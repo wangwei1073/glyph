@@ -1,6 +1,6 @@
 <script setup>
 // App：三段式顶栏（身份 / 中置渲染主控簇 / 项目与视图）
-import { onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useMetaStore } from './stores/meta'
 import { useDataStore } from './stores/data'
@@ -31,6 +31,59 @@ function scheduleRender() {
 }
 watch(() => spec.spec, scheduleRender, { deep: true })
 watch(() => spec.renderOpts, scheduleRender, { deep: true })
+
+// ---- 草稿自动保存（崩溃 / 误关恢复）----
+let draftTimer = null
+function scheduleDraft() {
+  clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => { spec.saveDraft() }, 1500)
+}
+watch(() => spec.spec, () => { if (meta.loaded) scheduleDraft() }, { deep: true })
+watch(() => spec.renderOpts, () => { if (meta.loaded) scheduleDraft() }, { deep: true })
+
+const draftOffer = ref(null)
+const draftTime = computed(() => {
+  if (!draftOffer.value) return ''
+  const d = new Date(draftOffer.value.at)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+})
+const saveLabel = computed(() => {
+  if (!spec.spec.layers.length) return '新建'
+  return spec.dirty ? '未保存' : '已保存'
+})
+const saveHint = computed(() => {
+  if (!spec.spec.layers.length) return '新项目：添加图层后开始'
+  return spec.dirty
+    ? '有未保存的修改（草稿已自动存到本机，可随时恢复）'
+    : '当前内容已保存到项目文件'
+})
+function onBeforeUnload() { if (spec.dirty) spec.saveDraft() }
+
+async function restoreDraft() {
+  const d = draftOffer.value
+  draftOffer.value = null
+  if (!d) return
+  spec.restoreDraft(d)
+  const src = spec.spec.data && spec.spec.data.source
+  try {
+    if (src && src.type === 'dataset') await data.select(`dataset:${src.name}`)
+    else if (src && src.type === 'user' &&
+             data.sources.some(s => s.type === 'user' && s.name === src.id)) {
+      await data.select(`user:${src.id}`)
+    } else if (src && src.type === 'user') {
+      ElMessage.warning('草稿引用的上传数据已不存在，请重新选择数据')
+    }
+  } catch (e) {
+    ElMessage.warning('草稿数据恢复失败：' + e.message)
+  }
+  spec.renderNow()
+  ElMessage.success('草稿已恢复，记得「项目 → 保存项目」')
+}
+function discardDraft() {
+  draftOffer.value = null
+  spec.clearDraft()
+  ElMessage.info('草稿已丢弃')
+}
 
 // ---- 全局快捷键：Ctrl+Z / Ctrl+Y（在输入框、CodeMirror 内不拦截） ----
 function onKeydown(e) {
@@ -65,6 +118,9 @@ async function boot() {
     await retry(() => data.load())
     spec.ensureDefaultTheme()
     spec.renderNow()
+    // 有未保存草稿（上次异常退出/误关）→ 顶部条提示，不自动覆盖当前空白项目
+    const d = spec.readDraft()
+    if (d && !spec.spec.layers.length) draftOffer.value = d
   } catch (e) {
     ElMessage.error('后端服务不可用: ' + e.message)
   }
@@ -72,9 +128,14 @@ async function boot() {
 
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('beforeunload', onBeforeUnload)
   await boot()
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('beforeunload', onBeforeUnload)
+  clearTimeout(draftTimer)
+})
 
 function toggleDark() {
   spec.dark = !spec.dark
@@ -121,6 +182,7 @@ async function saveProject() {
   }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   downloadBlob(blob, `ggplotgui-project-${Date.now()}.json`)
+  spec.markSaved()
   ElMessage.success(embedded ? '项目已保存（含数据与手工编辑）' : '项目已保存')
 }
 
@@ -160,6 +222,7 @@ function loadProjectClick() {
                data.sources.some(s => s.type === 'user' && s.name === finalSrc.id)) {
         await data.select(`user:${finalSrc.id}`)
       }
+      spec.markSaved()   // 载入即视为当前内容与文件一致
       ElMessage.success(embedded ? '项目已载入（含内嵌数据）' : '项目已载入')
       spec.renderNow()
     } catch (e) {
@@ -178,6 +241,7 @@ async function clearCanvas() {
   const keep = JSON.parse(JSON.stringify(spec.spec.data))
   spec.reset()
   spec.spec.data = keep
+  spec.markSaved()
   ElMessage.success('画布已恢复空白（可 Ctrl+Z 撤销）')
 }
 function onProjectCmd(cmd) {
@@ -224,6 +288,11 @@ function onProjectCmd(cmd) {
       </div>
 
       <div class="h-right">
+        <el-tooltip :content="saveHint">
+          <span class="gg-save-state" :class="{ dirty: spec.dirty, empty: !spec.spec.layers.length }">
+            <i class="dot" />{{ saveLabel }}
+          </span>
+        </el-tooltip>
         <el-dropdown trigger="click" @command="onProjectCmd">
           <el-button text class="h-dd">
             <el-icon><FolderOpened /></el-icon>项目<el-icon><ArrowDown /></el-icon>
@@ -247,6 +316,15 @@ function onProjectCmd(cmd) {
         </el-tooltip>
       </div>
     </header>
+
+    <!-- 未保存草稿恢复条：上次异常退出/误关时出现 -->
+    <div v-if="draftOffer" class="gg-recover">
+      <el-icon><WarningFilled /></el-icon>
+      <span>发现上次未保存的草稿（{{ draftTime }}）</span>
+      <span class="gg-recover-sub">恢复后会以「未保存」状态打开</span>
+      <el-button size="small" type="primary" @click="restoreDraft">恢复草稿</el-button>
+      <el-button size="small" text @click="discardDraft">丢弃</el-button>
+    </div>
 
     <div class="gg-main">
       <div v-show="ui.leftOpen" class="gg-left"><DataPanel /></div>

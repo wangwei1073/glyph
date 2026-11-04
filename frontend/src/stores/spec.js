@@ -21,6 +21,9 @@ export function defaultSpec() {
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
+// 未保存草稿（崩溃/误关恢复）：只存 spec，数据本身由服务端 userdata/ 持久化
+const DRAFT_KEY = 'ggplotgui-draft-v1'
+
 export const useSpecStore = defineStore('spec', {
   state: () => ({
     spec: defaultSpec(),
@@ -34,7 +37,9 @@ export const useSpecStore = defineStore('spec', {
     dark: false,
     history: [],
     future: [],
-    renderToken: 0
+    renderToken: 0,
+    savedHash: '',      // 最近一次「保存项目 / 载入项目」时的 spec 指纹
+    draftAt: 0          // 草稿最近写入时间
   }),
   getters: {
     curLayer(state) {
@@ -60,6 +65,11 @@ export const useSpecStore = defineStore('spec', {
     },
     imgSrc(state) {
       return state.last.pngUrl || (state.last.png ? `data:image/png;base64,${state.last.png}` : null)
+    },
+    // 有内容且与「已保存」指纹不同 → 未保存
+    dirty(state) {
+      if (!state.spec.layers.length) return false
+      return state.savedHash !== JSON.stringify(state.spec)
     }
   },
   actions: {
@@ -69,6 +79,43 @@ export const useSpecStore = defineStore('spec', {
       this.selectedLayer = 0
       this.history = []
       this.future = []
+      this.savedHash = ''
+    },
+
+    // ---- 草稿：自动保存 / 崩溃恢复 -------------------------------------
+    markSaved() {
+      this.savedHash = JSON.stringify(this.spec)
+      this.clearDraft()
+    },
+    saveDraft() {
+      if (!this.spec.layers.length || !this.dirty) { this.clearDraft(); return false }
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          at: Date.now(), spec: this.spec, renderOpts: this.renderOpts
+        }))
+        this.draftAt = Date.now()
+        return true
+      } catch {
+        return false
+      }
+    },
+    readDraft() {
+      try {
+        const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null')
+        return d && d.spec && Array.isArray(d.spec.layers) && d.spec.layers.length ? d : null
+      } catch {
+        return null
+      }
+    },
+    clearDraft() {
+      try { localStorage.removeItem(DRAFT_KEY) } catch { /* 忽略 */ }
+      this.draftAt = 0
+    },
+    restoreDraft(draft) {
+      if (!draft || !draft.spec) return
+      this.loadProject(draft.spec)
+      if (draft.renderOpts) this.renderOpts = { ...this.renderOpts, ...draft.renderOpts }
+      this.savedHash = ''   // 恢复出来的内容仍算「未保存」，提醒用户另存
     },
     // ---- 历史 ----
     pushHistory() {
