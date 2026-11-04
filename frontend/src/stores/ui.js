@@ -13,7 +13,7 @@ function loadStored() {
 }
 
 export const useUiStore = defineStore('ui', {
-  state: () => ({ tab: 'layers', leftOpen: true, rightOpen: true, statsOpen: false, ...loadStored() }),
+  state: () => ({ tab: 'layers', leftOpen: true, rightOpen: true, statsOpen: false, statsHeight: 304, ...loadStored() }),
   actions: {
     setTab(tab) {
       this.tab = tab
@@ -31,10 +31,16 @@ export const useUiStore = defineStore('ui', {
       this.statsOpen = !this.statsOpen
       this.persist()
     },
+    // 抽屉高度可拖拽调整，范围 160-900px
+    setStatsHeight(h) {
+      this.statsHeight = Math.min(900, Math.max(160, Math.round(h)))
+      this.persist()
+    },
     persist() {
       try {
         localStorage.setItem(LS_KEY, JSON.stringify({
-          tab: this.tab, leftOpen: this.leftOpen, rightOpen: this.rightOpen, statsOpen: this.statsOpen
+          tab: this.tab, leftOpen: this.leftOpen, rightOpen: this.rightOpen,
+          statsOpen: this.statsOpen, statsHeight: this.statsHeight
         }))
       } catch { /* 隐私模式下忽略 */ }
     }

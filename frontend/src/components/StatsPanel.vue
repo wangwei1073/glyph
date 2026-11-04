@@ -7,6 +7,7 @@ import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
 import { statsColumns, statsSummary, statsSuggest, statsTest, sigPlan, regColumns, regFit, table1Columns, table1Build, table1Export, downloadBlob } from '../api'
+import { suggestCharts } from '../chartSuggest'
 
 const data = useDataStore()
 const spec = useSpecStore()
@@ -190,6 +191,35 @@ watch(regMethod, () => {
   regResult.value = null
 })
 
+// ---- 抽屉高度拖拽 ----
+const resizing = ref(false)
+let dragStartY = 0
+let dragStartH = 0
+
+function startResize(e) {
+  resizing.value = true
+  dragStartY = e.clientY
+  dragStartH = ui.statsHeight
+  window.addEventListener('mousemove', onResizing)
+  window.addEventListener('mouseup', stopResize)
+  // 拖拽时禁用文本选择，避免选中页面内容
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'ns-resize'
+}
+function onResizing(e) {
+  if (!resizing.value) return
+  // 向上拖 → 变高；因此用起始高度减去位移
+  const next = dragStartH - (e.clientY - dragStartY)
+  ui.setStatsHeight(next)
+}
+function stopResize() {
+  resizing.value = false
+  window.removeEventListener('mousemove', onResizing)
+  window.removeEventListener('mouseup', stopResize)
+  document.body.style.userSelect = ''
+  document.body.style.cursor = ''
+}
+
 // ---- L5 基线特征表 ----
 const t1Vars = ref([])
 const t1By = ref('')
@@ -253,6 +283,41 @@ async function exportT1(format) {
   } finally {
     t1Exporting.value = ''
   }
+}
+
+// ---- 图表建议 ----
+// 依据「列画像 + 已有统计结果」推导候选图；统计结果越完整，建议越贴合
+const chartIdeas = computed(() => suggestCharts(data.columns, {
+  summary: result.value,
+  testRes: testResult.value,
+  regRes: regResult.value
+}))
+
+// 把 aes 映射渲染成 x=Species · y=Sepal.Length 这样的短文本
+function aesText(aes) {
+  if (!aes) return ''
+  return Object.keys(aes)
+    .map(k => `${k}=${aes[k]?.map ?? aes[k]?.value ?? ''}`)
+    .filter(s => !s.endsWith('='))
+    .join(' · ')
+}
+
+function applyIdea(idea) {  if (!data.columns.length) { ElMessage.warning('先选择数据源'); return }
+  spec.addLayer(idea.geom || 'point')
+  const i = spec.spec.layers.length - 1
+  // 覆盖 guessAes 推测的映射
+  spec.spec.layers[i].aes = JSON.parse(JSON.stringify(idea.aes || {}))
+  if (idea.stat) spec.spec.layers[i].stat = idea.stat
+  if (idea.position) spec.spec.layers[i].position = JSON.parse(JSON.stringify(idea.position))
+  // 需要叠加图层（拟合线）时一并加上
+  if (idea.addLayer) {
+    spec.addLayer(idea.addLayer.geom)
+    const j = spec.spec.layers.length - 1
+    spec.spec.layers[j].aes = JSON.parse(JSON.stringify(idea.addLayer.aes || {}))
+    if (idea.addLayer.params) spec.spec.layers[j].params = { ...idea.addLayer.params }
+  }
+  spec.renderNow()
+  ElMessage.success(`已应用：${idea.title}`)
 }
 const isCorr = computed(() => testMethod.value.startsWith('cor.test'))
 const canRunTest = computed(() => {
@@ -382,7 +447,14 @@ watch(tab, (v) => {
 })
 </script>
 <template>
-  <div class="stats-drawer" :class="{ open: ui.statsOpen }">
+  <div class="stats-drawer" :class="{ open: ui.statsOpen }"
+    :style="ui.statsOpen ? { height: ui.statsHeight + 'px' } : null">
+    <!-- 顶部拖拽条：上下拖动调整抽屉高度 -->
+    <div v-if="ui.statsOpen" class="sd-resizer" :class="{ active: resizing }"
+      title="拖动调整高度" @mousedown.prevent="startResize">
+      <span class="sd-bar" />
+    </div>
+
     <!-- 标题栏：折叠 + 页签 + 结果摘要 -->
     <div class="sd-head">
       <span class="sd-collapse" @click="ui.toggleStats()">
@@ -397,6 +469,7 @@ watch(tab, (v) => {
           <el-radio-button value="mark">图上标注</el-radio-button>
           <el-radio-button value="reg">回归分析</el-radio-button>
           <el-radio-button value="table1">基线表</el-radio-button>
+          <el-radio-button value="idea">图表建议</el-radio-button>
         </el-radio-group>
       </template>
 
@@ -940,6 +1013,50 @@ watch(tab, (v) => {
             </div>
           </section>
         </div>
+
+        <!-- ================= 图表建议 ================= -->
+        <div v-show="tab === 'idea'" class="sd-pane">
+          <aside class="sd-params">
+            <div class="sp-hint" style="padding-top:0">
+              依据数据列类型与已有的统计结果推导候选图。做过的统计越多，建议越贴合：
+              跑过检验 → 推荐能展示组间差异的图；跑过回归 → 推荐散点加拟合线。
+            </div>
+            <div class="idea-tags">
+              <el-tag v-if="result" size="small" type="success" :disable-transitions="true">描述统计</el-tag>
+              <el-tag v-if="testResult" size="small" type="success" :disable-transitions="true">检验</el-tag>
+              <el-tag v-if="regResult" size="small" type="success" :disable-transitions="true">回归</el-tag>
+              <el-tag v-if="!result && !testResult && !regResult" size="small" type="info"
+                :disable-transitions="true">仅按列类型推荐</el-tag>
+            </div>
+            <div class="sp-hint">
+              点击「应用」会直接在当前画布上创建对应图层（可撤销）。
+            </div>
+          </aside>
+
+          <section class="sd-result">
+            <template v-if="chartIdeas.length">
+              <div class="gg-scroll idea-list">
+                <div v-for="(it, i) in chartIdeas" :key="i" class="idea-card">
+                  <div class="idea-rank">{{ i + 1 }}</div>
+                  <div class="idea-main">
+                    <div class="idea-title">
+                      {{ it.title }}
+                      <el-tag size="small" :type="i === 0 ? 'success' : 'info'"
+                        :disable-transitions="true" class="idea-geom">{{ it.geom }}</el-tag>
+                    </div>
+                    <div class="idea-reason">{{ it.reason }}</div>
+                    <div v-if="it.extra" class="idea-extra">💡 {{ it.extra }}</div>
+                    <div class="idea-aes gg-mono">{{ aesText(it.aes) }}</div>
+                  </div>
+                  <el-button size="small" type="primary" plain @click="applyIdea(it)">应用</el-button>
+                </div>
+              </div>
+            </template>
+            <div v-else class="gg-empty-hint" style="padding:24px">
+              先在左侧选择数据源，或跑一次统计
+            </div>
+          </section>
+        </div>
       </template>
     </div>
   </div>
@@ -953,6 +1070,20 @@ watch(tab, (v) => {
   background: var(--gg-panel); min-height: 0;
 }
 .stats-drawer.open { height: 304px; }
+
+/* 拖拽条：视觉上是一条细线，热区 8px */
+.sd-resizer {
+  height: 8px; flex-shrink: 0; cursor: ns-resize;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: -4px; position: relative; z-index: 2;
+}
+.sd-bar {
+  width: 46px; height: 3px; border-radius: 2px;
+  background: rgba(128, 128, 128, .3); transition: background .12s, width .12s;
+}
+.sd-resizer:hover .sd-bar, .sd-resizer.active .sd-bar {
+  background: var(--gg-accent); width: 64px;
+}
 
 .sd-head {
   display: flex; align-items: center; gap: 10px; flex-shrink: 0;
@@ -1086,4 +1217,28 @@ watch(tab, (v) => {
   flex-shrink: 0; max-height: 62px; overflow-y: auto;
   padding: 5px 0 2px; border-top: 1px dashed var(--gg-border); margin-top: 5px;
 }
+
+/* ---------- 图表建议 ---------- */
+.idea-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.idea-list { flex: 1; min-height: 0; }
+.idea-card {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 8px; border-bottom: 1px solid var(--gg-border);
+}
+.idea-card:hover { background: rgba(74, 144, 217, .05); }
+.idea-rank {
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(74, 144, 217, .14); color: var(--gg-accent);
+  font-size: 10.5px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+.idea-main { flex: 1; min-width: 0; }
+.idea-title { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.idea-geom { font-family: Consolas, monospace; font-size: 10px; }
+.idea-reason {
+  font-size: 11px; line-height: 1.5; margin-top: 3px;
+  color: var(--el-text-color-secondary);
+}
+.idea-extra { font-size: 10.5px; margin-top: 3px; color: #c07f18; }
+.idea-aes { font-size: 10.5px; margin-top: 3px; color: var(--gg-accent); }
 </style>
