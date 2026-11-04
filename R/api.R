@@ -299,6 +299,16 @@ ggspec_api_app <- function(state) {
     }
 
     ## ---- 导出 ----
+    if (path == "/api/export/check" && method == "POST") {
+      spec <- body$spec %||% list()
+      format <- body$format %||% "png"
+      width <- as.integer(body$width %||% 1600); height <- as.integer(body$height %||% 1000)
+      dpi <- as.integer(body$dpi %||% 300)
+      res <- tryCatch(ggspec_export_check(spec, state$meta, state, width, height, dpi, format),
+                      error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(res))
+    }
     if (path == "/api/export" && method == "POST") {
       spec <- body$spec %||% list()
       format <- body$format %||% "png"

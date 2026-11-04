@@ -100,6 +100,10 @@ export const exportPlot = async (spec, { width = 1600, height = 1000, dpi = 300,
   return { blob, filename: res.filename || `ggplotgui.${format}` }
 }
 
+// 导出前检查（白底 / 尺寸 / dpi / 矢量 / 字体 / 字号）
+export const checkExport = (spec, { width = 1600, height = 1000, dpi = 300, format = 'png' } = {}) =>
+  post('/api/export/check', { spec, width, height, dpi, format }, T_HEAVY)
+
 export const getPlotly = (spec, { width = 800, height = 500 } = {}) =>
   post('/api/plotly', { spec, width, height }, T_HEAVY)
 

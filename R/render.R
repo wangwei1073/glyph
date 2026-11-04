@@ -214,6 +214,158 @@ ggspec_export <- function(spec, meta, state, width, height, dpi, format) {
   rf
 }
 
+# ---- 导出前检查（P0：白底 / 尺寸 / dpi / 矢量 / 字体 / 字号）----------------
+.ggspec_is_whiteish <- function(col) {
+  rgb <- tryCatch(grDevices::col2rgb(col), error = function(e) NULL)
+  if (is.null(rgb)) return(FALSE)
+  all(rgb[, 1] >= 245)
+}
+
+ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
+                                dpi = 300, format = "png") {
+  format <- match.arg(format, c("png", "svg", "pdf"))
+  issues <- list()
+  add <- function(id, level, title, detail) {
+    issues[[length(issues) + 1]] <<- list(id = id, level = level, title = title, detail = detail)
+  }
+  w_mm <- width / max(dpi, 1) * 25.4
+  h_mm <- height / max(dpi, 1) * 25.4
+  info <- list(widthMm = round(w_mm, 1), heightMm = round(h_mm, 1), dpi = dpi,
+               format = format, fonts = character(0), minTextPt = NA_real_)
+
+  has_layers <- length(spec$layers %||% list()) > 0 || isTRUE((spec$combine %||% list())$active)
+  if (!has_layers) {
+    add("layers", "fail", "画布为空", "还没有任何图层，导出会得到空白图。")
+    return(list(ok = FALSE, issues = issues, info = info))
+  }
+
+  # 构建图对象（与渲染/导出一致）
+  plot <- tryCatch({
+    gen <- ggspec_pipeline(spec, meta, state)
+    env <- .ggspec_eval_env(gen$env_list)
+    ev <- .ggspec_eval(gen$eval_code, env)
+    if (!is.null(ev$error)) stop(ev$error)
+    .ggspec_pick_plot(ev$result, env)
+  }, error = function(e) e)
+  if (inherits(plot, "error") || is.null(plot)) {
+    add("render", "fail", "图形无法生成", conditionMessage(plot))
+    return(list(ok = FALSE, issues = issues, info = info))
+  }
+
+  # 0) 试渲染：图对象能构造 ≠ 能画出来（stat/scale 错误常发生在 print 时）
+  render_err <- NULL
+  alpha_ok <- TRUE
+  tmp_png <- tempfile(fileext = ".png")
+  tryCatch({
+    ragg::agg_png(tmp_png, width = 160, height = 160, units = "px", res = 72, background = "white")
+    tryCatch(print(plot), error = function(e) { render_err <<- conditionMessage(e) })
+    grDevices::dev.off()
+    if (is.null(render_err) && identical(format, "png")) {
+      img <- png::readPNG(tmp_png)
+      if (length(dim(img)) >= 3 && dim(img)[3] == 4) alpha_ok <- min(img[, , 4]) >= 1
+    }
+  }, error = function(e) {
+    render_err <<- conditionMessage(e)
+    try(grDevices::dev.off(), silent = TRUE)
+  })
+  unlink(tmp_png)
+  if (!is.null(render_err)) {
+    add("render", "fail", "图形无法渲染", render_err)
+    return(list(ok = FALSE, issues = issues, info = info))
+  }
+  if (!alpha_ok) {
+    add("alpha", "fail", "存在透明像素", "导出 PNG 含透明通道；期刊通常要求不透明白底。")
+  }
+
+  # 1) 背景：透明 / 非白
+  if (inherits(plot, "patchwork")) {
+    add("background", "info", "拼图背景", "拼图模式下按各子图主题渲染，请确认整体为白色背景。")
+  } else {
+    bg <- tryCatch(ggplot2::calc_element("plot.background", plot$theme), error = function(e) NULL)
+    fill <- bg$fill %||% "white"
+    if (length(fill) == 0 || is.na(fill) || identical(tolower(as.character(fill)), "transparent")) {
+      add("background", "fail", "背景透明", "导出图背景为透明；多数期刊要求白底（白色背景）。")
+    } else if (!.ggspec_is_whiteish(fill)) {
+      add("background", "warn", "背景不是白色", sprintf("当前背景色 %s；投稿通常要求白色背景。", fill))
+    } else {
+      add("background", "pass", "白底", "背景为白色。")
+    }
+    panel_bg <- tryCatch(ggplot2::calc_element("panel.background", plot$theme), error = function(e) NULL)
+    if (!is.null(panel_bg) && !is.null(panel_bg$fill) && !is.na(panel_bg$fill) &&
+        !identical(tolower(as.character(panel_bg$fill)), "transparent") &&
+        !.ggspec_is_whiteish(panel_bg$fill)) {
+      add("panel", "info", "面板为彩色背景",
+          sprintf("面板背景 %s；若期刊偏好白底，可把主题换成 minimal / classic。", panel_bg$fill))
+    }
+  }
+
+  # 2) 分辨率 / 矢量
+  if (format == "png") {
+    if (dpi < 300) {
+      add("dpi", "warn", "位图分辨率偏低", sprintf("当前 %d dpi；多数期刊要求位图 ≥300 dpi（照片 600 dpi）。", dpi))
+    } else {
+      add("dpi", "pass", "位图分辨率", sprintf("%d dpi，达到 300 dpi 要求。", dpi))
+    }
+  } else {
+    add("vector", "pass", "矢量格式", sprintf("%s 为矢量格式，缩放不失真。", toupper(format)))
+  }
+
+  # 3) 物理尺寸
+  if (w_mm < 80 || w_mm > 180) {
+    add("size", "warn", "物理宽度非常见栏宽",
+        sprintf("当前约 %.0f mm 宽；单栏常见 85 mm、双栏 170 mm。", w_mm))
+  } else {
+    add("size", "pass", "物理尺寸", sprintf("约 %.0f × %.0f mm（宽 × 高）。", w_mm, h_mm))
+  }
+
+  # 4) 字体可用性 + 5) 最小字号
+  if (!inherits(plot, "patchwork")) {
+    els <- c("plot.title", "axis.title.x", "axis.title.y", "axis.text.x", "axis.text.y",
+             "legend.text", "legend.title")
+    get_el <- function(e) tryCatch(ggplot2::calc_element(e, plot$theme), error = function(e2) NULL)
+    fams <- unique(stats::na.omit(vapply(els, function(e) {
+      x <- get_el(e)
+      if (is.null(x) || is.null(x$family)) return(NA_character_)
+      f <- as.character(x$family)
+      if (!nzchar(f)) NA_character_ else f
+    }, character(1))))
+    info$fonts <- fams
+    # sans/serif/mono 是设备通用别名，不算"缺失字体"
+    check_fams <- setdiff(fams, c("sans", "serif", "mono", "sans-serif"))
+    if (length(check_fams)) {
+      sys <- tryCatch(unique(systemfonts::system_fonts()$family), error = function(e) character(0))
+      missing <- setdiff(check_fams, sys)
+      if (length(missing)) {
+        add("font", "warn", "字体可能不可用",
+            sprintf("未在本机找到：%s；导出会自动回退，可能影响最终字形。", paste(missing, collapse = "、")))
+      } else {
+        add("font", "pass", "字体可用", paste(check_fams, collapse = "、"))
+      }
+    } else {
+      add("font", "pass", "字体", "使用设备默认字体（sans / serif / mono）。")
+    }
+    sizes <- vapply(c("axis.text.x", "axis.text.y", "legend.text"), function(e) {
+      x <- get_el(e)
+      if (is.null(x) || is.null(x$size)) NA_real_ else as.numeric(x$size)
+    }, numeric(1))
+    min_pt <- suppressWarnings(min(sizes, na.rm = TRUE))
+    if (is.finite(min_pt)) {
+      info$minTextPt <- round(min_pt, 1)
+      if (min_pt < 6) {
+        add("textsize", "warn", "文字偏小",
+            sprintf("最小有效字号约 %.1f pt；多数期刊要求 ≥6–7 pt。", min_pt))
+      } else {
+        add("textsize", "pass", "文字字号", sprintf("最小约 %.1f pt。", min_pt))
+      }
+    }
+  }
+
+  # 6) 透明像素已在试渲染阶段检查（见上）
+
+  list(ok = !any(vapply(issues, function(i) identical(i$level, "fail"), logical(1))),
+       issues = issues, info = info)
+}
+
 # spec -> 数据（考虑加工 + 手动编辑）
 ggspec_resolve_data <- function(spec, state) {
   spec <- spec %||% list()

@@ -65,6 +65,8 @@
 ### 输出
 - 实时自动渲染（可暂停手动），预览尺寸 / dpi 可调
 - 导出 **PNG（300dpi）/ SVG / PDF** 矢量
+- **导出前检查**：白底 / 分辨率 / 物理尺寸 / 矢量格式 / 字体可用性 / 最小字号 / 能否真正渲染；
+  有警告或失败时弹窗列出原因，可选择「仍然导出」；也可从导出菜单单独触发
 - 交互式 plotly 预览（自动转换，部分 geom 不支持）
 - **项目保存 / 载入**（JSON 格式，随时续作）：上传/粘贴的数据会以 CSV 快照内嵌进项目文件，
   手工编辑一并带上，换机器或重启后可直接打开；本机上传数据同时落盘在 `userdata/`
@@ -114,6 +116,7 @@ Rscript tests/test_edits.R          # 手工编辑引擎 + 行锚 + 因子列
 Rscript tests/test_patchwork.R      # 图库存取 + 拼图组合
 Rscript tests/test_api_guard.R      # 请求来源校验（防跨站 / DNS 重绑定）
 Rscript tests/test_project_data.R   # 项目数据：落盘 / 快照 / 重建 / 手工编辑恢复
+Rscript tests/test_export_check.R   # 导出前检查：白底 / dpi / 尺寸 / 字号 / 可渲染性
 
 # 重新生成 geom 示意图（改了默认主题/映射后跑一次，产物在 frontend/public/geom-thumbs）
 Rscript tools/make_geom_thumbs.R

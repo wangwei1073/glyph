@@ -6,7 +6,7 @@ import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
 import { useDataStore } from '../stores/data'
 import { usePinStore } from '../stores/pins'
-import { exportPlot, downloadBlob, genCode, getPlotly } from '../api'
+import { exportPlot, downloadBlob, genCode, getPlotly, checkExport } from '../api'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
@@ -35,7 +35,51 @@ const statusParts = computed(() => {
 // 导出尺寸独立于预览尺寸（默认高清）
 const exportOpts = ref({ width: 1600, height: 1000, dpi: 300 })
 
+// ---- 导出前检查 ----
+const checkVisible = ref(false)
+const checkIssues = ref([])
+const checkInfo = ref(null)
+const checking = ref(false)
+const pendingFormat = ref('png')
+
+const checkIcon = (level) => ({
+  pass: 'CircleCheck', warn: 'Warning', fail: 'CircleClose', info: 'InfoFilled'
+}[level] || 'InfoFilled')
+
+async function runExportCheck(format, { silentPass = false } = {}) {
+  checking.value = true
+  try {
+    const res = await checkExport(spec.spec, { ...exportOpts.value, format })
+    checkIssues.value = res.issues || []
+    checkInfo.value = res.info || null
+    const blocking = checkIssues.value.some(i => i.level === 'warn' || i.level === 'fail')
+    if (blocking || !silentPass) checkVisible.value = true
+    return res
+  } catch (e) {
+    ElMessage.warning('导出检查暂不可用：' + e.message)
+    return null
+  } finally {
+    checking.value = false
+  }
+}
+
 async function doExport(format) {
+  if (format === 'check') {
+    if (!spec.hasPlot) return ElMessage.warning('先渲染一张图再检查')
+    pendingFormat.value = 'png'
+    await runExportCheck('png')
+    return
+  }
+  if (!spec.hasPlot) return
+  pendingFormat.value = format
+  const res = await runExportCheck(format, { silentPass: true })
+  if (res === null) return exportNow(format)        // 检查接口异常时直接导出
+  const blocking = (res.issues || []).some(i => i.level === 'warn' || i.level === 'fail')
+  if (!blocking) await exportNow(format)
+}
+
+async function exportNow(format) {
+  checkVisible.value = false
   exporting.value = true
   try {
     const { width, height, dpi } = exportOpts.value
@@ -48,6 +92,15 @@ async function doExport(format) {
     exporting.value = false
   }
 }
+
+const checkSummary = computed(() => {
+  const list = checkIssues.value
+  const nWarn = list.filter(i => i.level === 'warn').length
+  const nFail = list.filter(i => i.level === 'fail').length
+  if (nFail) return `${nFail} 项未通过`
+  if (nWarn) return `${nWarn} 项建议`
+  return '全部通过'
+})
 
 async function copyCode() {
   const text = codeBlock.value || spec.last.code
@@ -191,6 +244,7 @@ async function drawPlotly() {
           <el-dropdown-item command="png">PNG 位图</el-dropdown-item>
           <el-dropdown-item command="svg">SVG 矢量</el-dropdown-item>
           <el-dropdown-item command="pdf">PDF 矢量</el-dropdown-item>
+          <el-dropdown-item command="check" divided>导出前检查…</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
@@ -207,6 +261,7 @@ async function drawPlotly() {
           <el-dropdown-item command="png" divided :disabled="!spec.hasPlot">导出 PNG</el-dropdown-item>
           <el-dropdown-item command="svg" :disabled="!spec.hasPlot">导出 SVG</el-dropdown-item>
           <el-dropdown-item command="pdf" :disabled="!spec.hasPlot">导出 PDF</el-dropdown-item>
+          <el-dropdown-item command="check" divided :disabled="!spec.hasPlot">导出前检查…</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
@@ -255,6 +310,33 @@ async function drawPlotly() {
 
   <div class="gg-status gg-mono" :title="statusParts">{{ statusParts }}</div>
 
+  <el-dialog v-model="checkVisible" title="导出前检查" width="560px">
+    <div class="check-head">
+      <el-icon :class="['check-dot', checkSummary === '全部通过' ? 'ok' : 'warn']"><CircleCheckFilled v-if="checkSummary === '全部通过'" /><WarningFilled v-else /></el-icon>
+      <b>{{ checkSummary }}</b>
+      <span v-if="checkInfo" class="gg-hint">
+        {{ checkInfo.widthMm }} × {{ checkInfo.heightMm }} mm · {{ checkInfo.dpi }} dpi ·
+        {{ (checkInfo.format || 'png').toUpperCase() }}
+      </span>
+    </div>
+    <div class="check-list">
+      <div v-for="(it, i) in checkIssues" :key="i" class="check-item" :class="it.level">
+        <el-icon class="ci-icon"><component :is="checkIcon(it.level)" /></el-icon>
+        <div class="ci-body">
+          <div class="ci-title">{{ it.title }}</div>
+          <div class="ci-detail">{{ it.detail }}</div>
+        </div>
+      </div>
+    </div>
+    <template #footer>
+      <el-button size="small" @click="checkVisible = false">取消</el-button>
+      <el-button size="small" type="primary" :loading="exporting"
+        @click="exportNow(pendingFormat)">
+        仍然导出 {{ (pendingFormat || 'png').toUpperCase() }}
+      </el-button>
+    </template>
+  </el-dialog>
+
   <el-dialog v-model="plotlyVisible" title="plotly 交互预览（部分 geom 不支持）" width="82%" destroy-on-close @opened="drawPlotly">
     <div v-loading="plotlyLoading" style="min-height:300px">
       <div ref="plotlyEl" />
@@ -283,4 +365,21 @@ async function drawPlotly() {
 .gg-empty-hint .ghost { color: var(--gg-text-4); margin-bottom: 10px; }
 .gg-empty-hint .t { font-size: 14px; font-weight: 600; color: var(--gg-text-2); margin-bottom: 12px; }
 .gg-empty-hint .sub { margin-top: 10px; font-size: 12px; color: var(--gg-text-3); }
+
+/* 导出前检查 */
+.check-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; }
+.check-head .check-dot { font-size: 18px; }
+.check-dot.ok { color: var(--gg-success, #3f9d6b); }
+.check-dot.warn { color: #d98c1f; }
+.check-list { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow: auto; }
+.check-item { display: flex; gap: 9px; padding: 8px 10px; border-radius: 8px; background: var(--gg-panel-2); }
+.check-item + .check-item { margin-top: 4px; }
+.check-item .ci-icon { margin-top: 1px; font-size: 15px; color: var(--gg-text-4); }
+.check-item.pass .ci-icon { color: #3f9d6b; }
+.check-item.warn .ci-icon { color: #d98c1f; }
+.check-item.fail { background: #fdf1f1; }
+.check-item.fail .ci-icon { color: #d9534f; }
+.check-item.info .ci-icon { color: var(--gg-brand); }
+.ci-title { font-size: 12.5px; font-weight: 600; color: var(--gg-text-1); }
+.ci-detail { font-size: 12px; color: var(--gg-text-3); line-height: 1.55; margin-top: 2px; }
 </style>

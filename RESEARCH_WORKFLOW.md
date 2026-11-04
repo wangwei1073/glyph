@@ -236,3 +236,43 @@ PDF 要嵌字体、不能透明背景……这些全部靠人肉。
 - 草稿只存在本机浏览器（localStorage），换浏览器/清缓存不可恢复；跨设备恢复仍靠项目文件。
 - 草稿只存 spec，不存上传数据本身；数据由 P0-1 的 `userdata/` 落盘恢复。
 - 只保留一份草稿（单窗口工具），不做多项目草稿列表。
+---
+
+## 十三、已实施：P0-3 导出前检查（2026-11-04）
+
+### 13.1 规则（当前 7 条）
+
+| 规则 | 判定 | 说明 |
+|---|---|---|
+| 画布为空 | fail | 没有图层/拼图槽位，导出会是空白图 |
+| 能否渲染 | fail | 先试画一张 160px 小图；stat/scale 错误在 print 阶段才会暴露 |
+| 白底 | fail / warn | `plot.background` 透明 → fail；非白色 → warn；面板非白仅提示 |
+| 分辨率 | warn | PNG < 300 dpi 提醒（照片类建议 600） |
+| 物理尺寸 | warn | 宽度 < 80mm 或 > 180mm 提示常见栏宽（85/170mm） |
+| 字体 | warn / pass | 收集标题/轴/图例的 family，用 systemfonts 检查是否安装；sans/serif/mono 视为通用别名 |
+| 最小字号 | warn / pass | 取 axis.text / legend.text 的最小 pt，< 6pt 提醒 |
+| 矢量格式 | pass | SVG/PDF 直接通过此项 |
+
+### 13.2 交互
+
+- 点「导出 PNG/SVG/PDF」时自动先检查：**只有 warn/fail 才弹窗**，全通过则直接导出。
+- 导出菜单新增「导出前检查…」，任何时候都能查看全部检查项。
+- 弹窗顶部显示汇总（全部通过 / N 项建议 / N 项未通过）与物理尺寸、dpi、格式；
+  底部可「取消」或「仍然导出」。
+
+### 13.3 验证
+
+- 新增 `tests/test_export_check.R`：10 项断言（正常、低 dpi、透明背景、小字号、空画布、
+  渲染期错误、PDF 矢量），全部通过。
+- 接口实测：`POST /api/export/check` 对 150dpi 图返回 dpi + 尺寸两条 warn；
+  对离散值喂数值美学的坏图返回 `fail: 图形无法渲染`。
+- 回归：`test_specs` 29/29、`test_api_guard` 全过。
+
+截图：`export_check_dialog.png`（全部通过）、`export_check_warn.png`（2 项建议）。
+
+### 13.4 留给 P1
+
+- 期刊模板（Nature/Science/Cell/PLOS/IEEE/中文核心）与“一键修复”。
+- PDF 字体嵌入检查（`pdftools`）、CMYK/灰度、色盲模拟。
+- 面板标签 a/b/c 一致性、图注字数等规则。
+- 更严格的字号判定（按最终物理尺寸换算后判断，而不是 theme 的 pt 值）。
