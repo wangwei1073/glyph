@@ -128,11 +128,11 @@ const shownCols = computed(() => {
   const s = q.value.trim().toLowerCase()
   return s ? data.columns.filter(c => c.name.toLowerCase().includes(s)) : data.columns
 })
-const DOT = {
-  numeric: '#2170b5', character: '#c07f18', factor: '#3e8929',
-  logical: '#8d3fb0', date: '#c55a11', datetime: '#c55a11'
+const TYPE_ABBR = {
+  numeric: 'num', character: 'chr', factor: 'fct',
+  logical: 'lgl', date: 'date', datetime: 'dttm'
 }
-function dotFor(c) { return DOT[c.type] || '#888' }
+function typeAbbr(c) { return TYPE_ABBR[c.type] || String(c.type || '').slice(0, 3) }
 
 // 列插入：共享模块（弹窗列菜单同样可用）
 function insertName(name) {
@@ -213,13 +213,13 @@ function openPreview(colName = '') {
     </div>
 
     <!-- 列 -->
-    <div class="dp-sechead" :class="{ fold: collapsed.cols }" @click="collapsed.cols = !collapsed.cols">
+    <div class="dp-sechead" :class="{ fold: collapsed.cols }" @click="collapsed.cols = !collapsed.cols"
+      :title="`加工后 ${data.preview.nrow || 0} 行 · ${data.columns.length} 列`">
       <el-icon><component :is="collapsed.cols ? 'ArrowRight' : 'ArrowDown'" /></el-icon>
       列（{{ data.columns.length }}）
-      <span style="font-weight:400;letter-spacing:0" v-if="data.preview.nrow">· 加工后 {{ data.preview.nrow }} 行</span>
       <span style="flex:1" />
       <el-input v-if="!collapsed.cols && data.columns.length > 8" v-model="q" size="small"
-        placeholder="过滤列…" style="width:100px" @click.stop clearable>
+        class="dp-filter" placeholder="过滤" @click.stop clearable>
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
       <el-button size="small" text title="重新加载列信息" @click.stop="data.refresh()">
@@ -229,11 +229,11 @@ function openPreview(colName = '') {
     <div v-if="!collapsed.cols" class="gg-scroll" style="flex:1; min-height:0">
       <div v-for="(c, i) in shownCols" :key="c.name" class="colitem">
         <div class="colrow" :class="{ open: expandedCol === c.name }"
-          :title="`${c.name} · 单击展开映射与统计`" @click="toggleCol(c.name)">
+          :title="`${c.name}（${c.type}）· 单击展开映射与统计`" @click="toggleCol(c.name)">
           <el-icon class="col-caret"><component :is="expandedCol === c.name ? 'ArrowDown' : 'ArrowRight'" /></el-icon>
-          <span class="dot" :style="{ background: dotFor(c) }" />
+          <span class="col-type" :class="c.type">{{ typeAbbr(c) }}</span>
           <span class="colname">{{ c.name }}</span>
-          <span class="coln">{{ c.nUnique }}</span>
+          <span class="coln" :title="`唯一值 ${c.nUnique}`">{{ c.nUnique }}</span>
           <el-button size="small" text class="col-open" title="在数据表格中查看此列"
             @click.stop="openPreview(c.name)">
             <el-icon><MoreFilled /></el-icon>
@@ -328,33 +328,40 @@ function openPreview(colName = '') {
 }
 .dp-sechead {
   display: flex; align-items: center; gap: 6px;
-  padding: 9px 12px 4px; font-size: 12px; font-weight: 600;
-  color: var(--el-text-color-secondary); flex-shrink: 0; cursor: pointer;
-  user-select: none; letter-spacing: .4px;
+  padding: 10px 12px 6px; font-size: 12px; font-weight: 600;
+  color: var(--gg-text-3); flex-shrink: 0; cursor: pointer;
+  user-select: none; letter-spacing: .2px;
 }
-.dp-sechead:not(.fold):hover { color: var(--el-text-color-primary); }
+.dp-sechead:not(.fold):hover { color: var(--gg-text-1); }
+.dp-filter { width: 96px; flex-shrink: 0; }
+.dp-filter :deep(.el-input__wrapper) { padding-left: 6px; }
 .pv-n { font-weight: 400; font-size: 11px; }
 .colrow {
-  display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 8px; font-size: 13px;
-  cursor: pointer;
+  display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 6px;
+  min-height: 28px; font-size: 13px; cursor: pointer; border-radius: 6px;
+  margin: 0 4px;
 }
-.colrow:hover { background: rgba(47, 111, 191,.07); }
-.colrow.open { background: rgba(47, 111, 191,.10); }
-.colrow.open .colname { font-weight: 600; color: var(--gg-accent); }
-.col-caret { font-size: 11px; color: var(--el-text-color-placeholder); flex-shrink: 0; margin-right: -2px; }
+.colrow:hover { background: rgba(47, 111, 191, .07); }
+.colrow.open { background: rgba(47, 111, 191, .08); }
+.colrow.open .colname { font-weight: 600; color: var(--gg-brand); }
+.col-caret { font-size: 11px; color: var(--gg-text-4); flex-shrink: 0; }
 .col-expand {
-  padding: 6px 10px 8px 26px;
-  background: rgba(47, 111, 191,.05);
-  border-left: 2px solid var(--gg-accent);
-  margin-bottom: 2px;
+  margin: 2px 6px 8px 24px; padding: 9px 10px 10px;
+  background: var(--gg-panel-2); border: 1px solid var(--gg-border);
+  border-left: 2px solid var(--gg-brand);
+  border-radius: 8px;
 }
-.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.col-type {
+  flex-shrink: 0; width: 30px; text-align: center; letter-spacing: 0;
+  font-weight: 500; text-transform: lowercase;
+}
 .colname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .coln {
-  margin-left: auto; font-size: 11px; color: var(--el-text-color-secondary);
-  background: rgba(128,128,128,.10); border-radius: 8px; padding: 0 6px; line-height: 14px;
+  margin-left: auto; font-size: 11px; color: var(--gg-text-4);
+  font-variant-numeric: tabular-nums;
 }
-.col-open { padding: 2px; }
+.col-open { padding: 2px; opacity: 0; transition: opacity .12s; }
+.colrow:hover .col-open, .colrow.open .col-open, .col-open:focus-visible { opacity: 1; }
 .coldetail { font-size: 12px; }
 .cd-stat { color: var(--el-text-color-secondary); font-size: 12px; padding: 4px 0; }
 .cd-prev { display: flex; gap: 5px; flex-wrap: wrap; }
