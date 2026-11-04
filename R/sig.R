@@ -84,6 +84,47 @@
   y_col <- .ggspec_sig_y_column(spec)
   pos <- .ggspec_sig_positions(d, y_col, length(marks))
 
+  marks_lines <- .ggspec_sig_mark_lines(spec, marks, d, pos)
+
+  # 关键：标注 y 若超出面板范围，几何体会被画到绘图区外，进而挤压标题区。
+  # 因此把所有标注都纳入 y 轴范围，并在最高标注之上再留 4% 余量。
+  expand <- .ggspec_sig_y_limit(d, y_col, marks, pos)
+  if (is.null(expand)) return(marks_lines)
+  c(expand, marks_lines)
+}
+
+# 生成 y 轴范围语句，使标注完整落在绘图区内
+# 注意：必须与 .ggspec_sig_mark_lines 使用同一套 y 推算规则（无 yPos 时按 start/step 递增），
+# 否则上限会算小、把高位标注裁掉（曾出现第 3 条括号被裁的问题）。
+.ggspec_sig_y_limit <- function(d, y_col, marks, pos) {
+  if (is.null(d) || is.null(y_col) || !y_col %in% names(d)) return(NULL)
+  v <- d[[y_col]]
+  v <- v[is.finite(v)]
+  if (!length(v)) return(NULL)
+
+  # 与图层生成一致的 y 序列：显式 yPos 优先，缺失则按序号递增
+  ys <- vapply(seq_along(marks), function(i) {
+    y <- marks[[i]]$yPos
+    if (is.null(y) || is.na(suppressWarnings(as.numeric(y)))) {
+      pos$start + pos$step * (i - 1)
+    } else {
+      as.numeric(y)
+    }
+  }, numeric(1))
+  if (!length(ys)) ys <- pos$start
+
+  top <- max(c(max(v), max(ys)))
+  lo <- min(v)
+  span <- top - lo
+  if (!is.finite(span) || span <= 0) span <- abs(top) * 0.2 + 0.5
+  pad <- span * 0.06
+  sprintf("scale_y_continuous(limits = c(%s, %s), expand = expansion(mult = c(0.02, 0.02)))",
+          format(lo - span * 0.02, trim = TRUE),
+          format(top + pad, trim = TRUE))
+}
+
+# 只生成标注图层本身（不含 y 轴范围）
+.ggspec_sig_mark_lines <- function(spec, marks, d, pos) {
   lines <- character(0)
   # 分组：bracket 类走 ggsignif，text 类走 ggpubr / annotate
   brackets <- Filter(function(m) identical(m$kind %||% "", "bracket"), marks)

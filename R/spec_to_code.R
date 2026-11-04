@@ -197,6 +197,48 @@
   }
 }
 
+# ---- 中文字体兜底 -----------------------------------------------------------
+# ragg 下默认 sans 对部分汉字缺字（「著」「注」等会直接消失），
+# 因此图形里一旦出现中文文本、且用户没指定 base_family，就自动补中文字体。
+.ggspec_cjk_pattern <- "[\u4e00-\u9fff]"
+
+.ggspec_has_cjk <- function(x) {
+  if (is.null(x)) return(FALSE)
+  if (is.list(x)) return(any(vapply(x, .ggspec_has_cjk, logical(1))))
+  if (!is.character(x)) return(FALSE)
+  any(grepl(.ggspec_cjk_pattern, x))
+}
+
+# 按平台挑选一个确定存在的中文字体；返回 NULL 表示无需/不可用
+.ggspec_cjk_family <- function() {
+  cands <- if (.Platform$OS.type == "windows") {
+    c("Microsoft YaHei", "SimHei", "SimSun")
+  } else if (identical(Sys.info()[["sysname"]], "Darwin")) {
+    c("PingFang SC", "Heiti SC", "STHeiti")
+  } else {
+    c("Noto Sans CJK SC", "WenQuanYi Micro Hei", "Source Han Sans SC")
+  }
+  have <- tryCatch(systemfonts::system_fonts()$family, error = function(e) character(0))
+  for (f in cands) if (f %in% have) return(f)
+  NULL
+}
+
+# 需要补字体时返回一条 theme(...) 语句
+.ggspec_cjk_font_line <- function(spec, meta) {
+  # 用户已显式指定基础字体 → 尊重用户选择
+  if (has_val((spec$theme %||% list())$args[["base_family"]])) return(NULL)
+  # 只关心会落到图上的文本：labs / 注释 / 标注
+  texts <- list(
+    (spec$labs %||% list()),
+    (spec$annotations %||% list()),
+    (spec$sigMarks %||% list())
+  )
+  if (!.ggspec_has_cjk(texts)) return(NULL)
+  fam <- .ggspec_cjk_family()
+  if (is.null(fam)) return(NULL)
+  sprintf("theme(text = element_text(family = %s))", r_string(fam))
+}
+
 # 主题
 .theme_calls <- function(theme, meta) {
   out <- list()
@@ -497,6 +539,11 @@ spec_to_code <- function(spec, meta, state, var_name = "p", df_name = "df",
     if (!is.null(ac)) tail_lines <- c(tail_lines, ac)
   }
   tail_lines <- c(tail_lines, .theme_calls(spec$theme, meta))
+
+  # 中文字体兜底：默认 sans 在 ragg 下会缺字（如「著」「注」直接不显示），
+  # 因此当图形里存在中文文本、且用户没指定 base_family 时，自动补一个中文字体。
+  cn_font <- .ggspec_cjk_font_line(spec, meta)
+  if (!is.null(cn_font)) tail_lines <- c(tail_lines, cn_font)
 
   # 显著性标注（L3）：依赖 ggsignif / ggpubr，缺失时退化为 annotate("text")
   sig_marks <- spec$sigMarks %||% list()

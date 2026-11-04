@@ -6,7 +6,7 @@ import { ElMessage } from 'element-plus'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
-import { statsColumns, statsSummary, statsSuggest, statsTest, sigPlan, downloadBlob } from '../api'
+import { statsColumns, statsSummary, statsSuggest, statsTest, sigPlan, regColumns, regFit, downloadBlob } from '../api'
 
 const data = useDataStore()
 const spec = useSpecStore()
@@ -128,6 +128,67 @@ function resetY() {
   sigMarks.value.forEach((m, i) => spec.setSigMark(i, { yPos: Number((start + step * i).toFixed(3)) }))
   spec.renderNow()
 }
+
+// ---- L4 回归分析 ----
+const regMethod = ref('lm')
+const regY = ref('')
+const regXs = ref([])
+const regResult = ref(null)
+const regRunning = ref(false)
+const regCodeOpen = ref(false)
+const regCols = ref({ numeric: [], categorical: [], binary: [], count: [] })
+const regXOptions = computed(() => {
+  const c = regCols.value
+  if (regMethod.value === 'corr') return c.numeric
+  // 线性回归：数值 + 分类都可；逻辑/泊松同理
+  return [...(c.numeric || []), ...(c.categorical || [])].filter(v => v !== regY.value)
+})
+const regYOptions = computed(() => {
+  const c = regCols.value
+  if (regMethod.value === 'logistic') return c.binary
+  if (regMethod.value === 'poisson') return c.count
+  return [...(c.numeric || []), ...(c.categorical || [])]
+})
+const canReg = computed(() => hasSource.value && !!regY.value &&
+  (regMethod.value === 'corr' ? regXs.value.length >= 1 : regXs.value.length >= 1))
+
+async function loadRegColumns() {
+  if (!hasSource.value) { regCols.value = { numeric: [], categorical: [], binary: [], count: [] }; return }
+  try {
+    const r = await regColumns(source.value, prep.value)
+    regCols.value = { numeric: r.numeric || [], categorical: r.categorical || [],
+                      binary: r.binary || [], count: r.count || [] }
+    // 清理失效选择
+    regXs.value = regXs.value.filter(v => regXOptions.value.includes(v))
+    if (regY.value && !regYOptions.value.includes(regY.value)) regY.value = ''
+    if (!regY.value && regYOptions.value.length) regY.value = regYOptions.value[0]
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+async function runReg() {
+  if (!canReg.value) { ElMessage.warning('请选择因变量与至少一个自变量'); return }
+  regRunning.value = true
+  error.value = ''
+  try {
+    regResult.value = await regFit(source.value, prep.value, {
+      y: regY.value, xs: regXs.value, method: regMethod.value
+    })
+    regCodeOpen.value = false
+  } catch (e) {
+    error.value = e.message; regResult.value = null
+  } finally {
+    regRunning.value = false
+  }
+}
+
+// 切换方法时重置不适用的选择
+watch(regMethod, () => {
+  if (!regYOptions.value.includes(regY.value)) regY.value = regYOptions.value[0] || ''
+  regXs.value = regXs.value.filter(v => regXOptions.value.includes(v))
+  regResult.value = null
+})
 const isCorr = computed(() => testMethod.value.startsWith('cor.test'))
 const canRunTest = computed(() => {
   if (!hasSource.value) return false
@@ -249,7 +310,10 @@ let sigTimer = null
 watch(() => JSON.stringify((spec.spec.layers || []).map(l => [l.geom, l.aes?.x?.map, l.aes?.y?.map])),
   () => { clearTimeout(sigTimer); sigTimer = setTimeout(loadSigPlan, 350) },
   { immediate: true })
-watch(tab, (v) => { if (v === 'mark') loadSigPlan() })
+watch(tab, (v) => {
+  if (v === 'mark') loadSigPlan()
+  if (v === 'reg') loadRegColumns()
+})
 </script>
 <template>
   <div class="stats-drawer" :class="{ open: ui.statsOpen }">
@@ -265,6 +329,7 @@ watch(tab, (v) => { if (v === 'mark') loadSigPlan() })
           <el-radio-button value="desc">描述统计</el-radio-button>
           <el-radio-button value="test">统计检验</el-radio-button>
           <el-radio-button value="mark">图上标注</el-radio-button>
+          <el-radio-button value="reg">回归分析</el-radio-button>
         </el-radio-group>
       </template>
 
@@ -570,6 +635,139 @@ watch(tab, (v) => { if (v === 'mark') loadSigPlan() })
             </div>
           </section>
         </div>
+
+        <!-- ================= 回归分析（L4）================= -->
+        <div v-show="tab === 'reg'" class="sd-pane">
+          <aside class="sd-params">
+            <div class="sp-field">
+              <label>模型类型</label>
+              <el-select v-model="regMethod" size="small" style="width:100%">
+                <el-option value="lm" label="线性回归（连续 y）" />
+                <el-option value="logistic" label="逻辑回归（二分类 y）" />
+                <el-option value="poisson" label="泊松回归（计数 y）" />
+                <el-option value="corr" label="相关矩阵" />
+              </el-select>
+            </div>
+            <div class="sp-field">
+              <label>{{ regMethod === 'corr' ? '首个变量' : '因变量' }}</label>
+              <el-select v-model="regY" size="small" filterable clearable
+                placeholder="选择列" style="width:100%">
+                <el-option v-for="c in regYOptions" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div class="sp-field">
+              <label>{{ regMethod === 'corr' ? '其余变量' : '自变量' }}</label>
+              <el-select v-model="regXs" size="small" multiple filterable collapse-tags
+                collapse-tags-tooltip placeholder="可多选" style="width:100%">
+                <el-option v-for="c in regXOptions" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div class="sp-actions">
+              <el-button size="small" type="primary" :loading="regRunning" :disabled="!canReg" @click="runReg">
+                <el-icon class="el-icon--left"><TrendCharts /></el-icon>拟合
+              </el-button>
+              <el-button size="small" text @click="loadRegColumns"><el-icon><Refresh /></el-icon></el-button>
+            </div>
+            <div class="sp-hint">
+              分类自变量会自动转为因子；分类因变量在逻辑回归里同样自动处理。
+            </div>
+          </aside>
+
+          <section class="sd-result">
+            <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon />
+            <template v-if="regResult">
+              <!-- 拟合优度 -->
+              <div class="reg-fit">
+                <template v-if="regResult.method === 'lm'">
+                  <span class="rf-item"><b>R²</b> {{ num(regResult.fitStats.r2) }}</span>
+                  <span class="rf-item"><b>调整R²</b> {{ num(regResult.fitStats.adjR2) }}</span>
+                  <span v-if="regResult.fitStats.fstat" class="rf-item">
+                    <b>F</b> {{ num(regResult.fitStats.fstat) }}
+                    <span class="gg-mono">({{ regResult.fitStats.df1 }},{{ regResult.fitStats.df2 }})</span>
+                  </span>
+                  <span v-if="regResult.fitStats.p" class="rf-item">
+                    <b>p</b> {{ pval(regResult.fitStats.p) }}<span class="stars">{{ stars(regResult.fitStats.p) }}</span>
+                  </span>
+                </template>
+                <template v-else-if="regResult.method !== 'corr'">
+                  <span class="rf-item"><b>AIC</b> {{ num(regResult.fitStats.aic) }}</span>
+                  <span class="rf-item"><b>伪R²</b> {{ num(regResult.fitStats.pseudoR2) }}</span>
+                  <span class="rf-item"><b>偏差</b> {{ num(regResult.fitStats.deviance) }}</span>
+                </template>
+                <span class="rf-item"><b>n</b> {{ regResult.n }}</span>
+                <span style="flex:1" />
+                <el-button size="small" text @click="regCodeOpen = !regCodeOpen">
+                  <el-icon><Document /></el-icon>{{ regCodeOpen ? '隐藏代码' : '代码' }}
+                </el-button>
+              </div>
+
+              <!-- 系数表 -->
+              <div class="gg-scroll res-table-wrap">
+                <table class="stat-table">
+                  <thead>
+                    <tr v-if="regResult.method === 'corr'">
+                      <th>变量 1</th>
+                      <th>变量 2</th>
+                      <th class="n">r</th>
+                      <th class="n">p</th>
+                      <th class="n">n</th>
+                    </tr>
+                    <tr v-else>
+                      <th>项</th>
+                      <th class="n">估计</th>
+                      <th v-if="regResult.method !== 'lm'" class="n">exp</th>
+                      <th class="n">SE</th>
+                      <th class="n">t / z</th>
+                      <th class="n">p</th>
+                      <th class="n">95% CI</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <template v-if="regResult.method === 'corr'">
+                      <tr v-for="(row, i) in regResult.coefs" :key="i">
+                        <td class="gg-mono">{{ row.var1 }}</td>
+                        <td class="gg-mono">{{ row.var2 }}</td>
+                        <td class="n">{{ num(row.r) }}<span class="stars">{{ row.stars }}</span></td>
+                        <td class="n">{{ pval(row.p) }}</td>
+                        <td class="n">{{ row.n }}</td>
+                      </tr>
+                    </template>
+                    <template v-else>
+                      <tr v-for="(row, i) in regResult.coefs" :key="i">
+                        <td class="gg-mono">{{ row.term }}</td>
+                        <td class="n">{{ num(row.estimate) }}</td>
+                        <td v-if="regResult.method !== 'lm'" class="n">{{ num(row.expEstimate) }}</td>
+                        <td class="n">{{ num(row.se) }}</td>
+                        <td class="n">{{ num(row.stat) }}</td>
+                        <td class="n">{{ pval(row.p) }}<span class="stars">{{ row.stars }}</span></td>
+                        <td class="n">{{ num(row.ciLow) }} ~ {{ num(row.ciHigh) }}</td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- 诊断提示 -->
+              <div v-if="regResult.notes && regResult.notes.length" class="reg-notes">
+                <div v-for="(n, i) in regResult.notes" :key="i" class="note-line">· {{ n }}</div>
+              </div>
+
+              <!-- 代码 -->
+              <div v-if="regCodeOpen" class="res-code">
+                <div class="res-code-head">
+                  <span>可复现 R 代码</span><span style="flex:1" />
+                  <el-button size="small" text @click="copyText(regResult.code, '回归代码已复制')">
+                    <el-icon><CopyDocument /></el-icon>
+                  </el-button>
+                </div>
+                <pre class="gg-mono code-pre">{{ regResult.code }}</pre>
+              </div>
+            </template>
+            <div v-else class="gg-empty-hint" style="padding:24px">
+              选择因变量与自变量后点「拟合」
+            </div>
+          </section>
+        </div>
       </template>
     </div>
   </div>
@@ -703,5 +901,17 @@ watch(tab, (v) => { if (v === 'mark') loadSigPlan() })
 .res-note {
   flex-shrink: 0; padding-top: 6px; font-size: 10.5px; line-height: 1.5;
   color: var(--el-text-color-secondary);
+}
+
+/* ---------- 回归 ---------- */
+.reg-fit {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; flex-shrink: 0;
+  padding: 0 0 6px; font-size: 11.5px;
+}
+.rf-item { color: var(--el-text-color-secondary); font-variant-numeric: tabular-nums; }
+.rf-item b { color: var(--el-text-color-primary); font-weight: 600; margin-right: 3px; }
+.reg-notes {
+  flex-shrink: 0; max-height: 62px; overflow-y: auto;
+  padding: 5px 0 2px; border-top: 1px dashed var(--gg-border); margin-top: 5px;
 }
 </style>

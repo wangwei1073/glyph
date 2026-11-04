@@ -151,5 +151,58 @@ if (!inherits(gen7, "error")) {
   chk("L2+L3 联动：含筛选代码", grepl("subset(", gen7$code, fixed = TRUE))
 }
 
+# ---------- 8) y 轴自动扩展（防止标注被裁 / 挤压标题）----------
+spec8 <- spec_box
+spec8$sigMarks <- list(
+  list(kind = "bracket", group1 = "setosa", group2 = "versicolor", label = "***"),
+  list(kind = "bracket", group1 = "versicolor", group2 = "virginica", label = "***"),
+  list(kind = "bracket", group1 = "setosa", group2 = "virginica", label = "n.s.")
+)
+gen8 <- tryCatch(spec_to_code(spec8, META, STATE), error = function(e) e)
+chk("多标注：生成 y 轴扩展语句", !inherits(gen8, "error") &&
+      grepl("scale_y_continuous", gen8$code, fixed = TRUE))
+if (!inherits(gen8, "error")) {
+  # 解析 limits 上界，必须覆盖最高标注（第 3 条 = start + 2*step）
+  lim <- regmatches(gen8$code, regexpr("limits = c\\([0-9.\\-]+, [0-9.\\-]+\\)", gen8$code))
+  nums <- as.numeric(strsplit(gsub("[^0-9.,\\-]", "", lim), ",")[[1]])
+  d8 <- ggspec_resolve_data(spec8, STATE)
+  pos8 <- .ggspec_sig_positions(d8, "Sepal.Length", 3)
+  top_mark <- pos8$start + pos8$step * 2
+  chk("y 上限覆盖最高标注", length(nums) == 2 && nums[2] > top_mark)
+  chk("y 下限不高于数据最小值", length(nums) == 2 && nums[1] <= min(d8$Sepal.Length))
+  # 渲染时不应出现「Removed ... rows」
+  w <- character(0)
+  rf8 <- withCallingHandlers(
+    tryCatch(ggspec_render_file(gen8$eval_code, d8, 560, 400, 96, "png"), error = function(e) e),
+    warning = function(e) { w <<- c(w, conditionMessage(e)); invokeRestart("muffleWarning") })
+  chk("多标注渲染成功", !inherits(rf8, "error"))
+  chk("无标注被裁掉的警告", !any(grepl("Removed.*rows", w)))
+  if (!inherits(rf8, "error")) unlink(rf8$path)
+}
+
+# ---------- 9) 中文字体兜底（ragg 下 sans 缺字）----------
+chk("字体探测函数可用", is.function(.ggspec_cjk_family))
+chk("中文检测：识别中文", isTRUE(.ggspec_has_cjk("显著性")))
+chk("中文检测：英文为假", isFALSE(.ggspec_has_cjk("Sepal Length")))
+
+spec9 <- spec_box   # labs(title = "L3 探针") 含中文
+spec9$labs <- list(title = "中文标题测试")
+gen9 <- tryCatch(spec_to_code(spec9, META, STATE), error = function(e) e)
+chk("中文标题：自动补字体", !inherits(gen9, "error") &&
+      (is.null(.ggspec_cjk_family()) || grepl("element_text(family", gen9$code, fixed = TRUE)))
+
+spec10 <- spec_box
+spec10$labs <- list(title = "English Only Title")
+gen10 <- tryCatch(spec_to_code(spec10, META, STATE), error = function(e) e)
+chk("纯英文标题：不补字体", !inherits(gen10, "error") &&
+      !grepl("element_text(family", gen10$code, fixed = TRUE))
+
+spec11 <- spec_box
+spec11$labs <- list(title = "中文标题")
+spec11$theme$args <- list(base_family = "SimHei")
+gen11 <- tryCatch(spec_to_code(spec11, META, STATE), error = function(e) e)
+chk("用户已指定字体：不重复补", !inherits(gen11, "error") &&
+      !grepl("element_text(family", gen11$code, fixed = TRUE))
+
 cat(sprintf("\n===== L3 显著性标注: %d 通过 / %d 失败 =====\n", pass, fail))
 quit(status = if (fail > 0) 1L else 0L)
