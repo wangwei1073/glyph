@@ -20,3 +20,8 @@ Thumbs.db
 .DS_Store
 # 用户上传数据（落盘，随项目恢复）
 userdata/
+
+# 统计代码示例的默认导出文件名（tests 运行时会生成）
+table1.docx
+table1.xlsx
+stats-summary.R
