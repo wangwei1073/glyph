@@ -113,6 +113,11 @@ export const bundlePlot = (spec, { width = 1600, height = 1000, dpi = 300, journ
 export const getPlotly = (spec, { width = 800, height = 500 } = {}) =>
   post('/api/plotly', { spec, width, height }, T_HEAVY)
 
+// 描述统计（L1）：基于「加工 + 手工编辑后」的数据，与画布一致
+export const statsColumns = (source, prep) => post('/api/stats/columns', { source, prep })
+export const statsSummary = (source, prep, vars, groupBy) =>
+  post('/api/stats/summary', { source, prep, vars, groupBy }, T_HEAVY)
+
 // 手动编辑（编辑模式）：ops 针对 source 的加工+编辑后数据
 export const editAdd = async (source, prep, op) => {
   const res = await post('/api/edits/add', { source, prep, op })

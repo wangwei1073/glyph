@@ -202,6 +202,39 @@ ggspec_api_app <- function(state) {
                                 page = list(start = start, length = length(idx)))))
     }
 
+    ## ---- 描述统计（L1）----
+    ## 复用 .prepared_full：统计基于「加工 + 手工编辑后」的数据，与画布/预览完全一致
+    if (path == "/api/stats/summary" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      res <- tryCatch(
+        .ggspec_stats_summary(pv$d,
+                              vars = body$vars %||% character(0),
+                              groupBy = body$groupBy %||% character(0)),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE,
+                                summary = res$summary,
+                                vars = as.list(res$vars),
+                                groupBy = as.list(res$groupBy),
+                                nrow = nrow(pv$d),
+                                code = paste(res$code, collapse = "\n"))))
+    }
+
+    ## 统计可用列（数值列 / 可分组列）
+    if (path == "/api/stats/columns" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      cols <- tryCatch(.ggspec_stats_columns(pv$d), error = function(e) e)
+      if (inherits(cols, "error")) return(json_error(conditionMessage(cols), 400))
+      return(json_response(list(ok = TRUE, numeric = cols$numeric,
+                                groupable = cols$groupable, nrow = nrow(pv$d))))
+    }
+
     ## 加工后数据导出 CSV
     if (path == "/api/data/export-csv" && method == "POST") {
       src <- body$source %||% list()
