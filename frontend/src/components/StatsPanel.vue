@@ -5,10 +5,12 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
+import { useUiStore } from '../stores/ui'
 import { statsColumns, statsSummary, statsSuggest, statsTest, downloadBlob } from '../api'
 
 const data = useDataStore()
 const spec = useSpecStore()
+const ui = useUiStore()
 
 // ---- 共用 ----
 const loading = ref(false)
@@ -166,7 +168,22 @@ watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.va
 </script>
 
 <template>
-  <div class="gg-tab-scroll">
+  <div class="stats-drawer" :class="{ open: ui.statsOpen }">
+    <div class="sd-head" @click="ui.toggleStats()">
+      <el-icon :size="13"><component :is="ui.statsOpen ? 'ArrowDown' : 'ArrowRight'" /></el-icon>
+      <span class="sd-title">数据统计</span>
+      <span v-if="testResult" class="sd-badge" :class="sigClass">
+        {{ testResult.methodLabel }} · p = {{ pval(testResult.p) }}
+      </span>
+      <span v-else-if="result && result.summary" class="sd-badge">
+        描述统计 · {{ result.summary.length }} 行
+      </span>
+      <span v-else class="sd-hint">描述统计 / 统计检验</span>
+      <span style="flex:1" />
+      <span class="sd-toggle">{{ ui.statsOpen ? '收起' : '展开' }}</span>
+    </div>
+
+    <div v-if="ui.statsOpen" class="sd-body gg-scroll">
     <div v-if="!hasSource" class="gg-empty-hint" style="padding:30px">
       <el-icon class="big"><Coin /></el-icon>
       <div>先在左侧选择数据源</div>
@@ -360,8 +377,35 @@ watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.va
         检验结果会同时给出假设检查提示，请结合前提选择方法。
       </div>
     </template>
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* 底栏抽屉：占据画布下方，可折叠；与右栏面板解耦 */
+.stats-drawer {
+  flex-shrink: 0; display: flex; flex-direction: column;
+  border-top: 1px solid var(--gg-border);
+  background: var(--gg-panel); min-height: 0;
+}
+.stats-drawer.open { height: 300px; }
+.sd-head {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 5px 10px; cursor: pointer; user-select: none;
+  border-bottom: 1px solid var(--gg-border);
+  font-size: 12px;
+}
+.sd-head:hover { background: rgba(74, 144, 217, .06); }
+.sd-title { font-weight: 600; }
+.sd-hint, .sd-toggle { font-size: 11px; color: var(--el-text-color-secondary); }
+.sd-badge {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 9px;
+  background: rgba(128, 128, 128, .12); color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.sd-badge.sig { background: rgba(84, 178, 142, .16); color: #2f8b68; }
+.sd-body { flex: 1; min-height: 0; padding: 2px 4px 8px; }
+</style>
 
 <style scoped>
 .stat-head {

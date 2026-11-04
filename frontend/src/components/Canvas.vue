@@ -7,8 +7,11 @@ import { useMetaStore } from '../stores/meta'
 import { useDataStore } from '../stores/data'
 import { usePinStore } from '../stores/pins'
 import { exportPlot, downloadBlob, genCode, getPlotly, checkExport, getJournalTemplates, bundlePlot } from '../api'
+import StatsPanel from './StatsPanel.vue'
+import { useUiStore } from '../stores/ui'
 
 const spec = useSpecStore()
+const ui = useUiStore()
 const meta = useMetaStore()
 const data = useDataStore()
 const pins = usePinStore()
@@ -425,6 +428,12 @@ async function drawPlotly() {
     </el-popover>
 
     <span style="flex:1" />
+    <el-tooltip :content="ui.statsOpen ? '收起数据统计' : '打开数据统计（描述统计 / 检验）'">
+      <el-button size="small" :type="ui.statsOpen ? 'primary' : ''" :plain="ui.statsOpen"
+        @click="ui.toggleStats()">
+        <el-icon class="el-icon--left"><DataAnalysis /></el-icon><span class="btn-label">统计</span>
+      </el-button>
+    </el-tooltip>
     <el-tooltip content="把当前图存入图库（用于拼图组合）">
       <el-button class="wide-only" size="small"
         :disabled="!spec.spec.layers.length || spec.composeActive || pins.saving"
@@ -508,6 +517,9 @@ async function drawPlotly() {
     <pre v-if="codeBlock" class="code-block gg-mono">{{ codeBlock }}</pre>
     <div v-else class="gg-empty-hint" style="padding:40px">暂无代码</div>
   </div>
+
+  <!-- 底栏：数据统计抽屉（描述统计 + 统计检验） -->
+  <StatsPanel />
 
   <div class="gg-status gg-mono" :title="statusParts">{{ statusParts }}</div>
 

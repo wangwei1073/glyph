@@ -12,7 +12,6 @@ import AnnotatePanel from './AnnotatePanel.vue'
 import ThemePanel from './ThemePanel.vue'
 import AdvancedPanel from './AdvancedPanel.vue'
 import PinPanel from './PinPanel.vue'
-import StatsPanel from './StatsPanel.vue'
 
 const ui = useUiStore()
 const tab = computed({
@@ -29,7 +28,6 @@ const items = [
   { name: 'labs', label: '标签', icon: 'EditPen', group: 2 },
   { name: 'annot', label: '注释', icon: 'Location', group: 2 },
   { name: 'theme', label: '主题', icon: 'Brush', group: 2 },
-  { name: 'stats', label: '统计', icon: 'DataAnalysis', group: 3 },
   { name: 'adv', label: '高级', icon: 'Setting', group: 3 }
 ]
 </script>
@@ -59,7 +57,6 @@ const items = [
       <AnnotatePanel v-show="tab === 'annot'" />
       <ThemePanel v-show="tab === 'theme'" />
       <PinPanel v-show="tab === 'patch'" />
-      <StatsPanel v-show="tab === 'stats'" />
       <AdvancedPanel v-show="tab === 'adv'" />
     </div>
   </div>

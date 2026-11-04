@@ -13,7 +13,7 @@ function loadStored() {
 }
 
 export const useUiStore = defineStore('ui', {
-  state: () => ({ tab: 'layers', leftOpen: true, rightOpen: true, ...loadStored() }),
+  state: () => ({ tab: 'layers', leftOpen: true, rightOpen: true, statsOpen: false, ...loadStored() }),
   actions: {
     setTab(tab) {
       this.tab = tab
@@ -27,10 +27,14 @@ export const useUiStore = defineStore('ui', {
       this.rightOpen = !this.rightOpen
       this.persist()
     },
+    toggleStats() {
+      this.statsOpen = !this.statsOpen
+      this.persist()
+    },
     persist() {
       try {
         localStorage.setItem(LS_KEY, JSON.stringify({
-          tab: this.tab, leftOpen: this.leftOpen, rightOpen: this.rightOpen
+          tab: this.tab, leftOpen: this.leftOpen, rightOpen: this.rightOpen, statsOpen: this.statsOpen
         }))
       } catch { /* 隐私模式下忽略 */ }
     }
