@@ -3,10 +3,13 @@
 import { computed } from 'vue'
 import { useMetaStore } from '../stores/meta'
 import { useSpecStore } from '../stores/spec'
+import { useUiStore } from '../stores/ui'
 import ParamControl from './ParamControl.vue'
+import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const spec = useSpecStore()
+const ui = useUiStore()
 
 const curLayerParams = computed(() => meta.layerParams(spec.curLayer?.geom))
 const curLayerStatParams = computed(() => meta.layerStatParams(spec.curLayer?.geom))
@@ -116,10 +119,13 @@ const aesParamSchema = (name) => {
         @update:model-value="setAesParam(name, $event)" />
     </div>
   </div>
-  <div v-else class="gg-empty-hint" style="padding:30px">先在「图层」中添加并选中图层</div>
+  <EmptyState v-else icon="Tools" title="还没有可调参数"
+    desc="参数跟着选中的图层走：先在「图层」里添加并选中一个 geom。">
+    <el-button size="small" type="primary" @click="ui.setTab('layers')">去添加图层</el-button>
+  </EmptyState>
 </template>
 
 <style scoped>
 .opt-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
-.opt-fn { font-size: 10.5px; color: var(--el-text-color-secondary); }
+.opt-fn { font-size: 11px; color: var(--el-text-color-secondary); }
 </style>

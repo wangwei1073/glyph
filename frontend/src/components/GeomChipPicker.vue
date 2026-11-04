@@ -49,7 +49,7 @@ function tip(g) {
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
     </div>
-    <div class="gg-scroll" style="max-height:410px">
+    <div class="gg-scroll geom-scroll" style="max-height:410px">
       <div v-for="g in filteredGroups" :key="g.name">
         <div class="gg-subhead">{{ g.name }}<span class="cnt">{{ g.geoms.length }}</span></div>
         <div class="geom-grid">
@@ -69,9 +69,9 @@ function tip(g) {
 
 <style scoped>
 .picker-head { display: flex; align-items: center; gap: 8px; }
-.picker-head :deep(.el-radio-button__inner) { padding: 4px 8px; font-size: 11.5px; }
+.picker-head :deep(.el-radio-button__inner) { padding: 4px 8px; font-size: 12px; }
 .cnt {
-  margin-left: 6px; font-weight: 400; font-size: 10px; color: var(--el-text-color-placeholder);
+  margin-left: 6px; font-weight: 400; font-size: 11px; color: var(--el-text-color-placeholder);
 }
 .geom-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0 2px 6px;
@@ -82,13 +82,17 @@ function tip(g) {
   transition: border-color .12s, box-shadow .12s, transform .12s; user-select: none;
 }
 .geom-card:hover {
-  border-color: var(--gg-accent); box-shadow: 0 2px 8px rgba(74, 144, 217, .22);
+  border-color: var(--gg-accent); box-shadow: 0 2px 8px rgba(47, 111, 191, .22);
   transform: translateY(-1px);
 }
 .geom-card img { width: 100%; height: 52px; object-fit: contain; display: block; }
 .geom-card .lbl {
-  font-size: 10.5px; line-height: 1.25; margin-top: 2px; color: #333; text-align: center;
+  font-size: 11px; line-height: 1.25; margin-top: 2px; color: #333; text-align: center;
   height: 2.5em; overflow: hidden; display: -webkit-box;
   -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all;
 }
+
+/* 隐藏滚动条（滚轮 / 触控板仍可滚动）：宽度固定、内容一眼能看出还可下滑 */
+.geom-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.geom-scroll::-webkit-scrollbar { width: 0; height: 0; }
 </style>

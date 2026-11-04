@@ -4,6 +4,7 @@ import { ref, computed } from 'vue'
 import { useMetaStore } from '../stores/meta'
 import { useSpecStore } from '../stores/spec'
 import ParamControl from './ParamControl.vue'
+import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const spec = useSpecStore()
@@ -12,11 +13,19 @@ const search = ref('')
 const openGroups = ref(['plot'])
 const showAll = ref(false)
 
+const PKG_LABELS = {
+  ggthemes: 'ggthemes 扩展', ggprism: 'ggprism 扩展', ggpubr: 'ggpubr 扩展'
+}
+
 const baseGroups = computed(() => {
   const g2 = meta.themes.filter(t => (t.package || 'ggplot2') === 'ggplot2')
   const ext = meta.themes.filter(t => t.package && t.package !== 'ggplot2')
   const groups = [{ label: 'ggplot2 内置', options: g2 }]
-  if (ext.length) groups.push({ label: 'ggthemes 扩展', options: ext })
+  const pkgs = []
+  for (const t of ext) if (!pkgs.includes(t.package)) pkgs.push(t.package)
+  for (const p of pkgs) {
+    groups.push({ label: PKG_LABELS[p] || `${p} 扩展`, options: ext.filter(t => t.package === p) })
+  }
   return groups.filter(g => g.options.length)
 })
 
@@ -121,6 +130,12 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
         </el-option-group>
       </el-select>
     </div>
+    <EmptyState v-if="!spec.spec.theme.base && !Object.keys(spec.spec.theme.elements).length"
+      icon="Brush" title="当前使用默认主题"
+      desc="一键套用内置或扩展主题，也可以只微调个别元素。">
+      <el-button size="small" @click="setBase('minimal')">极简主题</el-button>
+      <el-button v-if="meta.ext.ggprism" size="small" @click="setBase('prism')">Prism 主题</el-button>
+    </EmptyState>
     <template v-if="spec.spec.theme.base">
       <div v-for="p in themeArgs" :key="p.name" class="p-row">
         <label>{{ p.label }}</label>
@@ -155,7 +170,7 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
 
     <el-collapse v-model="openGroups">
       <el-collapse-item v-for="g in filteredGroups" :key="g.key" :name="g.key">
-        <template #title><span style="font-size:12.5px">{{ g.label }}（{{ g.elements.length }}）</span></template>
+        <template #title><span style="font-size: 13px">{{ g.label }}（{{ g.elements.length }}）</span></template>
         <div v-for="e in g.elements" :key="e.name" class="el-box">
           <div class="el-head">
             <el-checkbox size="small" :model-value="isBlank(e.name)"
@@ -247,11 +262,11 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
 .el-box { border-top: 1px dashed var(--gg-border); padding: 5px 12px 7px; }
 .el-head { display: flex; align-items: center; gap: 8px; }
 .el-name { font-size: 12px; }
-.el-type { font-size: 10px; color: var(--el-text-color-secondary); border: 1px solid var(--gg-border); border-radius: 3px; padding: 0 4px; }
+.el-type { font-size: 11px; color: var(--el-text-color-secondary); border: 1px solid var(--gg-border); border-radius: 4px; padding: 0 4px; }
 .el-props { padding: 4px 0 0 26px; }
 .ep-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
-.ep-row > label { width: 84px; font-size: 11.5px; color: var(--el-text-color-secondary); flex-shrink: 0; }
+.ep-row > label { width: 84px; font-size: 12px; color: var(--el-text-color-secondary); flex-shrink: 0; }
 .el-addhint { padding-left: 26px; }
-.margin-item { display: flex; align-items: center; gap: 4px; font-size: 11.5px; }
+.margin-item { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .margin-inline { display: flex; gap: 4px; }
 </style>

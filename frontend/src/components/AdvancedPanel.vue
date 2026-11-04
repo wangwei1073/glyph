@@ -94,19 +94,21 @@ async function runRaw() {
   }
 }
 
+// 扩展清单：key 对应 backend /api/meta 的 extensions 标记，where 说明入口面板
 const extList = [
-  { key: 'ggthemes', label: 'ggthemes 主题/标度' },
-  { key: 'ggsci', label: 'ggsci 学术配色' },
-  { key: 'ggrepel', label: 'ggrepel 防重叠标签' },
-  { key: 'patchwork', label: 'patchwork 拼图', note: '库可用（多图面板后续接入）' },
-  { key: 'plotly', label: 'plotly 交互预览' }
+  { key: 'ggthemes', label: 'ggthemes 主题/标度', where: '标度 · 主题' },
+  { key: 'ggsci', label: 'ggsci 学术配色', where: '标度' },
+  { key: 'ggprism', label: 'ggprism Prism 配色/主题', where: '标度 · 主题 · 标签 · 注释' },
+  { key: 'ggrepel', label: 'ggrepel 防重叠标签', where: '图层' },
+  { key: 'patchwork', label: 'patchwork 拼图', where: '拼图（先「存入图库」）' },
+  { key: 'plotly', label: 'plotly 交互预览', where: '画布「交互预览」' }
 ]
 </script>
 
 <template>
   <div class="gg-tab-scroll">
     <div class="gg-subhead">原始代码模式（完全自由，直接运行 R 代码；数据通过 df 变量使用）</div>
-    <div style="padding: 0 12px">
+    <div class="adv-pad">
       <el-button size="small" @click="loadFromSpec">
         <el-icon><Download /></el-icon>载入当前图形的生成代码
       </el-button>
@@ -115,46 +117,52 @@ const extList = [
       </el-button>
     </div>
     <div ref="editorEl" class="cm-editor-box" @keydown.ctrl.enter.prevent="runRaw" />
-    <div style="padding:4px 12px; font-size:11.5px; color:var(--el-text-color-secondary)">
+    <div class="gg-hint" style="padding: 4px 12px">
       当前数据的加工结果绑定在变量 <code class="gg-mono">df</code> 上；修改代码后点运行即可覆盖预览。
     </div>
 
-    <div class="gg-subhead" style="margin-top:16px">已集成扩展</div>
-    <div style="padding: 0 12px">
+    <div class="gg-subhead gg-section-gap">已集成扩展</div>
+    <div class="adv-pad">
       <div v-for="e in extList" :key="e.key" class="ext-row">
         <el-tag size="small" :type="meta.ext[e.key] ? 'success' : 'info'">
           {{ meta.ext[e.key] ? '已启用' : '未安装' }}
         </el-tag>
-        <span style="margin-left:8px">{{ e.label }}</span>
-        <span v-if="e.note" style="margin-left:6px;font-size:11px;color:var(--el-text-color-secondary)">{{ e.note }}</span>
+        <span class="ext-name">{{ e.label }}</span>
+        <span class="ext-where">{{ e.where }}</span>
       </div>
-      <div style="padding-top:6px;font-size:11.5px;color:var(--el-text-color-secondary)">
-        启用方式：ggrepel 的 geom 在「图层」、ggsci/ggthemes 的标度在「标度」、
-        ggthemes 主题在「主题」面板中直接选择；plotly 在画布「交互预览」使用。
+      <div class="gg-hint" style="padding-top: 6px">
+        可用性取决于本机是否安装对应包；安装后直接在「入口」所指面板选择即可，
+        生成的代码会自动带上 <code class="gg-mono">library(pkg)</code>。
       </div>
     </div>
 
-    <div class="gg-subhead" style="margin-top:16px">渲染设置</div>
+    <div class="gg-subhead gg-section-gap">渲染设置</div>
     <div class="p-row">
       <label>预览尺寸</label>
-      <span style="font-size:12px">
+      <span class="gg-hint-md">
         {{ spec.renderOpts.width }} × {{ spec.renderOpts.height }} @ {{ spec.renderOpts.dpi }} dpi
         （在画布顶部工具栏调整）
       </span>
     </div>
     <div class="p-row">
       <label>数据行数</label>
-      <span style="font-size:12px">当前渲染使用的 df 已应用筛选/新增列/抽样</span>
+      <span class="gg-hint-md">当前渲染使用的 df 已应用筛选/新增列/抽样</span>
     </div>
   </div>
 </template>
 
 <style scoped>
+.adv-pad { padding: 0 12px; }
 .cm-editor-box {
-  margin: 8px 12px; border: 1px solid var(--gg-border); border-radius: 6px;
-  overflow: hidden; max-height: 340px; font-size: 12.5px;
+  margin: 8px 12px; border: 1px solid var(--gg-border); border-radius: var(--gg-r-ctl);
+  overflow: hidden; max-height: 340px; font-size: 13px;
 }
 .cm-editor-box :deep(.cm-editor) { max-height: 340px; }
 .cm-editor-box :deep(.cm-scroller) { overflow: auto; }
-.ext-row { display: flex; align-items: center; padding: 4px 0; font-size: 12.5px; }
+.ext-row { display: flex; align-items: center; padding: 4px 0; font-size: 13px; }
+.ext-name { margin-left: 8px; }
+.ext-where {
+  margin-left: auto; padding-left: 10px; font-size: 11px; text-align: right;
+  color: var(--gg-text-3); white-space: nowrap;
+}
 </style>

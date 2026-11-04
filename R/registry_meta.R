@@ -378,7 +378,12 @@ GUIDE_META <- list(
   gm("axis_theta",  "角度轴",           "图例", "极坐标角度轴"),
   gm("axis_stack",  "组合轴",           "图例", "多轴叠加"),
   gm("none",        "隐藏",             "图例", "不显示图例"),
-  gm("custom",      "自定义图形",       "图例", "完全自定义的 grob")
+  gm("custom",      "自定义图形",       "图例", "完全自定义的 grob"),
+  # ggprism
+  gm("prism_minor",        "Prism 次刻度",        "图例", "ggprism：带次刻度的坐标轴"),
+  gm("prism_offset",       "Prism 偏移轴",        "图例", "ggprism：轴线偏移（避免与数据重叠）"),
+  gm("prism_offset_minor", "Prism 偏移+次刻度",   "图例", "ggprism：偏移轴 + 次刻度"),
+  gm("prism_bracket",      "Prism 括号",          "图例", "ggprism：带括号的图例分组")
 )
 GUIDE_META <- setNames(GUIDE_META, vapply(GUIDE_META, function(x) x$name, character(1)))
 
@@ -407,7 +412,11 @@ GUIDE_PARAM_WIDGETS <- list(
   vjust       = pv("vjust", "number", "垂直对齐", step = 0.05),
   hjust       = pv("hjust", "number", "水平对齐", step = 0.05),
   rotation    = pv("rotation", "number", "旋转", step = 5),
-  force.guide = pv("force.guide", "bool", "强制覆盖")
+  force.guide = pv("force.guide", "bool", "强制覆盖"),
+  check.overlap = pv("check.overlap", "bool", "检查标签重叠"),
+  n.dodge     = pv("n.dodge", "number", "错行数", min = 1, step = 1),
+  width       = pv("width", "number", "括号宽度", min = 0, step = 0.05),
+  outside     = pv("outside", "bool", "画在绘图区外")
 )
 
 # ---- 标度类型标签（纯中文；R 函数名在选项右侧显示） -------------------------
@@ -449,6 +458,10 @@ THEME_LABELS <- list(
   gray = "默认灰底 theme_gray", bw = "黑白 theme_bw", linedraw = "细线 theme_linedraw",
   light = "浅色 theme_light", dark = "深色 theme_dark", minimal = "极简 theme_minimal",
   classic = "经典 theme_classic", void = "无框 theme_void", test = "测试 theme_test"
+)
+# ggprism 主题中文标签（key 为 theme_ 之后的名字）
+GGPRISM_THEME_LABELS <- list(
+  prism = "Prism 期刊风"
 )
 ELEMENT_PROP_SCHEMA <- list(
   text = list(
@@ -523,6 +536,13 @@ THEME_VALUE_WIDGETS <- list(
   axis.ticks.length.x  = pv("axis.ticks.length.x", "unit", "刻度长度 x"),
   axis.ticks.length.y  = pv("axis.ticks.length.y", "unit", "刻度长度 y"),
   axis.mini.ticks.length = pv("axis.mini.ticks.length", "unit", "小刻度长度"),
+  prism.ticks.length   = pv("prism.ticks.length", "unit", "Prism 刻度长度"),
+  prism.ticks.length.x = pv("prism.ticks.length.x", "unit", "Prism x 刻度长度"),
+  prism.ticks.length.x.top = pv("prism.ticks.length.x.top", "unit", "Prism x 刻度长度(上)"),
+  prism.ticks.length.x.bottom = pv("prism.ticks.length.x.bottom", "unit", "Prism x 刻度长度(下)"),
+  prism.ticks.length.y = pv("prism.ticks.length.y", "unit", "Prism y 刻度长度"),
+  prism.ticks.length.y.left = pv("prism.ticks.length.y.left", "unit", "Prism y 刻度长度(左)"),
+  prism.ticks.length.y.right = pv("prism.ticks.length.y.right", "unit", "Prism y 刻度长度(右)"),
   strip.placement      = pv("strip.placement", "select", "条带位置", c("outside", "inside")),
   strip.text           = pv("strip.text", "text", NULL),
   strip.background     = pv("strip.background", "rect", NULL),
@@ -610,5 +630,13 @@ THEME_ELEMENT_LABELS <- list(
   `strip.text.x.top` = "条带文字(x上)", `strip.text.x.bottom` = "条带文字(x下)",
   `strip.text.y.left` = "条带文字(y左)", `strip.text.y.right` = "条带文字(y右)",
   `strip.switch.pad.grid` = "切换时条带间距(grid)",
-  `strip.switch.pad.wrap` = "切换时条带间距(wrap)"
+  `strip.switch.pad.wrap` = "切换时条带间距(wrap)",
+  # ggprism 注册的轴刻度元素
+  `prism.ticks.length` = "Prism 刻度长度",
+  `prism.ticks.length.x` = "Prism x 刻度长度",
+  `prism.ticks.length.x.top` = "Prism x 刻度长度(上)",
+  `prism.ticks.length.x.bottom` = "Prism x 刻度长度(下)",
+  `prism.ticks.length.y` = "Prism y 刻度长度",
+  `prism.ticks.length.y.left` = "Prism y 刻度长度(左)",
+  `prism.ticks.length.y.right` = "Prism y 刻度长度(右)"
 )

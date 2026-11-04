@@ -624,11 +624,11 @@ meta_build_lookup <- function(meta) {
   for (g in meta$geoms) fp[[g$fn]] <- g$package %||% "ggplot2"
   for (s in meta$scales) fp[[s$fn]] <- s$package %||% "ggplot2"
   for (t in meta$themes) fp[[t$fn]] <- t$package %||% "ggplot2"
-  for (a in meta$annotations) fp[[a$fn]] <- "ggplot2"
-  for (p in meta$positions) fp[[p$fn]] <- "ggplot2"
-  for (c in meta$coords) fp[[c$fn]] <- "ggplot2"
-  for (g in meta$guides) fp[[g$fn]] <- "ggplot2"
+  for (g in meta$guides) fp[[g$fn]] <- g$package %||% "ggplot2"
   for (st in meta$stats) fp[[st$fn]] <- "ggplot2"
+  for (a in meta$annotations) fp[[a$fn]] <- a$package %||% "ggplot2"
+  for (p in meta$positions) fp[[p$fn]] <- "ggplot2"
+  for (cc in meta$coords) fp[[cc$fn]] <- "ggplot2"
   meta$fn_package <- fp
   meta
 }

@@ -142,7 +142,7 @@ onMounted(() => { pins.load() })
     <div v-if="spec.composeActive" style="padding:0 12px 8px">
       <el-alert type="success" :closable="false" show-icon>
         <template #title>画布正在渲染组合图（下方序列的 patchwork 结果）</template>
-        <span style="font-size:11.5px">关闭「渲染组合图」即可回到单图编辑</span>
+        <span style="font-size: 12px">关闭「渲染组合图」即可回到单图编辑</span>
       </el-alert>
     </div>
 
@@ -220,10 +220,10 @@ onMounted(() => { pins.load() })
 
 <style scoped>
 .pin-row {
-  display: flex; align-items: center; gap: 7px; padding: 4px 12px; font-size: 12.5px;
+  display: flex; align-items: center; gap: 7px; padding: 4px 12px; font-size: 13px;
 }
-.pin-badge { font-size: 10.5px; background: rgba(74,144,217,.12); color: var(--gg-accent);
-  border-radius: 3px; padding: 1px 5px; }
+.pin-badge { font-size: 11px; background: rgba(47, 111, 191,.12); color: var(--gg-accent);
+  border-radius: 4px; padding: 1px 5px; }
 .pin-name { font-weight: 600; }
 .pin-meta { color: var(--el-text-color-secondary); font-size: 11px; margin-right: auto; }
 .slot-row {
@@ -231,7 +231,7 @@ onMounted(() => { pins.load() })
 }
 .slot-no {
   width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
-  background: var(--gg-accent); color: #fff; font-size: 10.5px;
+  background: var(--gg-accent); color: #fff; font-size: 11px;
   display: flex; align-items: center; justify-content: center;
 }
 .op { font-size: 13px; color: var(--el-text-color-secondary); }

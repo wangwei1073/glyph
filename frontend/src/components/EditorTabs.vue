@@ -1,6 +1,7 @@
 <script setup>
 // 右侧控制面板：图标竖栏 + 内容区（分组表达语义层级）
-import { ref } from 'vue'
+import { computed } from 'vue'
+import { useUiStore } from '../stores/ui'
 import LayerPanel from './LayerPanel.vue'
 import AesPanel from './AesPanel.vue'
 import ParamPanel from './ParamPanel.vue'
@@ -12,7 +13,11 @@ import ThemePanel from './ThemePanel.vue'
 import AdvancedPanel from './AdvancedPanel.vue'
 import PinPanel from './PinPanel.vue'
 
-const tab = ref('layers')
+const ui = useUiStore()
+const tab = computed({
+  get: () => ui.tab,
+  set: (v) => ui.setTab(v)
+})
 const items = [
   { name: 'layers', label: '图层', icon: 'Files', group: 0 },
   { name: 'aes', label: '美学', icon: 'CollectionTag', group: 0 },
@@ -30,6 +35,10 @@ const items = [
 <template>
   <div class="editor-root">
     <nav class="rail">
+      <button class="rail-btn rail-collapse" title="收起控制面板" @click="ui.toggleRight()">
+        <el-icon :size="16"><ArrowRight /></el-icon>
+      </button>
+      <div class="rail-sep" />
       <template v-for="(it, i) in items" :key="it.name">
         <div v-if="i > 0 && it.group !== items[i - 1].group" class="rail-sep" />
         <button class="rail-btn" :class="{ active: tab === it.name }" @click="tab = it.name">
@@ -68,12 +77,14 @@ const items = [
   font-family: inherit; line-height: 1; font-size: inherit;
 }
 .rail-btn:hover { color: var(--el-text-color-primary); background: rgba(128,128,128,.07); }
-.rail-btn.active { color: var(--gg-accent); background: rgba(74,144,217,.10); }
+.rail-btn.active { color: var(--gg-accent); background: rgba(47, 111, 191,.10); }
 .rail-btn.active::before {
   content: ""; position: absolute; left: 0; top: 7px; bottom: 5px;
   width: 2.5px; border-radius: 0 2px 2px 0; background: var(--gg-accent);
 }
-.rail-lab { font-size: 10.5px; letter-spacing: .5px; }
+.rail-lab { font-size: 11px; letter-spacing: .3px; }
+.rail-collapse { padding: 4px 0 2px; color: var(--gg-text-4); }
+.rail-collapse:hover { color: var(--gg-brand); background: transparent; }
 .rail-sep { height: 1px; margin: 6px 12px; background: var(--gg-border); flex-shrink: 0; }
 .tab-body { flex: 1; min-width: 0; min-height: 0; }
 </style>

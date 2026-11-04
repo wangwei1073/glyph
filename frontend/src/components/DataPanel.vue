@@ -4,12 +4,14 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
+import { useUiStore } from '../stores/ui'
 import { setExprEl } from '../exprInsert'
 import DataPreviewDialog from './DataPreviewDialog.vue'
 import ColumnActions from './ColumnActions.vue'
 
 const data = useDataStore()
 const spec = useSpecStore()
+const ui = useUiStore()
 
 const pasteVisible = ref(false)
 const pasteText = ref('')
@@ -149,7 +151,13 @@ function openPreview(colName = '') {
     @dragover.prevent="dragging = true"
     @dragleave="dragging = false"
     @drop.prevent="onFile">
-    <div class="gg-panel-title"><el-icon><Coin /></el-icon>数据</div>
+    <div class="gg-panel-title">
+      <el-icon><Coin /></el-icon>数据
+      <span style="flex:1" />
+      <el-button text size="small" class="collapse-btn" title="收起数据面板" @click="ui.toggleLeft()">
+        <el-icon><ArrowLeft /></el-icon>
+      </el-button>
+    </div>
 
     <!-- 数据源 -->
     <div class="dp-srcrow">
@@ -312,57 +320,57 @@ function openPreview(colName = '') {
 }
 .dp-panel.dragging { outline: 2px dashed var(--gg-accent); outline-offset: -6px; }
 .dp-srcrow {
-  display: flex; align-items: center; gap: 6px; padding: 8px 10px 0;
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px 0; flex-wrap: wrap;
 }
 .prep-badge {
   background: #fff; color: var(--gg-accent); border-radius: 999px;
-  font-size: 10.5px; padding: 0 5px; margin-left: 5px; font-weight: 600;
+  font-size: 11px; padding: 0 5px; margin-left: 5px; font-weight: 600;
 }
 .dp-sechead {
   display: flex; align-items: center; gap: 6px;
-  padding: 9px 12px 4px; font-size: 11.5px; font-weight: 600;
+  padding: 9px 12px 4px; font-size: 12px; font-weight: 600;
   color: var(--el-text-color-secondary); flex-shrink: 0; cursor: pointer;
   user-select: none; letter-spacing: .4px;
 }
 .dp-sechead:not(.fold):hover { color: var(--el-text-color-primary); }
-.pv-n { font-weight: 400; font-size: 10.5px; }
+.pv-n { font-weight: 400; font-size: 11px; }
 .colrow {
-  display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 8px; font-size: 12.5px;
+  display: flex; align-items: center; gap: 6px; padding: 3px 8px 3px 8px; font-size: 13px;
   cursor: pointer;
 }
-.colrow:hover { background: rgba(74,144,217,.07); }
-.colrow.open { background: rgba(74,144,217,.10); }
+.colrow:hover { background: rgba(47, 111, 191,.07); }
+.colrow.open { background: rgba(47, 111, 191,.10); }
 .colrow.open .colname { font-weight: 600; color: var(--gg-accent); }
 .col-caret { font-size: 11px; color: var(--el-text-color-placeholder); flex-shrink: 0; margin-right: -2px; }
 .col-expand {
   padding: 6px 10px 8px 26px;
-  background: rgba(74,144,217,.05);
+  background: rgba(47, 111, 191,.05);
   border-left: 2px solid var(--gg-accent);
   margin-bottom: 2px;
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .colname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .coln {
-  margin-left: auto; font-size: 10px; color: var(--el-text-color-secondary);
+  margin-left: auto; font-size: 11px; color: var(--el-text-color-secondary);
   background: rgba(128,128,128,.10); border-radius: 8px; padding: 0 6px; line-height: 14px;
 }
 .col-open { padding: 2px; }
 .coldetail { font-size: 12px; }
-.cd-stat { color: var(--el-text-color-secondary); font-size: 11.5px; padding: 4px 0; }
+.cd-stat { color: var(--el-text-color-secondary); font-size: 12px; padding: 4px 0; }
 .cd-prev { display: flex; gap: 5px; flex-wrap: wrap; }
 .cd-prev code {
-  background: rgba(128,128,128,.08); border-radius: 3px; padding: 1px 5px;
-  font-size: 10.5px; max-width: 90px; overflow: hidden; text-overflow: ellipsis;
+  background: rgba(128,128,128,.08); border-radius: 4px; padding: 1px 5px;
+  font-size: 11px; max-width: 90px; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap;
 }
 .coldot {
-  font-size: 10px; color: #fff; border-radius: 3px; padding: 0 5px;
+  font-size: 11px; color: #fff; border-radius: 4px; padding: 0 5px;
   line-height: 14px;
 }
 .col-chip { cursor: pointer; }
 .col-chip:hover { border-color: var(--gg-accent); color: var(--gg-accent); }
 .gg-pvwrap { flex: 1; min-height: 90px; }
-.pv-table { border-collapse: collapse; font-size: 11.5px; width: 100%; }
+.pv-table { border-collapse: collapse; font-size: 12px; width: 100%; }
 .pv-table th {
   position: sticky; top: 0; background: var(--gg-panel);
   text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--gg-border);
@@ -374,16 +382,16 @@ function openPreview(colName = '') {
 }
 .pin-row { display: flex; align-items: center; gap: 7px; padding: 4px 6px; }
 .pin-badge {
-  font-size: 10.5px; background: rgba(74,144,217,.12); color: var(--gg-accent);
-  border-radius: 3px; padding: 1px 5px;
+  font-size: 11px; background: rgba(47, 111, 191,.12); color: var(--gg-accent);
+  border-radius: 4px; padding: 1px 5px;
 }
 .pv-count {
-  font-size: 10.5px; color: var(--el-text-color-secondary); margin-left: 4px;
+  font-size: 11px; color: var(--el-text-color-secondary); margin-left: 4px;
 }
 .drop-mask {
   position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 8px;
-  background: rgba(74,144,217,.14); backdrop-filter: blur(1px);
+  background: rgba(47, 111, 191,.14); backdrop-filter: blur(1px);
   color: var(--gg-accent); font-size: 13px; pointer-events: none;
 }
 </style>

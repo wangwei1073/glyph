@@ -4,11 +4,14 @@ import { ref, computed, watch } from 'vue'
 import { useMetaStore } from '../stores/meta'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
+import { useUiStore } from '../stores/ui'
 import ParamControl from './ParamControl.vue'
+import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const data = useDataStore()
 const spec = useSpecStore()
+const ui = useUiStore()
 
 const mode = ref({}) // aesName -> 'map' | 'value'
 
@@ -168,11 +171,14 @@ watch(() => spec.selectedLayer, () => { afterStatHint.value = ''; mode.value = {
     <div v-if="spec.curLayer.stat" class="gg-subhead" style="margin-top:14px">
       stat_{{ spec.curLayer.stat }} 计算变量（after_stat）
     </div>
-    <div v-if="spec.curLayer.stat" style="padding: 2px 12px; font-size:11.5px; color:var(--el-text-color-secondary)">
+    <div v-if="spec.curLayer.stat" style="padding: 2px 12px; font-size: 12px; color:var(--el-text-color-secondary)">
       {{ (meta.statByName[spec.curLayer.stat]?.aes || []).join(' · ') }}
     </div>
   </div>
-  <div v-else class="gg-empty-hint" style="padding:30px">先在「图层」中添加并选中图层</div>
+  <EmptyState v-else icon="CollectionTag" title="还没有选中图层"
+    desc="先在「图层」里添加一个 geom，再回来设置映射与常量。">
+    <el-button size="small" type="primary" @click="ui.setTab('layers')">去添加图层</el-button>
+  </EmptyState>
 </template>
 
 <style scoped>

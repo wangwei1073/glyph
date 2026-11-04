@@ -62,7 +62,7 @@ function change(i, geomName) {
       <div style="min-width:0">
         <div class="layer-name">
           {{ meta.geomByName[l.geom]?.label || l.geom }}
-          <span v-if="l.geom !== (meta.geomByName[l.geom]?.name)" class="gg-mono" style="font-size:10px;color:var(--el-text-color-secondary)"></span>
+          <span v-if="l.geom !== (meta.geomByName[l.geom]?.name)" class="gg-mono" style="font-size: 11px;color:var(--el-text-color-secondary)"></span>
         </div>
         <div class="layer-sub gg-mono">{{ describe(l) }}</div>
       </div>
@@ -97,9 +97,9 @@ function change(i, geomName) {
   padding: 9px 10px; border-bottom: 1px solid var(--gg-border); flex-shrink: 0;
 }
 .layer-count { font-size: 11px; color: var(--el-text-color-secondary); }
-.layer-name { font-size: 12.5px; font-weight: 600; }
+.layer-name { font-size: 13px; font-weight: 600; }
 .layer-sub {
-  font-size: 10.5px; color: var(--el-text-color-secondary);
+  font-size: 11px; color: var(--el-text-color-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
 }
 </style>

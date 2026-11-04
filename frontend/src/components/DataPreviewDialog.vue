@@ -374,18 +374,18 @@ function scrollFocus() {
 .pvd-body { display: flex; flex-direction: column; min-height: 360px; }
 .pvd-bar { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; }
 .pvd-scroll { flex: 1; min-height: 240px; max-height: calc(90vh - 168px); border: 1px solid var(--gg-border); border-radius: 6px; }
-.pvd-table { border-collapse: collapse; font-size: 11.5px; width: 100%; }
+.pvd-table { border-collapse: collapse; font-size: 12px; width: 100%; }
 .pvd-table th {
   position: sticky; top: 0; z-index: 2; background: var(--gg-panel);
   border-bottom: 1px solid var(--gg-border); text-align: left; white-space: nowrap;
 }
-.pvd-table th.focus { outline: 2px solid var(--gg-accent); outline-offset: -2px; background: rgba(74,144,217,.08); }
-.pvd-table th.sorted { background: rgba(74,144,217,.12); }
+.pvd-table th.focus { outline: 2px solid var(--gg-accent); outline-offset: -2px; background: rgba(47, 111, 191,.08); }
+.pvd-table th.sorted { background: rgba(47, 111, 191,.12); }
 .th-in { display: flex; align-items: center; gap: 3px; padding: 3px 5px; }
 .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
 .th-name { font-weight: 600; max-width: 104px; overflow: hidden; text-overflow: ellipsis; }
 .th-n {
-  font-size: 9.5px; color: var(--el-text-color-secondary);
+  font-size: 11px; color: var(--el-text-color-secondary);
   background: rgba(128,128,128,.10); border-radius: 8px; padding: 0 4px; line-height: 12px;
 }
 .pvd-sort, .pvd-menu { padding: 0 !important; width: 16px; height: 16px; opacity: .45; transition: opacity .12s; }
@@ -395,15 +395,15 @@ function scrollFocus() {
   padding: 1px 7px; line-height: 17px; border-bottom: 1px solid var(--gg-border);
   white-space: nowrap; max-width: 148px; overflow: hidden; text-overflow: ellipsis;
 }
-.pvd-table tbody tr:hover td { background: rgba(74,144,217,.06); }
+.pvd-table tbody tr:hover td { background: rgba(47, 111, 191,.06); }
 .pvd-stat { color: var(--el-text-color-secondary); font-size: 11px; padding: 2px 0; }
 .pvd-prev { display: flex; gap: 4px; flex-wrap: wrap; }
 .pvd-prev code {
-  background: rgba(128,128,128,.08); border-radius: 3px; padding: 0 4px;
-  font-size: 10.5px; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: rgba(128,128,128,.08); border-radius: 4px; padding: 0 4px;
+  font-size: 11px; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pvd-editrow { display: flex; gap: 6px; padding-top: 5px; margin-top: 5px; border-top: 1px dashed var(--gg-border); }
-.pvd-foot { display: flex; align-items: center; gap: 8px; padding-top: 6px; flex-wrap: wrap; font-size: 11.5px; }
+.pvd-foot { display: flex; align-items: center; gap: 8px; padding-top: 6px; flex-wrap: wrap; font-size: 12px; }
 .pvd-editable { cursor: cell; }
 .pvd-redit { width: 28px; }
 </style>

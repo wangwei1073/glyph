@@ -6,6 +6,7 @@ import { useMetaStore } from './stores/meta'
 import { useDataStore } from './stores/data'
 import { useSpecStore } from './stores/spec'
 import { usePinStore } from './stores/pins'
+import { useUiStore } from './stores/ui'
 import { downloadBlob } from './api'
 import DataPanel from './components/DataPanel.vue'
 import Canvas from './components/Canvas.vue'
@@ -15,6 +16,7 @@ const meta = useMetaStore()
 const data = useDataStore()
 const spec = useSpecStore()
 const pins = usePinStore()
+const ui = useUiStore()
 
 // ---- 自动渲染（深度 watch spec + 渲染设置，550ms 防抖） ----
 let debounceTimer = null
@@ -48,8 +50,8 @@ function onKeydown(e) {
   }
 }
 
-onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
+// 启动加载（元数据 + 数据源）；失败时停在启动页，可重试
+async function boot() {
   // 后端刚启动 / 代理尚未就绪时重试
   const retry = async (fn, tries = 4, delay = 700) => {
     let err
@@ -61,11 +63,15 @@ onMounted(async () => {
   try {
     await retry(() => meta.load())
     await retry(() => data.load())
+    spec.renderNow()
   } catch (e) {
     ElMessage.error('后端服务不可用: ' + e.message)
-    return
   }
-  spec.renderNow()
+}
+
+onMounted(async () => {
+  window.addEventListener('keydown', onKeydown)
+  await boot()
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
@@ -123,7 +129,22 @@ function onProjectCmd(cmd) {
 </script>
 
 <template>
-  <div class="gg-layout">
+  <!-- 启动加载页：元数据枚举约 0.5–1s，避免整屏白闪；失败时停留在此并可重试 -->
+  <div v-if="!meta.loaded" class="gg-boot">
+    <div class="gg-boot-logo">ggplotGUI</div>
+    <template v-if="!meta.error">
+      <div class="gg-boot-row">
+        <el-icon class="is-loading" :size="18"><Loading /></el-icon>
+        <span>正在加载绘图能力…</span>
+      </div>
+    </template>
+    <template v-else>
+      <div class="gg-boot-row">后端服务不可用</div>
+      <el-button size="small" @click="boot">重试</el-button>
+    </template>
+  </div>
+
+  <div v-else class="gg-layout">
     <header class="gg-header">
       <div class="h-left">
         <div class="gg-logo" :title="`ggplot2 ${meta.ggplot2Version}`">
@@ -135,6 +156,9 @@ function onProjectCmd(cmd) {
         <el-tooltip content="自动渲染：修改后自动出图；关闭后用右侧按钮手动渲染">
           <el-switch v-model="spec.autoRender" size="small" />
         </el-tooltip>
+        <span class="h-mid-label" :class="{ off: !spec.autoRender }">
+          {{ spec.autoRender ? '自动渲染' : '手动渲染' }}
+        </span>
         <el-button type="primary" size="small" :loading="spec.rendering" @click="spec.renderNow()">
           <el-icon class="el-icon--left"><MagicStick /></el-icon>渲染
         </el-button>
@@ -166,9 +190,19 @@ function onProjectCmd(cmd) {
     </header>
 
     <div class="gg-main">
-      <div class="gg-left"><DataPanel /></div>
+      <div v-show="ui.leftOpen" class="gg-left"><DataPanel /></div>
+      <button v-show="!ui.leftOpen" class="gg-side-strip" title="展开数据面板"
+        @click="ui.toggleLeft()">
+        <el-icon><ArrowRight /></el-icon>
+      </button>
+
       <div class="gg-center"><Canvas /></div>
-      <div class="gg-right"><EditorTabs /></div>
+
+      <button v-show="!ui.rightOpen" class="gg-side-strip" title="展开控制面板"
+        @click="ui.toggleRight()">
+        <el-icon><ArrowLeft /></el-icon>
+      </button>
+      <div v-show="ui.rightOpen" class="gg-right"><EditorTabs /></div>
     </div>
   </div>
 </template>

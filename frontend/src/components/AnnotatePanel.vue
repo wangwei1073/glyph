@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { useMetaStore } from '../stores/meta'
 import { useSpecStore } from '../stores/spec'
 import ParamControl from './ParamControl.vue'
+import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const spec = useSpecStore()
@@ -97,20 +98,23 @@ function setParam(a, name, v) {
       </div>
     </div>
 
-    <div v-if="!spec.spec.annotations.length" class="gg-empty-hint" style="padding:18px">
-      添加文字标注、参考线、对数刻度等。坐标值支持 R 表达式（如 mean(df$x)）
-    </div>
+    <EmptyState v-if="!spec.spec.annotations.length" icon="Location" title="还没有注释"
+      desc="给图加文字、参考线、p 值或坐标轴刻度；坐标值支持 R 表达式。">
+      <el-button size="small" type="primary" @click="addAnnotate">
+        <el-icon><Plus /></el-icon>添加文字标注
+      </el-button>
+    </EmptyState>
   </div>
 </template>
 
 <style scoped>
 .ann-card {
-  border: 1px solid var(--gg-border); border-radius: 7px;
+  border: 1px solid var(--gg-border); border-radius: 8px;
   margin: 7px 10px; padding: 6px 0 8px;
 }
 .ann-head {
   display: flex; align-items: center; gap: 6px;
   padding: 4px 9px 6px; border-bottom: 1px dashed var(--gg-border); margin-bottom: 4px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 </style>

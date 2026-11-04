@@ -47,17 +47,18 @@
 - 全部 scale 家族按 aesthetic 分组（continuous / discrete / binned / date / manual /
   brewer / gradient / gradient2 / viridis / hue / grey / reverse / log10 / sqrt …），
   含 **sec_axis 次轴**、轴位置、expansion、变换
-- ggsci 学术配色与 ggthemes 标度（自动识别）
+- ggsci 学术配色、ggthemes 标度与 **ggprism 的 65 套 Prism 配色**（自动识别）
 - 坐标系：cartesian / fixed / polar / radial / sf / map / trans…（含 4.0 新 API；
   flip 以 superseded 标注）
 - facet_wrap / facet_grid 全参数（scales、space、margins、labeller…）
 
 ### 标签 · 图例 · 注释 · 主题
 - labs 全字段 + 按映射的图例标题
-- guides：legend / colorbar / bins / colorsteps / axis…（含参数）
-- annotate()（任意 geom）与 annotation_logticks 等函数
-- **全部 160 个 theme() 元素**：中文标签、按类型（text / line / rect / …）渲染对应属性；
-  9 个内置主题 + ggthemes 主题；base_family 支持微软雅黑/黑体等中文字体预设
+- guides：legend / colorbar / bins / colorsteps / axis…（含参数），装 ggprism 后还有
+  **次刻度 / 偏移轴 / 括号**四种 Prism 轴样式
+- annotate()（任意 geom）与 annotation_logticks 等函数；ggprism 的 annotation_ticks 轴刻度
+- **全部 160+ 个 theme() 元素**：中文标签、按类型（text / line / rect / …）渲染对应属性；
+  9 个内置主题 + ggthemes 主题 + **ggprism 的 Prism 期刊风主题**；base_family 支持微软雅黑/黑体等中文字体预设
 
 ### 输出
 - 实时自动渲染（可暂停手动），预览尺寸 / dpi 可调
@@ -120,6 +121,8 @@ Rscript tools/make_geom_thumbs.R
 - **大图渲染慢**：后端是单线程 httpuv，一次重渲染会阻塞其它请求（包括取图）；
   渲染已在前端串行化并给到 300s 超时，数据量大时建议先抽样（数据 → 加工 → 抽样）。
 - **上传体积**：单文件上限 35MB（请求体 base64 后约 47MB，受后端 50MB 限制）。
+- **选 Prism guide 后出现 S3 弃用警告**：ggprism 的 guide 仍基于 ggplot2 旧 S3 机制
+  （ggplot2 4.0 已弃用但兼容），功能正常；标度与主题不受影响。
 - **只能本机访问**：默认绑定 127.0.0.1，并校验 Host/Origin/Content-Type，防止网页跨站调用；
   如需局域网访问请显式 `--host 0.0.0.0`（会放宽 Host 校验，请自行评估风险）。
 - dev 模式下 vite 代理对 >64KB 响应有截断问题（生产模式无代理，不受影响），
@@ -128,5 +131,5 @@ Rscript tools/make_geom_thumbs.R
 ## 依赖
 
 后端：R、ggplot2、httpuv、jsonlite、ragg（PNG）、readr/readxl（导入）、
-自动识别：ggsci / ggthemes / ggrepel / patchwork / plotly / scales。
+自动识别：ggsci / ggthemes / ggprism / ggrepel / patchwork / plotly / scales。
 前端：Vue 3、Element Plus、Pinia、CodeMirror 6、plotly.js。

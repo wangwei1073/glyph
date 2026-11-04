@@ -91,13 +91,13 @@ const fmt = (v) => (v === null || v === undefined ? '' : String(v))
 .ca-target { font-size: 11px; color: var(--el-text-color-secondary); }
 .ca-warn { color: #e8734a; }
 .ca-aes { display: flex; flex-wrap: wrap; gap: 4px; }
-.ca-aes .el-button { margin: 0; height: 22px; padding: 0 8px; font-size: 11.5px; }
+.ca-aes .el-button { margin: 0; height: 22px; padding: 0 8px; font-size: 12px; }
 .ca-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ca-ins { padding: 0 2px; height: 20px; font-size: 11.5px; }
+.ca-ins { padding: 0 2px; height: 20px; font-size: 12px; }
 .ca-stat { font-size: 11px; color: var(--el-text-color-secondary); }
 .ca-prev { display: flex; gap: 4px; flex-wrap: wrap; }
 .ca-prev code {
-  background: rgba(128, 128, 128, .08); border-radius: 3px; padding: 0 4px;
-  font-size: 10.5px; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: rgba(128, 128, 128, .08); border-radius: 4px; padding: 0 4px;
+  font-size: 11px; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 </style>

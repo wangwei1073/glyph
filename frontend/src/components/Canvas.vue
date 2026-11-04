@@ -78,6 +78,13 @@ function pinCurrent() {
   }).catch((e) => ElMessage.error(e.message))
 }
 
+// 窄窗口「更多」菜单：复用同一个动作入口
+function onMoreCmd(cmd) {
+  if (cmd === 'pin') pinCurrent()
+  else if (cmd === 'plotly') showPlotly()
+  else doExport(cmd)
+}
+
 function addFirstLayer() {
   spec.addLayer('point')
   if (!Object.keys(spec.spec.layers[0].aes || {}).length) spec.guessAes(spec.spec.layers[0])
@@ -140,8 +147,8 @@ async function drawPlotly() {
 
     <el-popover v-model:visible="sizePopover" placement="bottom-start" :width="290" trigger="click">
       <template #reference>
-        <el-button size="small" text class="gg-mono">
-          {{ spec.renderOpts.width }}×{{ spec.renderOpts.height }} · {{ spec.renderOpts.dpi }}dpi
+        <el-button size="small" text class="gg-mono size-btn" title="预览 / 导出尺寸">
+          <span class="size-text">{{ spec.renderOpts.width }}×{{ spec.renderOpts.height }} · {{ spec.renderOpts.dpi }}dpi</span>
         </el-button>
       </template>
       <div class="gg-subhead" style="padding:0 0 6px">预览尺寸</div>
@@ -167,21 +174,39 @@ async function drawPlotly() {
 
     <span style="flex:1" />
     <el-tooltip content="把当前图存入图库（用于拼图组合）">
-      <el-button size="small" :disabled="!spec.spec.layers.length || spec.composeActive || pins.saving"
+      <el-button class="wide-only" size="small"
+        :disabled="!spec.spec.layers.length || spec.composeActive || pins.saving"
         @click="pinCurrent">
-        <el-icon><AddFilled /></el-icon>存入图库
+        <el-icon><StarFilled /></el-icon><span class="btn-label">存入图库</span>
       </el-button>
     </el-tooltip>
-    <el-button size="small" :disabled="!spec.hasPlot" @click="showPlotly">
-      <el-icon class="el-icon--left"><DataLine /></el-icon>交互预览
+    <el-button class="wide-only" size="small" :disabled="!spec.hasPlot" @click="showPlotly">
+      <el-icon class="el-icon--left"><DataLine /></el-icon><span class="btn-label">交互预览</span>
     </el-button>
-    <el-dropdown split-button size="small" type="primary" @click="doExport('png')" @command="doExport">
-      导出 PNG
+    <el-dropdown class="wide-only" split-button size="small" type="primary" title="导出 PNG"
+      @click="doExport('png')" @command="doExport">
+      <el-icon><Download /></el-icon><span class="btn-label">导出 PNG</span>
       <template #dropdown>
         <el-dropdown-menu>
           <el-dropdown-item command="png">PNG 位图</el-dropdown-item>
           <el-dropdown-item command="svg">SVG 矢量</el-dropdown-item>
           <el-dropdown-item command="pdf">PDF 矢量</el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+
+    <!-- 窄窗口：次要动作收进「更多」 -->
+    <el-dropdown class="narrow-only" trigger="click" @command="onMoreCmd">
+      <el-button size="small"><el-icon><MoreFilled /></el-icon></el-button>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item command="pin" :disabled="!spec.spec.layers.length || spec.composeActive">
+            存入图库
+          </el-dropdown-item>
+          <el-dropdown-item command="plotly" :disabled="!spec.hasPlot">交互预览</el-dropdown-item>
+          <el-dropdown-item command="png" divided :disabled="!spec.hasPlot">导出 PNG</el-dropdown-item>
+          <el-dropdown-item command="svg" :disabled="!spec.hasPlot">导出 SVG</el-dropdown-item>
+          <el-dropdown-item command="pdf" :disabled="!spec.hasPlot">导出 PDF</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
@@ -217,7 +242,7 @@ async function drawPlotly() {
 
   <div v-show="view === 'code'" class="gg-code-view gg-scroll">
     <div class="code-head">
-      <span style="font-size:12px;color:var(--el-text-color-secondary)">
+      <span class="gg-hint-md">
         由当前绘图规格生成，可直接粘贴到 RStudio / Positron 运行
       </span>
       <span style="flex:1" />
@@ -239,22 +264,23 @@ async function drawPlotly() {
 
 <style scoped>
 .gg-canvas-head {
-  display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px;
   border-bottom: 1px solid var(--gg-border); background: var(--gg-panel); flex-shrink: 0;
+  flex-wrap: nowrap; min-width: 0;
 }
-.render-spin { position: absolute; top: 60px; right: 22px; z-index: 5; }
+.render-spin { position: absolute; top: 56px; right: 22px; z-index: 5; }
 .err-box { padding: 8px 14px; flex-shrink: 0; }
 .err-pre { margin: 4px 0 0; white-space: pre-wrap; font-size: 12px; font-family: Consolas, monospace; max-height: 140px; overflow: auto; }
 .warn-box { padding: 4px 14px 8px; flex-shrink: 0; }
-.warn-item { font-size: 12px; color: var(--el-text-color-secondary); padding: 1px 0; }
+.warn-item { font-size: 12px; color: var(--gg-text-3); padding: 1px 0; }
 .gg-code-view { background: var(--gg-panel); flex: 1; min-height: 0; }
 .gg-status {
-  height: 24px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
-  padding: 0 12px; border-top: 1px solid var(--gg-border); background: var(--gg-panel);
-  font-size: 11px; color: var(--el-text-color-secondary);
+  height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  padding: 0 12px; border-top: 1px solid var(--gg-border); background: var(--gg-panel-2);
+  font-size: 12px; color: var(--gg-text-3);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.gg-empty-hint .ghost { color: var(--el-text-color-placeholder); margin-bottom: 10px; }
-.gg-empty-hint .t { font-size: 14px; margin-bottom: 12px; }
-.gg-empty-hint .sub { margin-top: 10px; font-size: 11.5px; }
+.gg-empty-hint .ghost { color: var(--gg-text-4); margin-bottom: 10px; }
+.gg-empty-hint .t { font-size: 14px; font-weight: 600; color: var(--gg-text-2); margin-bottom: 12px; }
+.gg-empty-hint .sub { margin-top: 10px; font-size: 12px; color: var(--gg-text-3); }
 </style>

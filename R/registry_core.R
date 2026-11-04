@@ -67,8 +67,9 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
 }
 
 .ggspec_formals_params <- function(fn, exclude = c("mapping", "data", "stat", "position",
-                                                   "...", "show.legend", "inherit.aes")) {
-  f <- get(fn, envir = .ggspec_ns())
+                                                   "...", "show.legend", "inherit.aes"),
+                                   pkg = "ggplot2") {
+  f <- get(fn, envir = if (identical(pkg, "ggplot2")) .ggspec_ns() else asNamespace(pkg))
   fm <- formals(f)
   names <- setdiff(names(fm), exclude)
   lapply(setNames(names, names), function(nm) {
@@ -154,8 +155,8 @@ SCALE_AES_PREFIXES <- c("x", "y", "colour", "color", "fill", "alpha", "size",
   out
 }
 
-.ggspec_theme_args <- function(fn) {
-  f <- get(fn, envir = .ggspec_ns())
+.ggspec_theme_args <- function(fn, pkg = "ggplot2") {
+  f <- get(fn, envir = if (identical(pkg, "ggplot2")) .ggspec_ns() else asNamespace(pkg))
   fm <- formals(f)
   out <- list()
   for (nm in names(fm)) {
@@ -208,6 +209,18 @@ GGTHEMES_THEME_LABELS <- list(
       fam <- sub("^(npg|aaas|nejm|lancet|jama|ucscgb|d3|locuszoom|igv|uchicago|startrek|tron|futurama|rickandmorty|simpsons|frontiers|glow|higlass|observable|material).*$", "\\1", type)
       label <- GGSCI_FAMILIES[[fam]] %||% fam
       label <- paste0(label, " (ggsci)")
+    } else if (pkg == "ggprism") {
+      # scale_color_* 是 scale_colour_* 的别名，跳过以免下拉里出现两个一样的选项
+      if (startsWith(fn, "scale_color_")) next
+      # ggprism 的标度共享 type="prism"，靠 aes 区分；palette 取值来自
+      # ggprism_data 的命名，直接做成下拉避免用户背调色板名。
+      label <- if (identical(parsed$aes, "shape")) "Prism 形状 (ggprism)" else "Prism 配色 (ggprism)"
+      pals <- .ggprism_palette_names(parsed$aes)
+      out[[length(out) + 1]] <- list(
+        fn = fn, aes = parsed$aes, type = type, label = label, package = pkg,
+        params = list(palette = pv("palette", "select", "Prism 调色板", options = as.list(pals)))
+      )
+      next
     } else {
       fam <- sub("^([a-z0-9_]+?)(_(c|b|d|p|gradient|continuous|discrete|manual|shape|linetype|stata|excel|tableau))?$", "\\1", type)
       fam <- sub("^(economist|wsj|fivethirtyeight|few|excel|excel_new|gdocs|calc|pander|hc|solarized|solarized_2|stata|tufte|igray|base|solid|map|par|clean|foundation|colorblind|canva|carto|ptol|flat_ui|manyeye|material|nejm|jama|ee|lh|squad|hue|grey|brewer|step).*$", "\\1", type)
@@ -238,6 +251,125 @@ GGTHEMES_THEME_LABELS <- list(
       label = (GEOM_META[[name]]$label %||% paste0(name, " (", pkg, ")")),
       group = (GEOM_META[[name]]$group %||% "扩展"),
       desc = (GEOM_META[[name]]$desc %||% "")
+    )
+  }
+  out
+}
+
+# ---- 扩展包通用扫描器（theme / guide / annotation） --------------------------
+
+# ggprism 调色板名：直接读 ggprism_data，随包升级自动同步（不硬编码 110+ 个名字）
+# 注意 ggprism_data 是 lazy-data，不在命名空间里，走 getExportedValue / utils::data
+.ggprism_palette_names <- function(aes = "colour") {
+  if (!requireNamespace("ggprism", quietly = TRUE)) return(character(0))
+  d <- tryCatch(getExportedValue("ggprism", "ggprism_data"), error = function(e) NULL)
+  if (!is.list(d)) {
+    d <- tryCatch({
+      e <- new.env()
+      utils::data("ggprism_data", package = "ggprism", envir = e)
+      get("ggprism_data", envir = e)
+    }, error = function(e2) NULL)
+  }
+  if (!is.list(d)) return(character(0))
+  key <- switch(aes,
+    colour = "colour_palettes", color = "colour_palettes",
+    fill = "fill_palettes", shape = "shape_palettes", NULL)
+  if (is.null(key) || is.null(d[[key]])) return(character(0))
+  names(d[[key]])
+}
+
+# theme_prism 的专用控件（palette 是 65 选 1，border/轴线角度也需要合适的控件）
+.ggprism_theme_args <- function(args) {
+  for (i in seq_along(args)) {
+    nm <- args[[i]]$name
+    if (identical(nm, "palette")) {
+      args[[i]] <- pv("palette", "select", "Prism 调色板",
+                      options = as.list(.ggprism_palette_names("colour")))
+    } else if (identical(nm, "base_fontface")) {
+      args[[i]] <- pv("base_fontface", "select", "字体样式",
+                      c("plain", "bold", "italic", "bold.italic"))
+    } else if (identical(nm, "axis_text_angle")) {
+      args[[i]] <- pv("axis_text_angle", "number", "轴文字角度", step = 15)
+    } else if (identical(nm, "border")) {
+      args[[i]] <- pv("border", "bool", "显示边框")
+    } else if (identical(nm, "base_size")) {
+      args[[i]] <- pv("base_size", "number", "基础字号", min = 4, max = 48, step = 1)
+    } else if (nm %in% c("base_line_size", "base_rect_size")) {
+      args[[i]] <- pv(nm, "number", "基础线宽", min = 0, step = 0.1)
+    } else if (identical(nm, "base_family")) {
+      args[[i]] <- pv("base_family", "text", "基础字体")
+    }
+  }
+  args
+}
+
+.ggspec_scan_pkg_themes <- function(pkg, labels = list()) {
+  if (!requireNamespace(pkg, quietly = TRUE)) return(list())
+  fns <- grep("^theme_", getNamespaceExports(pkg), value = TRUE)
+  fns <- setdiff(fns, c("theme_get", "theme_set", "theme_update", "theme_replace",
+                       "theme_solid_calc"))
+  out <- list()
+  for (fn in sort(fns)) {
+    f <- tryCatch(get(fn, envir = asNamespace(pkg)), error = function(e) NULL)
+    if (is.null(f) || !is.function(f)) next
+    key <- sub("^theme_", "", fn)
+    args <- .ggspec_theme_args(fn, pkg)
+    if (identical(pkg, "ggprism") && identical(key, "prism")) args <- .ggprism_theme_args(args)
+    out[[length(out) + 1]] <- list(
+      name = key, fn = fn, package = pkg,
+      label = paste0(labels[[key]] %||% key, " (", pkg, ")"),
+      args = args
+    )
+  }
+  out
+}
+
+.ggspec_scan_pkg_guides <- function(pkg, labels = list()) {
+  if (!requireNamespace(pkg, quietly = TRUE)) return(list())
+  fns <- grep("^guide_", getNamespaceExports(pkg), value = TRUE)
+  fns <- fns[!grepl("\\.", fns)]
+  fns <- setdiff(fns, c("guide_build", "guide_gengrob", "guide_geom", "guide_grid",
+                        "guide_merge", "guide_train", "guide_transform"))
+  out <- list()
+  for (fn in sort(fns)) {
+    name <- sub("^guide_", "", fn)
+    meta <- GUIDE_META[[name]]
+    p <- .ggspec_formals_params(fn, exclude = c("...", "available_aes", "position", "order"),
+                                pkg = pkg)
+    for (i in seq_along(p)) {
+      ov <- GUIDE_PARAM_WIDGETS[[names(p)[i]]]
+      if (!is.null(ov)) p[[i]] <- ov
+    }
+    label <- meta$label %||% paste0("guide_", name)
+    out[[length(out) + 1]] <- list(
+      fn = fn, name = name, package = pkg,
+      label = paste0(label, " (", pkg, ")"),
+      desc = meta$desc %||% "", params = p
+    )
+  }
+  out
+}
+
+.ggspec_scan_pkg_annotations <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) return(list())
+  fns <- grep("^annotation_", getNamespaceExports(pkg), value = TRUE)
+  out <- list()
+  for (fn in sort(fns)) {
+    name <- sub("^annotation_", "", fn)
+    p <- .ggspec_formals_params(fn, exclude = c("...", "data", "mapping"), pkg = pkg)
+    if (identical(pkg, "ggprism") && identical(name, "ticks")) {
+      p$sides <- pv("sides", "text", "边（b/l/t/r 可组合，如 bl）")
+      p$type <- pv("type", "select", "刻度类型", c("both", "major", "minor"))
+      p$outside <- pv("outside", "bool", "朝向图外")
+      # tick.length / minor.length 需要 unit()，参数面板暂不支持（值会变成裸数字），
+      # 依赖默认值 4.8pt / 2.4pt；需要自定义时走「高级模式」写代码。
+      p$tick.length <- NULL
+      p$minor.length <- NULL
+    }
+    out[[length(out) + 1]] <- list(
+      fn = fn, name = name, package = pkg,
+      label = paste0(ANNOTATION_META[[name]] %||% paste0("annotation_", name), " (", pkg, ")"),
+      params = p
     )
   }
   out
@@ -375,6 +507,11 @@ ggspec_build_meta <- function() {
     )
   }
 
+  # 扩展 guide（ggprism: 次刻度 / 偏移轴 / 括号）
+  for (pkg in c("ggprism")) {
+    for (g in .ggspec_scan_pkg_guides(pkg)) guides[[length(guides) + 1]] <- g
+  }
+
   ## scale_*（ggplot2 + ggsci + ggthemes）
   scale_fns <- grep("^scale_", ls(ns), value = TRUE)
   scale_fns <- scale_fns[!grepl("\\.", scale_fns)]
@@ -394,7 +531,7 @@ ggspec_build_meta <- function() {
       params = params
     )
   }
-  for (pkg in c("ggsci", "ggthemes")) {
+  for (pkg in c("ggsci", "ggthemes", "ggprism")) {
     for (s in .ggspec_scan_pkg_scales(pkg)) scales[[length(scales) + 1]] <- s
   }
 
@@ -423,6 +560,11 @@ ggspec_build_meta <- function() {
     }
   }
 
+  # ggprism 主题（theme_prism）
+  for (t in .ggspec_scan_pkg_themes("ggprism", GGPRISM_THEME_LABELS)) {
+    themes[[length(themes) + 1]] <- t
+  }
+
   ## 注释函数
   ann_fns <- grep("^annotation_", ls(ns), value = TRUE)
   annotations <- lapply(sort(ann_fns), function(fn) {
@@ -439,6 +581,10 @@ ggspec_build_meta <- function() {
          })()
     )
   })
+  # 扩展注释函数（ggprism: annotation_ticks）
+  for (pkg in c("ggprism")) {
+    for (a in .ggspec_scan_pkg_annotations(pkg)) annotations[[length(annotations) + 1]] <- a
+  }
 
   list(
     ggplot2Version = as.character(packageVersion("ggplot2")),
@@ -467,6 +613,7 @@ ggspec_build_meta <- function() {
       ggsci = requireNamespace("ggsci", quietly = TRUE),
       ggthemes = requireNamespace("ggthemes", quietly = TRUE),
       ggrepel = requireNamespace("ggrepel", quietly = TRUE),
+      ggprism = requireNamespace("ggprism", quietly = TRUE),
       patchwork = requireNamespace("patchwork", quietly = TRUE),
       plotly = requireNamespace("plotly", quietly = TRUE)
     )
@@ -506,5 +653,6 @@ ANNOTATION_META <- list(
   logticks = "对数刻度 annotation_logticks",
   custom = "自定义 grob annotation_custom",
   map = "地图底图 annotation_map",
-  raster = "图片 annotation_raster"
+  raster = "图片 annotation_raster",
+  ticks = "轴刻度 annotation_ticks"
 )

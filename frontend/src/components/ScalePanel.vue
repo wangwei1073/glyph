@@ -5,6 +5,7 @@ import { useMetaStore } from '../stores/meta'
 import { useSpecStore } from '../stores/spec'
 import { useDataStore } from '../stores/data'
 import ParamControl from './ParamControl.vue'
+import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const spec = useSpecStore()
@@ -30,6 +31,17 @@ const availableAes = computed(() => {
 })
 
 const commonParams = computed(() => meta.scaleCommonParams)
+
+// 标度来源包：ggplot2 在前，其余按字母序（ggsci / ggprism / ggthemes …）
+const scalePkgs = computed(() => {
+  const pkgs = []
+  for (const s of meta.scales) {
+    if (!pkgs.includes(s.package)) pkgs.push(s.package)
+  }
+  const core = pkgs.filter(p => p === 'ggplot2')
+  return [...core, ...pkgs.filter(p => p !== 'ggplot2').sort()]
+})
+const pkgLabel = (p) => (p === 'ggplot2' ? 'ggplot2 核心' : p)
 
 function addScale(aes) {
   spec.addScale(aes)
@@ -90,8 +102,8 @@ const label = (sc) => {
           <label>标度函数</label>
           <el-select :model-value="sc.type" size="small" filterable style="width:100%"
             placeholder="选择 scale 类型" @update:model-value="setType(sc, $event)">
-            <el-option-group v-for="pkg in ['ggplot2', 'ggsci', 'ggthemes']" :key="pkg"
-              :label="pkg === 'ggplot2' ? 'ggplot2 核心' : pkg">
+            <el-option-group v-for="pkg in scalePkgs" :key="pkg"
+              :label="pkgLabel(pkg)">
               <el-option v-for="t in meta.scaleTypesOf(sc.aes).filter(x => x.package === pkg)"
                 :key="t.fn" :value="t.type" :label="t.label">
                 <span class="gg-mono" style="font-size:11px">{{ t.fn }}</span>
@@ -164,9 +176,13 @@ const label = (sc) => {
       </el-collapse-item>
     </el-collapse>
 
-    <div v-if="!spec.spec.scales.length" class="gg-empty-hint" style="padding:22px">
-      尚未添加标度。示例：y 轴对数变换 → 添加 y → continuous → trans = log10
-    </div>
+    <EmptyState v-if="!spec.spec.scales.length" icon="Odometer" title="还没有自定义标度"
+      desc="默认会使用 ggplot2 自动标度；需要改配色、坐标轴范围或变换时再加一个。">
+      <el-button size="small" type="primary" :disabled="!availableAes.length"
+        @click="showAdd = true">
+        <el-icon><Plus /></el-icon>添加标度
+      </el-button>
+    </EmptyState>
   </div>
 </template>
 
