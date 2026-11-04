@@ -249,6 +249,37 @@ ggspec_api_app <- function(state) {
       return(json_response(plan))
     }
 
+    ## ---- 回归分析（L4）----
+    if (path == "/api/reg/fit" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      res <- tryCatch(
+        .ggspec_reg_fit(pv$d,
+                        y = body$y %||% "",
+                        xs = body$xs %||% character(0),
+                        method = body$method %||% "lm"),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      res$nrow <- nrow(pv$d)
+      return(json_response(res))
+    }
+
+    ## 回归可用变量
+    if (path == "/api/reg/columns" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      cols <- tryCatch(.ggspec_reg_columns(pv$d), error = function(e) e)
+      if (inherits(cols, "error")) return(json_error(conditionMessage(cols), 400))
+      return(json_response(list(ok = TRUE, numeric = cols$numeric,
+                                categorical = cols$categorical,
+                                binary = cols$binary, count = cols$count,
+                                nrow = nrow(pv$d))))
+    }
+
     ## ---- 统计检验（L2）----
     if (path == "/api/stats/test" && method == "POST") {
       src <- body$source %||% list()
