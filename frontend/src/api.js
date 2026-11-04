@@ -117,6 +117,10 @@ export const getPlotly = (spec, { width = 800, height = 500 } = {}) =>
 export const statsColumns = (source, prep) => post('/api/stats/columns', { source, prep })
 export const statsSummary = (source, prep, vars, groupBy) =>
   post('/api/stats/summary', { source, prep, vars, groupBy }, T_HEAVY)
+// 统计检验（L2）
+export const statsSuggest = (source, prep) => post('/api/stats/suggest', { source, prep })
+export const statsTest = (source, prep, { y = '', x = '', group = '', method = '' } = {}) =>
+  post('/api/stats/test', { source, prep, y, x, group, method }, T_HEAVY)
 
 // 手动编辑（编辑模式）：ops 针对 source 的加工+编辑后数据
 export const editAdd = async (source, prep, op) => {

@@ -235,6 +235,37 @@ ggspec_api_app <- function(state) {
                                 groupable = cols$groupable, nrow = nrow(pv$d))))
     }
 
+    ## ---- 统计检验（L2）----
+    if (path == "/api/stats/test" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      res <- tryCatch(
+        .ggspec_stats_test(pv$d,
+                           y = body$y %||% "",
+                           x = body$x %||% "",
+                           group = body$group %||% "",
+                           method = body$method %||% ""),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      res$ok <- TRUE
+      res$nrow <- nrow(pv$d)
+      return(json_response(res))
+    }
+
+    ## 统计方法推荐（按当前数据的列角色）
+    if (path == "/api/stats/suggest" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      sug <- tryCatch(.ggspec_stats_suggest(pv$d), error = function(e) e)
+      if (inherits(sug, "error")) return(json_error(conditionMessage(sug), 400))
+      return(json_response(list(ok = TRUE, methods = sug$methods, roles = sug$roles,
+                                nrow = nrow(pv$d))))
+    }
+
     ## 加工后数据导出 CSV
     if (path == "/api/data/export-csv" && method == "POST") {
       src <- body$source %||% list()
