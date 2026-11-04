@@ -155,6 +155,37 @@ const colsPure = [col('mpg', 'numeric', 25), col('wt', 'numeric', 29)]
 const r16 = suggestCharts(colsPure, { regRes: { method: 'lm', vars: ['mpg', 'wt'], fitStats: { r2: 0.75 } } })
 chk('纯连续自变量：仍推荐拟合线', r16.some(s => s.addLayer && s.addLayer.geom === 'smooth'))
 
+// ---------- 15) 检验结果的建议必须排在通用建议之前（回归 bug） ----------
+// 用户场景：mpg 上做了「hwy ~ drv 单因素方差分析」，图表建议第一位却是「时间序列折线图」。
+// 根因：后端检验结果没有返回 vars，前端取不到 x/y，箱线图建议没生成，通用建议胜出。
+const colsMpgFull = [
+  col('displ', 'numeric', 35), col('year', 'numeric', 2), col('cyl', 'numeric', 4),
+  col('cty', 'numeric', 21), col('hwy', 'numeric', 27),
+  col('manufacturer', 'character', 15), col('drv', 'character', 3), col('class', 'character', 7)
+]
+const anovaRes = {
+  methodLabel: '单因素方差分析',
+  vars: ['hwy', 'drv'],           // 后端现在会返回这个字段
+  groups: ['4 (n=103)', 'f (n=106)', 'r (n=25)'],
+  p: 0.00001
+}
+const r19 = suggestCharts(colsMpgFull, { testRes: anovaRes })
+chk('检验结果：第一条是箱线图', r19[0].geom === 'boxplot')
+chk('检验结果：x 为分组列 drv', r19[0].aes.x.map === 'drv')
+chk('检验结果：y 为数值列 hwy', r19[0].aes.y.map === 'hwy')
+chk('检验结果：箱线图分数高于折线图',
+    r19[0].score > (r19.find(s => s.geom === 'line')?.score ?? 0))
+
+// 无 vars 的旧结果也不应崩溃，且不应推错
+const r20 = suggestCharts(colsMpgFull, { testRes: { methodLabel: '方差分析', groups: ['a (n=10)', 'b (n=12)'] } })
+chk('缺 vars 时不崩溃', Array.isArray(r20) && r20.length > 0)
+
+// vars 顺序颠倒（分类在前）时应自动纠正
+const swapped = { methodLabel: '方差分析', vars: ['drv', 'hwy'], groups: ['4 (n=103)', 'f (n=106)'] }
+const r21 = suggestCharts(colsMpgFull, { testRes: swapped })
+chk('vars 顺序颠倒：x 仍为分类列', r21[0].aes.x.map === 'drv')
+chk('vars 顺序颠倒：y 仍为数值列', r21[0].aes.y.map === 'hwy')
+
 // ---------- 14) 时期/序号型低基数列（如 year）不应被当作分组 ----------
 const colsYear = [col('year', 'numeric', 2), col('displ', 'numeric', 35), col('hwy', 'numeric', 27)]
 const r17 = suggestCharts(colsYear)

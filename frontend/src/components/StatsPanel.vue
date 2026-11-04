@@ -1058,7 +1058,26 @@ watch(tab, (v) => {
                     </div>
                     <div class="idea-reason">{{ it.reason }}</div>
                     <div v-if="it.extra" class="idea-extra">💡 {{ it.extra }}</div>
-                    <div class="idea-aes gg-mono">{{ aesText(it.aes) }}</div>
+                    <div class="idea-aes">
+                      <span v-for="(v, k) in it.aes" :key="k" class="aes-chip">
+                        <b>{{ k }}</b><span class="aes-eq">=</span>
+                        <span class="gg-mono">{{ v.map ?? v.value ?? '' }}</span>
+                      </span>
+                      <template v-if="it.stat">
+                        <span class="aes-chip stat"><b>stat</b><span class="aes-eq">=</span>
+                          <span class="gg-mono">{{ it.stat }}</span></span>
+                      </template>
+                      <template v-if="it.addLayer">
+                        <span class="aes-plus">+</span>
+                        <span class="aes-chip layer">
+                          <span class="gg-mono">{{ it.addLayer.geom }}</span>
+                          <template v-if="it.addLayer.params?.method">
+                            <span class="aes-eq">/</span>
+                            <span class="gg-mono">{{ it.addLayer.params.method }}</span>
+                          </template>
+                        </span>
+                      </template>
+                    </div>
                   </div>
                   <el-button size="small" type="primary" plain @click="applyIdea(it)">应用</el-button>
                 </div>
@@ -1252,5 +1271,18 @@ watch(tab, (v) => {
   color: var(--el-text-color-secondary);
 }
 .idea-extra { font-size: 10.5px; margin-top: 3px; color: #c07f18; }
-.idea-aes { font-size: 10.5px; margin-top: 3px; color: var(--gg-accent); }
+.idea-aes {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px;
+}
+.aes-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 0 5px; height: 17px; border-radius: 3px;
+  background: rgba(74, 144, 217, .1); color: var(--gg-accent);
+  font-size: 10px; line-height: 17px; white-space: nowrap;
+}
+.aes-chip b { font-weight: 600; }
+.aes-chip .aes-eq { opacity: .5; }
+.aes-chip.stat { background: rgba(232, 115, 74, .12); color: #c0552f; }
+.aes-chip.layer { background: rgba(84, 178, 142, .14); color: #2f8b68; }
+.aes-plus { font-size: 10px; color: var(--el-text-color-placeholder); }
 </style>

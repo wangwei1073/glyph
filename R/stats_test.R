@@ -101,7 +101,7 @@
 .stats_result <- function(method, stat = NA_real_, df = NA_real_, p = NA_real_,
                           estimate = NA_real_, estimate_name = "", n = NA_integer_,
                           groups = character(0), notes = character(0), code = character(0),
-                          extra = list()) {
+                          extra = list(), vars = character(0)) {
   list(
     method = method$id %||% "",
     methodLabel = method$label %||% "",
@@ -112,6 +112,9 @@
     estimateName = estimate_name,
     n = n,
     groups = as.list(groups),
+    # vars 顺序约定：[被比较的数值/分类变量, 分组变量或第二个数值变量]
+    # 前端「图表建议」依赖它来还原 x/y，不能省略
+    vars = as.list(vars),
     notes = as.list(notes),
     code = paste(code, collapse = "\n"),
     extra = extra
@@ -165,7 +168,7 @@
       .stats_method_by_id(id) %||% list(id = id, label = "相关分析"),
       stat = stat_val, df = as.numeric(ct$parameter), p = ct$p.value,
       estimate = as.numeric(ct$estimate), estimate_name = est_name, n = length(dy),
-      groups = c(y, x), notes = notes,
+      groups = c(y, x), notes = notes, vars = c(y, x),
       code = c("# 相关分析",
                if (identical(est_name, "rho"))
                  sprintf("stats::cor.test(df$%s, df$%s, method = \"spearman\")", y, x)
@@ -224,7 +227,7 @@
         n = length(a) + length(b),
         groups = c(sprintf("%s (n=%d)", lv[1], length(a)),
                    sprintf("%s (n=%d)", lv[2], length(b))),
-        notes = notes,
+        notes = notes, vars = c(y, group),
         code = c("# 两样本均值比较",
                  sprintf("t.test(df$%s[df$%s == %s], df$%s[df$%s == %s])",
                          y, group, r_string(lv[1]), y, group, r_string(lv[2])))
@@ -241,6 +244,7 @@
         n = length(a) + length(b),
         groups = c(sprintf("%s (n=%d)", lv[1], length(a)),
                    sprintf("%s (n=%d)", lv[2], length(b))),
+        vars = c(y, group),
         notes = c("非参数检验，比较分布位置（中位数）"),
         code = c("# 两样本位置比较（非参数）",
                  sprintf("wilcox.test(df$%s[df$%s == %s], df$%s[df$%s == %s])",
@@ -265,7 +269,7 @@
           p = at[["Pr(>F)"]][1], estimate = eta, estimate_name = "eta²",
           n = sum(vapply(groups_list, length, integer(1))),
           groups = sprintf("%s (n=%d)", lv, vapply(groups_list, length, integer(1))),
-          notes = notes,
+          notes = notes, vars = c(y, group),
           code = c("# 单因素方差分析",
                    sprintf("fit <- aov(%s ~ %s, data = df)", y, group),
                    "summary(fit)")
@@ -277,6 +281,7 @@
         estimate = NA_real_, estimate_name = "",
         n = length(dy),
         groups = sprintf("%s (n=%d)", lv, vapply(groups_list, length, integer(1))),
+        vars = c(y, group),
         notes = c("非参数检验，比较各组分布位置"),
         code = c("# Kruskal-Wallis 检验",
                  sprintf("kruskal.test(%s ~ %s, data = df)", y, group))
@@ -299,7 +304,7 @@
       return(.stats_result(
         m, stat = NA_real_, df = NA_real_, p = ft$p.value,
         estimate = as.numeric(ft$estimate), estimate_name = "odds ratio",
-        n = sum(tab), groups = c(y, group),
+        n = sum(tab), groups = c(y, group), vars = c(y, group),
         notes = c("Fisher 精确检验适用于小样本/稀疏列联表"),
         code = c("# Fisher 精确检验",
                  sprintf("fisher.test(table(df$%s, df$%s))", y, group))
@@ -312,7 +317,7 @@
     return(.stats_result(
       m, stat = as.numeric(ct$statistic), df = as.numeric(ct$parameter), p = ct$p.value,
       estimate = .stats_cramers_v(tab), estimate_name = "Cramér's V",
-      n = sum(tab), groups = c(y, group), notes = notes,
+      n = sum(tab), groups = c(y, group), notes = notes, vars = c(y, group),
       code = c("# 卡方独立性检验",
                sprintf("chisq.test(table(df$%s, df$%s))", y, group))
     ))

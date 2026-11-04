@@ -58,21 +58,34 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
 
   // ---------- 1) 有检验结果：优先给能直接展示结论的图 ----------
   if (testRes && testRes.groups && testRes.groups.length >= 2) {
-    const gv = testRes.vars && testRes.vars[0]
-    const xcol = testRes.vars && testRes.vars[1]
-    // 从检验结果反查变量名
-    const groupVar = findGroupVar(testRes, categorical, numeric)
-    if (gv && groupVar) {
+    // 后端约定 vars = [被比较的变量, 分组变量]；用列画像核对类型，
+    // 兼容旧数据里顺序不确定的情况
+    const tvars = (testRes.vars || []).map(String)
+    const colOfName = (n) => cols.find(c => c.name === n)
+    let gv = tvars[0]
+    let groupVar = tvars[1]
+    // 若顺序反了（第一个是分类、第二个是数值/连续），交换
+    const firstKind = gv ? kindOf(colOfName(gv)) : 'unknown'
+    const secondKind = groupVar ? kindOf(colOfName(groupVar)) : 'unknown'
+    if (firstKind === 'categorical' && secondKind === 'numeric') {
+      ;[gv, groupVar] = [groupVar, gv]
+    }
+    // 兜底：groupVar 缺失时从分类列里找
+    if (!groupVar) groupVar = findGroupVar(testRes, categorical, numeric)
+    // 只在类型真的支持时推荐（y 需数值/分类，x 需分类）
+    const gvCol = gv ? colOfName(gv) : null
+    const okPair = gv && groupVar && gvCol && groupVar !== gv
+    if (okPair) {
       const isTwo = testRes.groups.length === 2
-      push(100, {
-        geom: isTwo ? 'boxplot' : 'boxplot',
+      push(120, {
+        geom: 'boxplot',
         title: isTwo ? '箱线图（两组对比）' : '箱线图（多组对比）',
-        reason: `刚才的「${testRes.methodLabel}」比较了 ${testRes.groups.length} 组，箱线图能同时展示分布形状与中位数差异，并在图上标注显著性`,
+        reason: `刚才的「${testRes.methodLabel}」比较了 ${testRes.groups.length} 组，箱线图能同时展示分布形状与中位数差异，并可在图上标注显著性`,
         aes: { x: { map: groupVar }, y: { map: gv } },
         extra: '建议切到「图上标注」页签，一键把检验结果画到图上',
-        score: 100
+        score: 120
       })
-      push(92, {
+      push(112, {
         geom: 'violin',
         title: '小提琴图（分布对比）',
         reason: '小提琴图额外显示各组的概率密度，比箱线图更能看出分布形状差异',
@@ -111,7 +124,7 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
         reason: `线性回归显示 ${yv} 与 ${xv} 相关（R²=${regRes.fitStats?.r2 ?? '—'}），散点加拟合线是标准呈现方式`,
         aes: { x: { map: xv }, y: { map: yv } },
         addLayer: { geom: 'smooth', aes: { x: { map: xv }, y: { map: yv } }, params: { method: 'lm', se: true } },
-        score: 98
+        score: 118
       })
     } else {
       // 没有连续自变量（全是分类）→ 推荐分组对比类图，而不是拟合线
@@ -125,7 +138,7 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
           title: '箱线图（回归中的分类自变量）',
           reason: `回归里 ${yv} 的自变量「${catX}」是分类变量，用分组箱线图展示各组分布比拟合线更合适`,
           aes: { x: { map: catX }, y: { map: yv } },
-          score: 96
+          score: 116
         })
         push(90, {
           geom: 'point',
@@ -133,7 +146,7 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
           reason: `直接比较「${catX}」各组 ${yv} 的均值与标准误`,
           aes: { x: { map: catX }, y: { map: yv } },
           stat: 'summary',
-          score: 90
+          score: 108
         })
       }
     }
@@ -152,13 +165,13 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
       return Math.abs(m - md) / Math.abs(m) > 0.08
     })
     if (skewed.length) {
-      push(88, {
+      push(105, {
         geom: 'histogram',
         title: '直方图（检查偏态）',
         reason: `「${skewed[0].variable}」的均值(${skewed[0].mean})与中位数(${skewed[0].median})差距较大，分布可能偏态，直方图可直接确认`,
         aes: { x: { map: skewed[0].variable } }
       })
-      push(84, {
+      push(100, {
         geom: 'density',
         title: '核密度曲线',
         reason: '密度曲线比直方图更平滑，适合展示偏态与双峰',
