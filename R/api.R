@@ -222,6 +222,29 @@ ggspec_api_app <- function(state) {
       return(json_response(list(ok = TRUE)))
     }
 
+    ## 项目数据快照：把上传/粘贴的原始数据序列化为 CSV，供项目文件内嵌
+    ## （内置数据集不内嵌，靠数据集名即可复现）
+    if (path == "/api/data/snapshot" && method == "POST") {
+      src <- body$source %||% list()
+      if (!identical(src$type %||% "", "user")) {
+        return(json_error("只有上传/粘贴的数据需要内嵌", 400))
+      }
+      id <- src_id_of(src)
+      d <- state$data_store$get(id)
+      if (is.null(d)) return(json_error("数据不存在或已失效", 404))
+      d2 <- d[, setdiff(names(d), ".gg_rid"), drop = FALSE]
+      csv <- tryCatch(paste(readr::format_csv(d2), collapse = ""),
+                      error = function(e) {
+                        paste(utils::capture.output(
+                          utils::write.csv(d2, row.names = FALSE, na = "")), collapse = "\n")
+                      })
+      if (!nzchar(csv)) return(json_error("数据快照失败", 500))
+      info <- state$data_store$info(id) %||% list()
+      return(json_response(list(ok = TRUE, csv = csv,
+                                label = info$label %||% id,
+                                nrow = nrow(d2), ncol = ncol(d2))))
+    }
+
     ## ---- 渲染 ----
     if (path == "/api/render" && method == "POST") {
       spec <- body$spec %||% list()
@@ -366,6 +389,21 @@ ggspec_api_app <- function(state) {
       src <- body$source %||% list()
       state$edit_store$clear(.keyof(src))
       return(json_response(list(ok = TRUE)))
+    }
+    ## 项目载入时批量恢复手工编辑（跟随数据一起内嵌在项目文件里）
+    if (path == "/api/edits/import" && method == "POST") {
+      src <- body$source %||% list()
+      ops <- body$ops %||% list()
+      key <- .keyof(src)
+      imported <- 0L
+      for (op in ops) {
+        if (is.list(op) && !is.null(op$kind)) {
+          state$edit_store$add(key, op)
+          imported <- imported + 1L
+        }
+      }
+      return(json_response(list(ok = TRUE, imported = imported,
+                                count = state$edit_store$count(key))))
     }
     ## ---- 图库（pins）----
     if (path == "/api/pins" && method == "GET") {

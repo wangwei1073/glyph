@@ -66,7 +66,8 @@
 - 实时自动渲染（可暂停手动），预览尺寸 / dpi 可调
 - 导出 **PNG（300dpi）/ SVG / PDF** 矢量
 - 交互式 plotly 预览（自动转换，部分 geom 不支持）
-- **项目保存 / 载入**（JSON 格式，随时续作）
+- **项目保存 / 载入**（JSON 格式，随时续作）：上传/粘贴的数据会以 CSV 快照内嵌进项目文件，
+  手工编辑一并带上，换机器或重启后可直接打开；本机上传数据同时落盘在 `userdata/`
 - 高级模式：原始代码编辑器（CodeMirror，R 高亮），直接改代码运行；数据以 `df` 变量提供
 
 ## 架构与目录
@@ -110,6 +111,7 @@ Rscript tests/test_codegen_exec.R   # 展示代码必须可执行，且数据与
 Rscript tests/test_edits.R          # 手工编辑引擎 + 行锚 + 因子列
 Rscript tests/test_patchwork.R      # 图库存取 + 拼图组合
 Rscript tests/test_api_guard.R      # 请求来源校验（防跨站 / DNS 重绑定）
+Rscript tests/test_project_data.R   # 项目数据：落盘 / 快照 / 重建 / 手工编辑恢复
 
 # 重新生成 geom 示意图（改了默认主题/映射后跑一次，产物在 frontend/public/geom-thumbs）
 Rscript tools/make_geom_thumbs.R

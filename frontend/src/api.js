@@ -76,7 +76,12 @@ export const uploadData = async (file) => {
   return post('/api/data/upload', { name: file.name, ext: file.name.split('.').pop(), dataBase64: b64 }, T_UPLOAD)
 }
 
-export const pasteData = (text) => post('/api/data/paste', { text })
+export const pasteData = (text, label = null) => post('/api/data/paste', label ? { text, label } : { text })
+
+// 项目文件内嵌数据：拿上传数据的 CSV 快照（内置数据集不需要）
+export const snapshotData = (source) => post('/api/data/snapshot', { source })
+export const getEdits = (key) => api(`/api/edits?key=${encodeURIComponent(key)}`)
+export const importEdits = (source, ops) => post('/api/edits/import', { source, ops })
 
 export const renderPlot = (spec, { width = 800, height = 500, dpi = 150 } = {}) =>
   post('/api/render', { spec, width, height, dpi }, T_HEAVY)

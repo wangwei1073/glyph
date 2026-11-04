@@ -1,15 +1,62 @@
 # ggplotGUI - 用户数据 IO：上传 / 粘贴 / 数据加工
 
-# 全局用户数据存储（内存）
+# 全局用户数据存储（内存 + 落盘，重启后可恢复）
+# 目录结构：<dir>/meta.json + <dir>/u1.rds（上传/粘贴的原始数据）
 DataStore <- local({
   .items <- list()
   .counter <- 0L
+  .dir <- NULL
+
+  .meta_file <- function() file.path(.dir, "meta.json")
+  .item_file <- function(id) file.path(.dir, paste0(id, ".rds"))
+
+  .save_meta <- function() {
+    if (is.null(.dir)) return(invisible(FALSE))
+    meta <- lapply(.items, function(it) {
+      list(id = it$id, label = it$label, nrow = it$nrow, ncol = it$ncol)
+    })
+    invisible(tryCatch({
+      write_file_atomic(jsonlite::toJSON(unname(meta), auto_unbox = TRUE, pretty = TRUE,
+                                         null = "null", na = "null"),
+                        .meta_file())
+      TRUE
+    }, error = function(e) FALSE))
+  }
+
+  .load <- function() {
+    if (is.null(.dir) || !file.exists(.meta_file())) return(invisible(FALSE))
+    meta <- tryCatch(jsonlite::fromJSON(.meta_file(), simplifyVector = FALSE),
+                     error = function(e) NULL)
+    if (!is.list(meta)) return(invisible(FALSE))
+    for (m in meta) {
+      id <- as.character(m$id %||% "")
+      if (!nzchar(id) || !file.exists(.item_file(id))) next
+      d <- tryCatch(readRDS(.item_file(id)), error = function(e) NULL)
+      if (is.null(d)) next
+      .items[[id]] <<- list(df = d, label = as.character(m$label %||% id), id = id,
+                            nrow = nrow(d), ncol = ncol(d))
+      n <- suppressWarnings(as.integer(sub("^u", "", id)))
+      if (!is.na(n)) .counter <<- max(.counter, n)
+    }
+    invisible(TRUE)
+  }
+
   list(
+    bind = function(dir) {
+      .dir <<- dir
+      dir.create(dir, showWarnings = FALSE, recursive = TRUE)
+      .load()
+    },
+    dir = function() .dir,
     add = function(df, label) {
       .counter <<- .counter + 1L
       id <- sprintf("u%d", .counter)
       .items[[id]] <<- list(df = df, label = label, id = id,
                             nrow = nrow(df), ncol = ncol(df))
+      if (!is.null(.dir)) {
+        try(saveRDS(df, .item_file(id)), silent = TRUE)
+        .save_meta()
+      }
       id
     },
     get = function(id) .items[[id]]$df,
@@ -20,7 +67,13 @@ DataStore <- local({
            nrow = it$nrow, ncol = it$ncol, package = NULL)
     },
     list = function() lapply(names(.items), function(id) .info_wrap(.items[[id]])),
-    remove = function(id) .items[[id]] <<- NULL
+    remove = function(id) {
+      .items[[id]] <<- NULL
+      if (!is.null(.dir)) {
+        unlink(.item_file(id))
+        .save_meta()
+      }
+    }
   )
 })
 .info_wrap <- function(it) list(type = "user", id = it$id, name = it$id, label = it$label,

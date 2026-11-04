@@ -7,7 +7,7 @@ import { useDataStore } from './stores/data'
 import { useSpecStore } from './stores/spec'
 import { usePinStore } from './stores/pins'
 import { useUiStore } from './stores/ui'
-import { downloadBlob } from './api'
+import { downloadBlob, snapshotData, getEdits, importEdits, pasteData } from './api'
 import DataPanel from './components/DataPanel.vue'
 import Canvas from './components/Canvas.vue'
 import EditorTabs from './components/EditorTabs.vue'
@@ -82,11 +82,48 @@ function toggleDark() {
 }
 
 // ---- 项目操作 ----
-function saveProject() {
-  const blob = new Blob([spec.exportProject()], { type: 'application/json' })
-  downloadBlob(blob, `ggplotgui-project-${Date.now()}.json`)
-  ElMessage.success('项目已保存')
+// 项目文件 = { app, format, savedAt, spec, data? }
+// data 仅在数据源为「上传/粘贴」时内嵌：CSV 快照 + 手工编辑 ops，
+// 这样换机器/重启后仍能打开；内置数据集只靠名字复现。
+const PROJECT_FORMAT = 2
+const EMBED_LIMIT = 8 * 1024 * 1024   // 8MB：超过则项目文件不内嵌，退化为本机持久化
+
+async function collectEmbeddedData() {
+  const src = spec.spec.data && spec.spec.data.source
+  if (!src || src.type !== 'user') return null
+  try {
+    const snap = await snapshotData(src)
+    if (!snap.ok || !snap.csv) return null
+    if (snap.csv.length > EMBED_LIMIT) {
+      ElMessage.warning('数据超过 8MB，项目文件未内嵌；请在本机打开（数据已落盘）或先导出 CSV')
+      return null
+    }
+    let ops = []
+    try {
+      const ed = await getEdits(`user:${src.id}`)
+      ops = ed.ops || []
+    } catch { /* 编辑读取失败不影响保存 */ }
+    return { sourceKey: `user:${src.id}`, label: snap.label, csv: snap.csv, edits: ops }
+  } catch (e) {
+    ElMessage.warning('数据快照失败：' + e.message)
+    return null
+  }
 }
+
+async function saveProject() {
+  const embedded = await collectEmbeddedData()
+  const payload = {
+    app: 'ggplotgui',
+    format: PROJECT_FORMAT,
+    savedAt: new Date().toISOString(),
+    spec: spec.spec,
+    data: embedded
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  downloadBlob(blob, `ggplotgui-project-${Date.now()}.json`)
+  ElMessage.success(embedded ? '项目已保存（含数据与手工编辑）' : '项目已保存')
+}
+
 function loadProjectClick() {
   const input = document.createElement('input')
   input.type = 'file'
@@ -95,14 +132,35 @@ function loadProjectClick() {
     const f = input.files[0]
     if (!f) return
     try {
-      spec.loadProject(JSON.parse(await f.text()))
-      // 项目里的数据源要同步到左侧数据面板，否则列/预览与 spec 不一致
-      const src = spec.spec.data && spec.spec.data.source
-      if (src && src.type === 'dataset') await data.select(`dataset:${src.name}`)
-      else if (src && src.type === 'user' && data.sources.some(s => s.type === 'user' && s.name === src.id)) {
-        await data.select(`user:${src.id}`)
+      const obj = JSON.parse(await f.text())
+      const isEnvelope = !!(obj && obj.app === 'ggplotgui' && obj.spec)
+      const project = isEnvelope ? obj : { spec: obj, data: null }
+      const src = project.spec && project.spec.data && project.spec.data.source
+      const embedded = project.data
+
+      // 内嵌数据且本地没有这条数据记录（换机器 / 清过上传缓存）→ 自动重建
+      const known = src && src.type === 'user' &&
+        data.sources.some(s => s.type === 'user' && s.name === src.id)
+      if (embedded && embedded.csv && src && src.type === 'user' && !known) {
+        const res = await pasteData(embedded.csv, embedded.label || '项目内嵌数据')
+        const newId = res.source && res.source.id
+        if (!newId) throw new Error(res.error || '内嵌数据恢复失败')
+        project.spec.data.source = { type: 'user', id: newId }
+        if (Array.isArray(embedded.edits) && embedded.edits.length) {
+          await importEdits(project.spec.data.source, embedded.edits)
+        }
+        await data.load()
       }
-      ElMessage.success('项目已载入')
+
+      spec.loadProject(project.spec)
+      // 项目里的数据源要同步到左侧数据面板，否则列/预览与 spec 不一致
+      const finalSrc = spec.spec.data && spec.spec.data.source
+      if (finalSrc && finalSrc.type === 'dataset') await data.select(`dataset:${finalSrc.name}`)
+      else if (finalSrc && finalSrc.type === 'user' &&
+               data.sources.some(s => s.type === 'user' && s.name === finalSrc.id)) {
+        await data.select(`user:${finalSrc.id}`)
+      }
+      ElMessage.success(embedded ? '项目已载入（含内嵌数据）' : '项目已载入')
       spec.renderNow()
     } catch (e) {
       ElMessage.error('载入失败: ' + e.message)

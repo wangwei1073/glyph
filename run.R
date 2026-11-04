@@ -42,6 +42,8 @@ root <- scriptdir
 for (f in sort(list.files(file.path(root, "R"), pattern = "\\.R$", full.names = TRUE))) {
   source(f, encoding = "UTF-8", local = FALSE)
 }
+# 上传/粘贴的数据落盘，重启后仍能打开引用它的项目
+DataStore$bind(file.path(root, "userdata"))
 
 t0 <- Sys.time()
 STATE <- list(

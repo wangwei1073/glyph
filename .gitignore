@@ -18,3 +18,5 @@ _dist_check/
 # 系统
 Thumbs.db
 .DS_Store
+# 用户上传数据（落盘，随项目恢复）
+userdata/
