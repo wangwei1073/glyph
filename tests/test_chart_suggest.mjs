@@ -108,5 +108,64 @@ const withRid = [col('.gg_rid', 'numeric', 100), col('x', 'numeric', 20)]
 const r12 = suggestCharts(withRid)
 chk('忽略 .gg_rid 列', !JSON.stringify(r12).includes('.gg_rid'))
 
+// ---------- 13) 回归自变量含分类列时，不得推荐拟合线（回归 bug） ----------
+// 复现场景：mpg 的 hwy ~ drv + displ，如果 regRes.vars 顺序里 drv 在前，
+// 旧实现会把 drv（分类）当 x，导致 geom_smooth 静默画不出线
+const colsMpg = [
+  col('hwy', 'numeric', 27),
+  col('drv', 'character', 3),
+  col('displ', 'numeric', 35)
+]
+const regWithCat = {
+  method: 'lm',
+  vars: ['hwy', 'drv', 'displ'],   // drv 在 displ 之前
+  fitStats: { r2: 0.73 }
+}
+const r13 = suggestCharts(colsMpg, { regRes: regWithCat })
+const smoothIdea = r13.find(s => s.addLayer && s.addLayer.geom === 'smooth')
+chk('分类自变量：拟合线的 x 必须是连续列',
+    !smoothIdea || (smoothIdea.aes.x.map !== 'drv' && smoothIdea.aes.x.map === 'displ'))
+chk('分类自变量：不把分类列当 x 叠加 smooth',
+    !r13.some(s => s.addLayer && s.addLayer.geom === 'smooth' && s.aes.x.map === 'drv'))
+
+// 回归自变量全是分类时，应改推箱线图而不是拟合线
+const regAllCat = {
+  method: 'lm',
+  vars: ['hwy', 'drv'],
+  fitStats: { r2: 0.5 }
+}
+const r14 = suggestCharts(colsMpg, { regRes: regAllCat })
+// 注意：通用分支「两连续变量 + loess」仍可出现拟合线（x/y 都是连续列，合理）；
+// 要断言的是「没有把分类列 drv 当 x 的拟合线」，且不出现 lm 拟合线
+chk('全分类自变量：无分类 x 的拟合线',
+    !r14.some(s => s.addLayer && s.addLayer.geom === 'smooth' && s.aes.x.map === 'drv'))
+chk('全分类自变量：无 lm 拟合线', !r14.some(s => s.addLayer && s.addLayer.params?.method === 'lm'))
+chk('全分类自变量：改推箱线图', r14.some(s => s.geom === 'boxplot'))
+chk('全分类自变量：理由提到分类', r14.some(s => /分类/.test(s.reason)))
+
+// 低基数数值列（如 am=0/1）也不能作为拟合线 x
+const colsAm = [col('mpg', 'numeric', 25), col('am', 'numeric', 2), col('wt', 'numeric', 29)]
+const regAm = { method: 'lm', vars: ['mpg', 'am', 'wt'], fitStats: { r2: 0.8 } }
+const r15 = suggestCharts(colsAm, { regRes: regAm })
+chk('低基数数值自变量：拟合线 x 不为 am',
+    !r15.some(s => s.addLayer && s.addLayer.geom === 'smooth' && s.aes.x.map === 'am'))
+
+// 纯连续自变量时仍正常推荐拟合线
+const colsPure = [col('mpg', 'numeric', 25), col('wt', 'numeric', 29)]
+const r16 = suggestCharts(colsPure, { regRes: { method: 'lm', vars: ['mpg', 'wt'], fitStats: { r2: 0.75 } } })
+chk('纯连续自变量：仍推荐拟合线', r16.some(s => s.addLayer && s.addLayer.geom === 'smooth'))
+
+// ---------- 14) 时期/序号型低基数列（如 year）不应被当作分组 ----------
+const colsYear = [col('year', 'numeric', 2), col('displ', 'numeric', 35), col('hwy', 'numeric', 27)]
+const r17 = suggestCharts(colsYear)
+chk('year 不被当作分类分组',
+    !r17.some(s => s.geom === 'boxplot' && s.aes.x?.map === 'year'))
+chk('year 可作为时间轴推荐折线', r17.some(s => s.geom === 'line' && s.aes.x?.map === 'year'))
+
+// 真正该当分类的低基数列（cyl=4/6/8）仍应可分组
+const colsCyl = [col('cyl', 'numeric', 3), col('hwy', 'numeric', 27)]
+const r18 = suggestCharts(colsCyl)
+chk('cyl 仍可作分类分组', r18.some(s => s.geom === 'boxplot' && s.aes.x?.map === 'cyl'))
+
 console.log(`\n===== 图表推荐: ${pass} 通过 / ${fail} 失败 =====`)
 process.exit(fail > 0 ? 1 : 0)

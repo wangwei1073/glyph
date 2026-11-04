@@ -19,6 +19,15 @@ function isLowCardinality(col) {
   return col && col.type === 'numeric' && (col.nUnique ?? 99) <= 8
 }
 
+// 名称像「时期/序号」的列：即使低基数也不适合当分类分组（如 year、id、index）
+const TIME_OR_INDEX_NAME = /^(year|yr|month|week|day|quarter|q|time|date|id|index|idx|seq|no|num|code)$/i
+function looksLikeTimeOrIndex(name) {
+  const n = String(name || '').trim()
+  if (TIME_OR_INDEX_NAME.test(n)) return true
+  // 形如 year_2020、t1、x1 之类的编号列
+  return /^(year|yr|t|x|v|g)_?\d+$/i.test(n)
+}
+
 /**
  * 分析数据画像，给出候选图表
  * @param {Array} columns 列信息 [{name,type,nUnique,nMissing,range,preview}]
@@ -31,7 +40,17 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
   if (!cols.length) return []
 
   const numeric = cols.filter(c => kindOf(c) === 'numeric' && !isLowCardinality(c))
-  const categorical = cols.filter(c => kindOf(c) === 'categorical' || isLowCardinality(c))
+  // 低基数值列可分两类：真·分类（如 am/cyl）+ 「时期/序号」型（如 year）
+  // 后者不宜作为分组变量，否则会推出「按年份分组的箱线图」这种没有意义的图
+  const categorical = cols.filter(c => {
+    if (kindOf(c) === 'categorical') return true
+    if (isLowCardinality(c) && !looksLikeTimeOrIndex(c.name)) return true
+    return false
+  })
+  // 时期/序号型数值列：既可作连续变量，也可作为时间轴
+  const ordinalLike = cols.filter(c => isLowCardinality(c) && looksLikeTimeOrIndex(c.name))
+  // 这些列也是合法的 y（如按年份统计的数值），纳入数值候选
+  const numericAll = [...numeric, ...ordinalLike]
   const temporal = cols.filter(c => kindOf(c) === 'temporal')
   const out = []
 
@@ -70,25 +89,55 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
   }
 
   // ---------- 2) 有回归结果：给散点 + 拟合线 ----------
+  // 注意：regRes.vars 的顺序不可靠（可能是 [y, x] 也可能是 [y, 分类列, ...]），
+  // 必须用列画像核对类型 —— 否则会把分类列当 x，导致 geom_smooth 静默画不出线。
   if (regRes && regRes.method === 'lm' && regRes.vars && regRes.vars.length >= 2) {
+    const colOf = (name) => cols.find(c => c.name === name)
     const yv = regRes.vars[0]
-    const xv = regRes.vars[1]
-    push(98, {
-      geom: 'point',
-      title: '散点图 + 回归拟合线',
-      reason: `线性回归显示 ${yv} 与 ${xv} 显著相关（R²=${regRes.fitStats?.r2 ?? '—'}），散点加拟合线是标准呈现方式`,
-      aes: { x: { map: xv }, y: { map: yv } },
-      addLayer: { geom: 'smooth', aes: { x: { map: xv }, y: { map: yv } }, params: { method: 'lm', se: true } },
-      score: 98
-    })
-    push(80, {
-      geom: 'point',
-      title: '散点图 + 分组着色',
-      reason: '若存在分组变量，用颜色区分可以看到每组各自的趋势',
-      aes: { x: { map: xv }, y: { map: yv } }
-    })
-  }
+    const yCol = colOf(yv)
+    // 只在「真实连续」的数值列里挑 x（低基数数值/分类列都要排除）
+    const contXs = regRes.vars
+      .slice(1)
+      .filter(v => {
+        const c = colOf(v)
+        return c && kindOf(c) === 'numeric' && !isLowCardinality(c)
+      })
+    const xv = contXs[0]
 
+    if (xv && yCol) {
+      push(98, {
+        geom: 'point',
+        title: '散点图 + 回归拟合线',
+        reason: `线性回归显示 ${yv} 与 ${xv} 相关（R²=${regRes.fitStats?.r2 ?? '—'}），散点加拟合线是标准呈现方式`,
+        aes: { x: { map: xv }, y: { map: yv } },
+        addLayer: { geom: 'smooth', aes: { x: { map: xv }, y: { map: yv } }, params: { method: 'lm', se: true } },
+        score: 98
+      })
+    } else {
+      // 没有连续自变量（全是分类）→ 推荐分组对比类图，而不是拟合线
+      const catX = regRes.vars.slice(1).find(v => {
+        const c = colOf(v)
+        return c && (kindOf(c) === 'categorical' || isLowCardinality(c))
+      })
+      if (catX && yCol) {
+        push(96, {
+          geom: 'boxplot',
+          title: '箱线图（回归中的分类自变量）',
+          reason: `回归里 ${yv} 的自变量「${catX}」是分类变量，用分组箱线图展示各组分布比拟合线更合适`,
+          aes: { x: { map: catX }, y: { map: yv } },
+          score: 96
+        })
+        push(90, {
+          geom: 'point',
+          title: '均值点图（分类自变量各组均值）',
+          reason: `直接比较「${catX}」各组 ${yv} 的均值与标准误`,
+          aes: { x: { map: catX }, y: { map: yv } },
+          stat: 'summary',
+          score: 90
+        })
+      }
+    }
+  }
   // ---------- 3) 有描述统计：根据分布特征推荐 ----------
   // summary 兼容两种形态：{summary:[...]} 或直接 [...]
   const srows = Array.isArray(summary) ? summary : (summary && Array.isArray(summary.summary) ? summary.summary : null)
@@ -119,13 +168,16 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
   }
 
   // ---------- 4) 无统计结果：按数据形态给通用建议 ----------
-  // 4a. 时间序列：时间 + 数值
-  if (temporal.length && numeric.length) {
-    const tv = temporal[0].name, nv = numeric[0].name
+  // 4a. 时间序列：时间列（date/datetime）+ 数值，或「年份/序号」型数值 + 数值
+  const timeAxis = temporal.length ? temporal[0]
+    : (ordinalLike.length && numeric.length >= 2 ? ordinalLike[0] : null)
+  if (timeAxis && numeric.length) {
+    const tv = timeAxis.name
+    const nv = (numeric.find(c => c.name !== tv) || numeric[0]).name
     push(95, {
       geom: 'line',
       title: '时间序列折线图',
-      reason: `检测到时间列「${tv}」与数值列「${nv}」，折线图是展示随时间变化的默认选择`,
+      reason: `检测到时间/序列列「${tv}」与数值列「${nv}」，折线图是展示随时间变化的默认选择`,
       aes: { x: { map: tv }, y: { map: nv } }
     })
   }

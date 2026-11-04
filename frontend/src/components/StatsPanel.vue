@@ -302,7 +302,19 @@ function aesText(aes) {
     .join(' · ')
 }
 
-function applyIdea(idea) {  if (!data.columns.length) { ElMessage.warning('先选择数据源'); return }
+function applyIdea(idea) {
+  if (!data.columns.length) { ElMessage.warning('先选择数据源'); return }
+  // 防护：拟合/平滑层要求 x 连续，分类 x 上 geom_smooth 会静默画不出线
+  if (idea.addLayer && idea.addLayer.geom === 'smooth') {
+    const xName = idea.aes?.x?.map
+    const xCol = data.columns.find(c => c.name === xName)
+    const isDiscrete = !xCol || ['character', 'factor', 'logical', 'date', 'datetime'].includes(xCol.type) ||
+      (xCol.type === 'numeric' && (xCol.nUnique ?? 99) <= 8)
+    if (isDiscrete) {
+      ElMessage.warning(`「${xName}」不是连续变量，无法叠加拟合线；已仅添加散点`)
+      idea = { ...idea, addLayer: null }
+    }
+  }
   spec.addLayer(idea.geom || 'point')
   const i = spec.spec.layers.length - 1
   // 覆盖 guessAes 推测的映射
