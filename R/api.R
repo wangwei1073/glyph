@@ -249,6 +249,63 @@ ggspec_api_app <- function(state) {
       return(json_response(plan))
     }
 
+    ## ---- 基线特征表（L5）----
+    if (path == "/api/table1/columns" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      cols <- tryCatch(.ggspec_table1_columns(pv$d), error = function(e) e)
+      if (inherits(cols, "error")) return(json_error(conditionMessage(cols), 400))
+      return(json_response(list(ok = TRUE, all = cols$all, groupable = cols$groupable,
+                                nrow = nrow(pv$d),
+                                stats = .ggspec_t1_stats())))
+    }
+
+    if (path == "/api/table1/build" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      res <- tryCatch(
+        .ggspec_table1(pv$d,
+                       vars = body$vars %||% character(0),
+                       by = body$by %||% "",
+                       statId = body$statId %||% "mean_sd",
+                       addP = isTRUE(body$addP),
+                       includeOverall = isTRUE(body$includeOverall),
+                       digits = body$digits %||% 1L),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      res$nrow <- nrow(pv$d)
+      return(json_response(res))
+    }
+
+    ## 基线表导出（docx / xlsx / csv）：落盘后返回下载 URL
+    if (path == "/api/table1/export" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      res <- tryCatch(
+        .ggspec_table1(pv$d,
+                       vars = body$vars %||% character(0),
+                       by = body$by %||% "",
+                       statId = body$statId %||% "mean_sd",
+                       addP = isTRUE(body$addP),
+                       includeOverall = isTRUE(body$includeOverall),
+                       digits = body$digits %||% 1L),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      ex <- tryCatch(
+        .ggspec_table1_export(res, format = body$format %||% "docx", out_dir = state$plot_dir),
+        error = function(e) e)
+      if (inherits(ex, "error")) return(json_error(conditionMessage(ex), 400))
+      return(json_response(list(ok = TRUE,
+                                url = paste0("/api/plotfile/", ex$filename),
+                                filename = ex$filename)))
+    }
+
     ## ---- 回归分析（L4）----
     if (path == "/api/reg/fit" && method == "POST") {
       src <- body$source %||% list()

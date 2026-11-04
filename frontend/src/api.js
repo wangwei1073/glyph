@@ -127,6 +127,21 @@ export const sigPlan = (spec) => post('/api/sig/plan', { spec })
 export const regColumns = (source, prep) => post('/api/reg/columns', { source, prep })
 export const regFit = (source, prep, { y = '', xs = [], method = 'lm' } = {}) =>
   post('/api/reg/fit', { source, prep, y, xs, method }, T_HEAVY)
+// 基线特征表（L5）
+export const table1Columns = (source, prep) => post('/api/table1/columns', { source, prep })
+export const table1Build = (source, prep, opts = {}) =>
+  post('/api/table1/build', {
+    source, prep,
+    vars: opts.vars || [], by: opts.by || '', statId: opts.statId || 'mean_sd',
+    addP: !!opts.addP, includeOverall: !!opts.includeOverall, digits: opts.digits ?? 2
+  }, T_HEAVY)
+export const table1Export = (source, prep, opts = {}, format = 'docx') =>
+  post('/api/table1/export', {
+    source, prep,
+    vars: opts.vars || [], by: opts.by || '', statId: opts.statId || 'mean_sd',
+    addP: !!opts.addP, includeOverall: !!opts.includeOverall, digits: opts.digits ?? 2,
+    format
+  }, T_HEAVY)
 
 // 手动编辑（编辑模式）：ops 针对 source 的加工+编辑后数据
 export const editAdd = async (source, prep, op) => {

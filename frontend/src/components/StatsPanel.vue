@@ -6,7 +6,7 @@ import { ElMessage } from 'element-plus'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
-import { statsColumns, statsSummary, statsSuggest, statsTest, sigPlan, regColumns, regFit, downloadBlob } from '../api'
+import { statsColumns, statsSummary, statsSuggest, statsTest, sigPlan, regColumns, regFit, table1Columns, table1Build, table1Export, downloadBlob } from '../api'
 
 const data = useDataStore()
 const spec = useSpecStore()
@@ -189,6 +189,71 @@ watch(regMethod, () => {
   regXs.value = regXs.value.filter(v => regXOptions.value.includes(v))
   regResult.value = null
 })
+
+// ---- L5 基线特征表 ----
+const t1Vars = ref([])
+const t1By = ref('')
+const t1Stat = ref('mean_sd')
+const t1AddP = ref(true)
+const t1Overall = ref(false)
+const t1Digits = ref(2)
+const t1Result = ref(null)
+const t1Running = ref(false)
+const t1Exporting = ref('')
+const t1CodeOpen = ref(false)
+const t1Cols = ref({ all: [], groupable: [] })
+const t1StatOptions = ref([])
+const canT1 = computed(() => hasSource.value && t1Vars.value.length > 0)
+
+async function loadT1Columns() {
+  if (!hasSource.value) { t1Cols.value = { all: [], groupable: [] }; return }
+  try {
+    const r = await table1Columns(source.value, prep.value)
+    t1Cols.value = { all: r.all || [], groupable: r.groupable || [] }
+    t1StatOptions.value = r.stats || []
+    t1Vars.value = t1Vars.value.filter(v => t1Cols.value.all.includes(v))
+    if (t1By.value && !t1Cols.value.groupable.includes(t1By.value)) t1By.value = ''
+    if (!t1Vars.value.length) t1Vars.value = t1Cols.value.all.filter(v => v !== t1By.value)
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+const t1Opts = () => ({
+  vars: t1Vars.value, by: t1By.value, statId: t1Stat.value,
+  addP: t1AddP.value, includeOverall: t1Overall.value, digits: t1Digits.value
+})
+
+async function runT1() {
+  if (!canT1.value) { ElMessage.warning('请至少选择一个变量'); return }
+  t1Running.value = true
+  error.value = ''
+  try {
+    t1Result.value = await table1Build(source.value, prep.value, t1Opts())
+    t1CodeOpen.value = false
+  } catch (e) {
+    error.value = e.message; t1Result.value = null
+  } finally {
+    t1Running.value = false
+  }
+}
+
+async function exportT1(format) {
+  if (!t1Result.value) return
+  t1Exporting.value = format
+  try {
+    const res = await table1Export(source.value, prep.value, t1Opts(), format)
+    if (!res.ok || !res.url) throw new Error(res.error || '导出失败')
+    const r = await fetch(res.url)
+    if (!r.ok) throw new Error(`下载失败: HTTP ${r.status}`)
+    downloadBlob(await r.blob(), res.filename)
+    ElMessage.success(`已导出 ${res.filename}`)
+  } catch (e) {
+    ElMessage.error('导出失败: ' + e.message)
+  } finally {
+    t1Exporting.value = ''
+  }
+}
 const isCorr = computed(() => testMethod.value.startsWith('cor.test'))
 const canRunTest = computed(() => {
   if (!hasSource.value) return false
@@ -313,6 +378,7 @@ watch(() => JSON.stringify((spec.spec.layers || []).map(l => [l.geom, l.aes?.x?.
 watch(tab, (v) => {
   if (v === 'mark') loadSigPlan()
   if (v === 'reg') loadRegColumns()
+  if (v === 'table1') loadT1Columns()
 })
 </script>
 <template>
@@ -330,6 +396,7 @@ watch(tab, (v) => {
           <el-radio-button value="test">统计检验</el-radio-button>
           <el-radio-button value="mark">图上标注</el-radio-button>
           <el-radio-button value="reg">回归分析</el-radio-button>
+          <el-radio-button value="table1">基线表</el-radio-button>
         </el-radio-group>
       </template>
 
@@ -765,6 +832,111 @@ watch(tab, (v) => {
             </template>
             <div v-else class="gg-empty-hint" style="padding:24px">
               选择因变量与自变量后点「拟合」
+            </div>
+          </section>
+        </div>
+
+        <!-- ================= 基线特征表（L5）================= -->
+        <div v-show="tab === 'table1'" class="sd-pane">
+          <aside class="sd-params">
+            <div class="sp-field">
+              <label>汇总变量</label>
+              <el-select v-model="t1Vars" size="small" multiple filterable collapse-tags
+                collapse-tags-tooltip placeholder="选择变量（默认全部）" style="width:100%">
+                <el-option v-for="c in t1Cols.all" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div class="sp-field">
+              <label>分组变量</label>
+              <el-select v-model="t1By" size="small" filterable clearable
+                placeholder="（可选）按组比较" style="width:100%">
+                <el-option v-for="c in t1Cols.groupable" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div class="sp-field">
+              <label>连续变量统计量</label>
+              <el-select v-model="t1Stat" size="small" style="width:100%">
+                <el-option v-for="s in t1StatOptions" :key="s.id" :value="s.id" :label="s.label" />
+              </el-select>
+            </div>
+            <div class="sp-field">
+              <label>小数位</label>
+              <el-input-number v-model="t1Digits" size="small" :min="0" :max="4" :step="1"
+                controls-position="right" style="width:100%" />
+            </div>
+            <div class="sp-actions" style="gap:12px">
+              <el-checkbox v-model="t1AddP" size="small" :disabled="!t1By">组间 p 值</el-checkbox>
+              <el-checkbox v-model="t1Overall" size="small" :disabled="!t1By">合计列</el-checkbox>
+            </div>
+            <div class="sp-actions">
+              <el-button size="small" type="primary" :loading="t1Running" :disabled="!canT1" @click="runT1">
+                <el-icon class="el-icon--left"><Grid /></el-icon>生成
+              </el-button>
+              <el-button size="small" text @click="loadT1Columns"><el-icon><Refresh /></el-icon></el-button>
+            </div>
+            <div class="sp-hint">
+              连续变量按所选统计量，分类变量按 n (%)；缺失值单独统计。
+            </div>
+          </aside>
+
+          <section class="sd-result">
+            <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon />
+            <template v-if="t1Result">
+              <div class="res-head">
+                <span class="gg-mono">
+                  {{ t1Result.n }} 行 · {{ t1Result.vars.length }} 变量<template v-if="t1Result.by"> · 按 {{ t1Result.by }} 分组</template>
+                  · 引擎 {{ t1Result.engine }}
+                </span>
+                <span style="flex:1" />
+                <el-button size="small" text @click="t1CodeOpen = !t1CodeOpen">
+                  <el-icon><Document /></el-icon>{{ t1CodeOpen ? '隐藏代码' : '代码' }}
+                </el-button>
+                <el-dropdown size="small" :disabled="!!t1Exporting" @command="exportT1">
+                  <el-button size="small" text :loading="!!t1Exporting">
+                    <el-icon><Download /></el-icon>导出
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="docx">Word (.docx)</el-dropdown-item>
+                      <el-dropdown-item command="xlsx">Excel (.xlsx)</el-dropdown-item>
+                      <el-dropdown-item command="csv">CSV</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
+
+              <div class="gg-scroll res-table-wrap">
+                <table class="stat-table">
+                  <thead>
+                    <tr>
+                      <th v-for="(c, i) in t1Result.columns" :key="i" :class="{ n: i > 0 }">{{ c }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(row, ri) in t1Result.table" :key="ri">
+                      <td v-for="(c, ci) in t1Result.columns" :key="ci"
+                        :class="{ 'gg-mono': ci === 0, n: ci > 0 }">{{ row[c] }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div v-if="t1Result.notes && t1Result.notes.length" class="reg-notes">
+                <div v-for="(n, i) in t1Result.notes" :key="i" class="note-line">· {{ n }}</div>
+              </div>
+
+              <div v-if="t1CodeOpen" class="res-code">
+                <div class="res-code-head">
+                  <span>可复现 R 代码</span><span style="flex:1" />
+                  <el-button size="small" text @click="copyText(t1Result.code, '基线表代码已复制')">
+                    <el-icon><CopyDocument /></el-icon>
+                  </el-button>
+                </div>
+                <pre class="gg-mono code-pre">{{ t1Result.code }}</pre>
+              </div>
+            </template>
+            <div v-else class="gg-empty-hint" style="padding:24px">
+              选择变量后点「生成」（可选分组变量做组间比较）
             </div>
           </section>
         </div>
