@@ -1,0 +1,20 @@
+# 运行时产物（不要提交）
+pins.json
+edits.json
+Rplots.pdf
+rt2.json
+*.tmp[0-9]*
+tests/out/
+tests/_out.txt
+*.log
+
+# 工具/编辑器内部状态
+.zcode/
+
+# 前端
+frontend/node_modules/
+_dist_check/
+
+# 系统
+Thumbs.db
+.DS_Store

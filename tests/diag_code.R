@@ -1,0 +1,18 @@
+Sys.setlocale("LC_CTYPE", ".UTF-8")
+suppressPackageStartupMessages(library(ggplot2))
+for (f in sort(list.files("R", pattern = "[.]R$", full.names = TRUE))) source(f, encoding = "UTF-8")
+META <- meta_build_lookup(ggspec_build_meta())
+STATE <- list(data_store = DataStore, pin_store = Pins, edit_store = EditStore,
+              raw_data = NULL, plot_dir = tempdir())
+EditStore$bind(file.path(tempdir(), "t3.json"))
+STATE$edit_store$clear("dataset:mpg")
+STATE$edit_store$add("dataset:mpg", list(kind = "colRen", from = "hwy", to = "hwy_new"))
+STATE$edit_store$add("dataset:mpg", list(kind = "cell", rid = 3, col = "hwy_new", value = 41.5))
+STATE$edit_store$add("dataset:mpg", list(kind = "rowIns",
+                                         values = list(displ = 9.5, model = "新行", .gg_rid = NA)))
+spec <- list(data = list(source = list(type = "dataset", name = "mpg")), layers = list())
+gen <- ggspec_pipeline(spec, META, STATE)
+writeLines(gen$code)
+cat("\n--- parse check ---\n")
+r <- tryCatch({ parse(text = gen$code); "OK" }, error = function(e) paste("ERR:", conditionMessage(e)))
+cat(r, "\n")
