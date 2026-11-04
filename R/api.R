@@ -7,7 +7,8 @@ MIME_MAP <- c(
   png = "image/png", jpg = "image/jpeg", ico = "image/x-icon",
   woff2 = "font/woff2", woff = "font/woff", ttf = "font/ttf",
   map = "application/json", txt = "text/plain; charset=utf-8", wasm = "application/wasm",
-  csv = "text/csv; charset=utf-8"
+  csv = "text/csv; charset=utf-8", zip = "application/zip",
+  md = "text/markdown; charset=utf-8", r = "text/plain; charset=utf-8"
 )
 
 .static_file <- function(root, url_path) {
@@ -303,6 +304,21 @@ ggspec_api_app <- function(state) {
       return(json_response(list(ok = TRUE, templates = journal_templates())))
     }
 
+    ## ---- 可复现包 ----
+    if (path == "/api/bundle" && method == "POST") {
+      spec <- body$spec %||% list()
+      format <- body$format %||% "png"
+      width <- as.integer(body$width %||% 1600); height <- as.integer(body$height %||% 1000)
+      dpi <- as.integer(body$dpi %||% 300)
+      journal <- body$journal %||% NULL
+      res <- tryCatch(ggspec_bundle(spec, state$meta, state, width, height, dpi, format,
+                                    journal = journal, project_id = body$projectId %||% NULL),
+                      error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE, url = paste0("/api/plotfile/", res$filename),
+                                filename = res$filename, files = res$files)))
+    }
+
     ## ---- 导出 ----
     if (path == "/api/export/check" && method == "POST") {
       spec <- body$spec %||% list()
@@ -435,7 +451,7 @@ ggspec_api_app <- function(state) {
         raw
       }, error = function(e) NULL)
       if (is.null(spec_json)) return(json_error("绘图规格解析失败", 400))
-      id <- state$pin_store$add(spec_json, (body$label %||% NULL))
+      id <- state$pin_store$add(spec_json, (body$label %||% NULL), (body$project %||% ""))
       return(json_response(list(ok = TRUE, id = id, pins = state$pin_store$list())))
     }
     if (path == "/api/pins/delete" && method == "POST") {

@@ -103,6 +103,19 @@ ok("edits/import 导入 1 条", identical(r4$json$imported, 1L))
 r5 <- call_api(paste0("/api/edits?key=user:", new_id), method = "GET")
 ok("GET /api/edits 读回 1 条", length(r5$json$ops %||% list()) == 1L)
 
+# ---- 5. 图库按项目隔离 -------------------------------------------------------
+jpin <- jsonlite::toJSON(list(data = list(source = list(type = "none")), layers = list()), auto_unbox = TRUE)
+pa <- Pins$add(jpin, "项目A图", "proj-A")
+pb <- Pins$add(jpin, "项目B图", "proj-B")
+pl <- Pins$add(jpin, "旧图库")
+plist <- Pins$list()
+proj_of <- function(id) {
+  it <- Filter(function(x) identical(x$id, id), plist)
+  if (!length(it)) NA_character_ else it[[1]]$project
+}
+ok("图库条目带项目字段", identical(proj_of(pa), "proj-A") && identical(proj_of(pb), "proj-B"))
+ok("旧图库条目 project 为空（对所有项目可见）", identical(proj_of(pl), ""))
+
 cat(sprintf("\n===== 项目数据测试: %d 通过 / %d 失败 =====\n", pass, fail))
 unlink(dir, recursive = TRUE)
 quit(status = if (fail > 0) 1 else 0)

@@ -106,6 +106,10 @@ export const checkExport = (spec, { width = 1600, height = 1000, dpi = 300, form
 
 export const getJournalTemplates = () => api('/api/journal/templates')
 
+// 可复现包：图 + 数据 + 代码 + sessionInfo + 图注 + 项目文件（zip）
+export const bundlePlot = (spec, { width = 1600, height = 1000, dpi = 300, journal = '', projectId = '' } = {}) =>
+  post('/api/bundle', { spec, width, height, dpi, journal, projectId }, T_HEAVY)
+
 export const getPlotly = (spec, { width = 800, height = 500 } = {}) =>
   post('/api/plotly', { spec, width, height }, T_HEAVY)
 
@@ -121,7 +125,7 @@ export const editsClear = (source) => post('/api/edits/clear', { source })
 
 // 图库（pins，用于 patchwork 拼图）
 export const getPins = () => api('/api/pins')
-export const savePin = (specJson, label = null) => post('/api/pins/save', { specJson, label })
+export const savePin = (specJson, label = null, project = '') => post('/api/pins/save', { specJson, label, project })
 export const deletePin = (id) => post('/api/pins/delete', { id })
 
 export function downloadBlob(blob, filename) {

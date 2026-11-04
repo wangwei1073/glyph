@@ -177,6 +177,7 @@ async function saveProject() {
     app: 'ggplotgui',
     format: PROJECT_FORMAT,
     savedAt: new Date().toISOString(),
+    projectId: spec.projectId,
     spec: spec.spec,
     data: embedded
   }
@@ -199,6 +200,7 @@ function loadProjectClick() {
       const project = isEnvelope ? obj : { spec: obj, data: null }
       const src = project.spec && project.spec.data && project.spec.data.source
       const embedded = project.data
+      if (isEnvelope && project.projectId) spec.setProjectId(project.projectId)
 
       // 内嵌数据且本地没有这条数据记录（换机器 / 清过上传缓存）→ 自动重建
       const known = src && src.type === 'user' &&

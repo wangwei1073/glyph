@@ -6,7 +6,7 @@ import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
 import { useDataStore } from '../stores/data'
 import { usePinStore } from '../stores/pins'
-import { exportPlot, downloadBlob, genCode, getPlotly, checkExport, getJournalTemplates } from '../api'
+import { exportPlot, downloadBlob, genCode, getPlotly, checkExport, getJournalTemplates, bundlePlot } from '../api'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
@@ -196,6 +196,7 @@ function applyFix(fix) {
 }
 
 async function doExport(format) {
+  if (format === 'bundle') return bundleNow()
   if (format === 'check') {
     if (!spec.hasPlot) return ElMessage.warning('先渲染一张图再检查')
     pendingFormat.value = 'png'
@@ -208,6 +209,25 @@ async function doExport(format) {
   if (res === null) return exportNow(format)        // 检查接口异常时直接导出
   const blocking = (res.issues || []).some(i => i.level === 'warn' || i.level === 'fail')
   if (!blocking) await exportNow(format)
+}
+
+// 可复现包：图 + 数据 + 代码 + sessionInfo + 图注 + 项目文件
+async function bundleNow() {
+  if (!spec.hasPlot) return ElMessage.warning('先渲染一张图再打包')
+  exporting.value = true
+  try {
+    const { width, height, dpi } = exportOpts.value
+    const res = await bundlePlot(spec.spec, { width, height, dpi, journal: journalId.value, projectId: spec.projectId })
+    if (!res.ok || !res.url) throw new Error(res.error || '打包失败')
+    const r = await fetch(res.url)
+    if (!r.ok) throw new Error(`下载失败: HTTP ${r.status}`)
+    downloadBlob(await r.blob(), res.filename || 'ggplotgui-bundle.zip')
+    ElMessage.success('可复现包已导出（图 + 数据 + 代码 + 图注）')
+  } catch (e) {
+    ElMessage.error('可复现包导出失败: ' + e.message)
+  } finally {
+    exporting.value = false
+  }
 }
 
 async function exportNow(format) {
@@ -423,7 +443,8 @@ async function drawPlotly() {
           <el-dropdown-item command="png">PNG 位图</el-dropdown-item>
           <el-dropdown-item command="svg">SVG 矢量</el-dropdown-item>
           <el-dropdown-item command="pdf">PDF 矢量</el-dropdown-item>
-          <el-dropdown-item command="check" divided>导出前检查…</el-dropdown-item>
+          <el-dropdown-item command="bundle" divided>可复现包 (.zip)</el-dropdown-item>
+          <el-dropdown-item command="check">导出前检查…</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
@@ -440,7 +461,8 @@ async function drawPlotly() {
           <el-dropdown-item command="png" divided :disabled="!spec.hasPlot">导出 PNG</el-dropdown-item>
           <el-dropdown-item command="svg" :disabled="!spec.hasPlot">导出 SVG</el-dropdown-item>
           <el-dropdown-item command="pdf" :disabled="!spec.hasPlot">导出 PDF</el-dropdown-item>
-          <el-dropdown-item command="check" divided :disabled="!spec.hasPlot">导出前检查…</el-dropdown-item>
+          <el-dropdown-item command="bundle" divided :disabled="!spec.hasPlot">可复现包 (.zip)</el-dropdown-item>
+          <el-dropdown-item command="check" :disabled="!spec.hasPlot">导出前检查…</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>

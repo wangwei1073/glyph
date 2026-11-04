@@ -21,6 +21,24 @@ export function defaultSpec() {
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
+// 项目标识：图库按项目隔离；持久化到 localStorage，刷新后仍是同一个项目
+const PROJECT_ID_KEY = 'ggplotgui-project-id'
+function newProjectId() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  } catch { /* 忽略 */ }
+  return 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8)
+}
+function currentProjectId() {
+  try {
+    const saved = localStorage.getItem(PROJECT_ID_KEY)
+    if (saved && saved.trim()) return saved.trim()
+  } catch { /* 忽略 */ }
+  const id = newProjectId()
+  try { localStorage.setItem(PROJECT_ID_KEY, id) } catch { /* 忽略 */ }
+  return id
+}
+
 // 未保存草稿（崩溃/误关恢复）：只存 spec，数据本身由服务端 userdata/ 持久化
 const DRAFT_KEY = 'ggplotgui-draft-v1'
 
@@ -28,6 +46,7 @@ export const useSpecStore = defineStore('spec', {
   state: () => ({
     spec: defaultSpec(),
     selectedLayer: 0,
+    projectId: currentProjectId(),
     autoRender: true,
     rendering: false,
     renderQueued: false,
@@ -73,6 +92,12 @@ export const useSpecStore = defineStore('spec', {
     }
   },
   actions: {
+    setProjectId(id) {
+      if (id && String(id).trim()) {
+        this.projectId = String(id).trim()
+        try { localStorage.setItem(PROJECT_ID_KEY, this.projectId) } catch { /* 忽略 */ }
+      }
+    },
     reset() {
       this.spec = defaultSpec()
       this.ensureDefaultTheme()

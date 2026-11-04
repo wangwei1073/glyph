@@ -30,7 +30,7 @@ Pins <- local({
       dir.create(dirname(file), showWarnings = FALSE, recursive = TRUE)
       .load()
     },
-    add = function(spec_json, label = NULL) {
+    add = function(spec_json, label = NULL, project = NULL) {
       n <- length(.pins) + 1L
       # id 永不复用（重启后继续编号）
       n <- max(n, .pins_max_n() + 1L)
@@ -39,6 +39,7 @@ Pins <- local({
         id = id,
         label = (label %||% paste0("图", n)),
         specJson = spec_json,
+        project = as.character(project %||% ""),
         t = format(Sys.time(), "%m-%d %H:%M")
       )
       .save()
@@ -69,6 +70,7 @@ Pins <- local({
         list(
           id = as.character(it$id),
           label = as.character(it$label %||% it$id),
+          project = as.character(it$project %||% ""),
           t = as.character(it$t %||% ""),
           src = as.character(src$name %||% ""),
           srcType = as.character(src$type %||% "none"),

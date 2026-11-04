@@ -69,6 +69,8 @@
 - 导出 **PNG（300dpi）/ SVG / PDF** 矢量
 - **导出前检查**：白底 / 分辨率 / 物理尺寸 / 矢量格式 / 字体可用性 / 最小字号 / 能否真正渲染；
   有警告或失败时弹窗列出原因，可选择「仍然导出」；也可从导出菜单单独触发
+- **可复现包（.zip）**：一次导出 图（PNG+PDF）+ 原始数据 CSV + 可运行 `figure.R` +
+  `sessionInfo.txt` + 图注草稿 + 项目文件；解压后 `Rscript figure.R` 即可复现
 - **期刊模板**：Nature / Science / Cell / PLOS / IEEE / 中文核心 / 通用，按模板检查栏宽、字号下限、
   字体白名单、格式与 dpi，并给出一键修复（套用栏宽、补 300dpi、提字号、改白底/字体/格式）
 - 交互式 plotly 预览（自动转换，部分 geom 不支持）
@@ -120,6 +122,7 @@ Rscript tests/test_edits.R          # 手工编辑引擎 + 行锚 + 因子列
 Rscript tests/test_patchwork.R      # 图库存取 + 拼图组合
 Rscript tests/test_api_guard.R      # 请求来源校验（防跨站 / DNS 重绑定）
 Rscript tests/test_project_data.R   # 项目数据：落盘 / 快照 / 重建 / 手工编辑恢复
+Rscript tests/test_bundle.R         # 可复现包：图 + 数据 + 代码 + 图注 + 项目文件
 Rscript tests/test_export_check.R   # 导出前检查：白底 / dpi / 尺寸 / 字号 / 可渲染性
 
 # 重新生成 geom 示意图（改了默认主题/映射后跑一次，产物在 frontend/public/geom-thumbs）

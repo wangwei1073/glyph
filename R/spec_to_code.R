@@ -320,12 +320,16 @@
 }
 
 # 数据赋值行
-.data_lines <- function(spec, state, df_name = "df") {
+.data_lines <- function(spec, state, df_name = "df", data_file = NULL) {
   src <- (spec$data %||% list())$source %||% list(type = "none")
   prep <- (spec$data %||% list())
   lines <- character(0)
   if (identical(src$type, "dataset")) {
     lines <- c(lines, paste0(df_name, " <- ", src$name))
+  } else if (identical(src$type, "user") && !is.null(data_file) && nzchar(data_file)) {
+    # 可复现包：数据随包导出为 CSV，代码直接读同目录文件
+    lines <- c(lines, sprintf('%s <- read.csv("%s", stringsAsFactors = FALSE, check.names = FALSE, encoding = "UTF-8")',
+                              df_name, data_file))
   } else if (identical(src$type, "user")) {
     d <- tryCatch(state$data_store$get(src_id_of(src)), error = function(e) NULL)
     inline_ok <- !is.null(d) && nrow(d) <= 30 && ncol(d) <= 6 &&
@@ -439,12 +443,12 @@
 # include_data：是否包含数据赋值/加工行（拼图展示代码包含，eval 由环境注入）
 # with_final：是否以变量名自身作为最后表达式（print 用）
 spec_to_code <- function(spec, meta, state, var_name = "p", df_name = "df",
-                         include_data = TRUE, with_final = TRUE) {
+                         include_data = TRUE, with_final = TRUE, data_file = NULL) {
   warns <- character(0)
   spec <- spec %||% list()
   layers <- spec$layers %||% list()
 
-  data_lines <- if (include_data) .data_lines(spec, state, df_name) else character(0)
+  data_lines <- if (include_data) .data_lines(spec, state, df_name, data_file) else character(0)
 
   g_aes <- .ggplot_aes(layers)
   plot_args <- df_name

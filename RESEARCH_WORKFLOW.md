@@ -353,3 +353,71 @@ PDF 要嵌字体、不能透明背景……这些全部靠人肉。
 - 顶栏常驻“合规状态”徽章（当前只在导出弹窗内）。
 - 模板可编辑/自定义（JSON 导入）。
 - PDF 字体嵌入、CMYK、色盲模拟等更深的检查。
+---
+
+## 十六、已实施：P1-3 可复现包（2026-11-04）
+
+### 16.1 内容
+
+导出菜单新增「可复现包 (.zip)」，一次打包含：
+
+| 文件 | 说明 |
+|---|---|
+| `figure.png` / `figure.pdf` | 按当前导出尺寸与 dpi 渲染（PNG 位图 + PDF 矢量） |
+| `data.csv` | 上传/粘贴数据的**原始数据**（不含内部 `.gg_rid`；加工步骤写在代码里） |
+| `figure.R` | 可运行代码；用户数据改为 `read.csv("data.csv")`，内置数据集直接引用 `mpg` 等 |
+| `sessionInfo.txt` | R 与包版本 |
+| `caption.md` | 图注草稿：数据来源、物理尺寸、dpi、模板、软件版本（标注需人工核对） |
+| `project.json` | 可重新导入 ggplotGUI 的项目文件（含数据快照与手工编辑） |
+| `README.txt` | 文件说明与复现步骤 |
+
+### 16.2 实现
+
+- 新增 `R/bundle.R`：`ggspec_bundle()` 组装目录并用 `zip::zipr` 打包（无外部 zip 依赖）。
+- `spec_to_code()` / `.data_lines()` 新增 `data_file` 参数，用于生成读 `data.csv` 的代码。
+- 新接口 `POST /api/bundle`；`.zip/.md/.r` 补了 MIME。
+- 拼图模式暂不支持（需要多份数据，会明确报错）。
+
+### 16.3 验证
+
+- 新增 `tests/test_bundle.R`：16 项断言（文件清单、代码读 CSV、图注内容、项目文件可解析、
+  内置数据集不带 CSV、拼图明确报错）全部通过。
+- API 实测：上传数据 + Nature 模板 → 返回 8 个文件、约 37KB zip；浏览器点菜单实际下载 72KB
+  （含 PDF 与项目文件）。
+
+---
+
+## 十七、已实施：P1-4 图库按项目隔离（2026-11-04）
+
+### 17.1 设计
+
+- 每个项目有稳定 `projectId`（`localStorage` 持久化，随项目文件保存/载入）。
+- 图库条目记录 `project` 字段；界面只显示「本项目 + 旧的全局条目」。
+- 旧条目（无 project）继续对所有项目可见，避免升级后图库突然变空。
+
+### 17.2 实现
+
+- `R/pins.R`：`add(spec_json, label, project)` 存 project；`list()` 返回 project。
+- `POST /api/pins/save` 接收 `project`。
+- `stores/spec.js`：`projectId`（localStorage 持久化、`setProjectId`）。
+- `stores/pins.js`：`items` 改为按当前 projectId 过滤的 getter，`byId` 同步。
+- 项目保存/载入途中带上 `projectId`；可复现包的 `project.json` 也带。
+
+### 17.3 验证
+
+- 后端：`test_project_data` 增加图库 project 字段断言（21/21）。
+- 浏览器：创建两条图库条目（本项目 / 其他项目）→ 刷新 → 拼图面板只显示「本项目图」与旧条目，
+  其他项目的条目被过滤。
+- 已知边界：图库仍存在服务端 `pins.json`，项目文件本身不内嵌图库；换机器打开项目时
+  图库条目不会跟着走（后续可把用到的 pin 内嵌进项目包）。
+
+---
+
+## 十八、P1 完成情况
+
+| 项 | 状态 |
+|---|---|
+| P1-1 物理尺寸模式 | ✅ |
+| P1-2 期刊模板 + 合规面板 | ✅ |
+| P1-3 可复现包 | ✅ |
+| P1-4 图库按项目隔离 | ✅（图库不随项目文件迁移，已记为边界） |
