@@ -235,6 +235,20 @@ ggspec_api_app <- function(state) {
                                 groupable = cols$groupable, nrow = nrow(pv$d))))
     }
 
+    ## ---- 显著性标注规划（L3）：给出可选比较对与默认 y 位置 ----
+    if (path == "/api/sig/plan" && method == "POST") {
+      spec <- body$spec %||% list()
+      d <- tryCatch(ggspec_resolve_data(spec, state), error = function(e) e)
+      if (inherits(d, "error")) return(json_error(conditionMessage(d), 400))
+      plan <- tryCatch(.ggspec_sig_plan(d, spec), error = function(e) e)
+      if (inherits(plan, "error")) return(json_error(conditionMessage(plan), 400))
+      plan$ok <- isTRUE(plan$ok)
+      plan$hasGgsignif <- .ggspec_has_pkg("ggsignif")
+      plan$hasGgpubr <- .ggspec_has_pkg("ggpubr")
+      plan$hasData <- !is.null(d)
+      return(json_response(plan))
+    }
+
     ## ---- 统计检验（L2）----
     if (path == "/api/stats/test" && method == "POST") {
       src <- body$source %||% list()

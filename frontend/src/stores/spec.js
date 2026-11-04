@@ -13,6 +13,8 @@ export function defaultSpec() {
     labs: {},
     guides: {},
     annotations: [],
+    // 图上显著性标注（L3）：[{kind:'bracket'|'text', group1, group2, label, yPos?}]
+    sigMarks: [],
     // 默认出图风格：Prism 期刊风（未装 ggprism 时启动后会回退到 minimal）
     theme: { base: 'prism', args: { palette: 'black_and_white', base_size: 12 }, elements: {} },
     combine: { active: false, slots: [], layout: {}, annotation: {} }
@@ -342,6 +344,38 @@ export const useSpecStore = defineStore('spec', {
     setTheme(patch) {
       this.pushHistory()
       Object.assign(this.spec.theme, patch)
+    },
+
+    // ---- 显著性标注（L3）----
+    ensureSigMarks() {
+      if (!Array.isArray(this.spec.sigMarks)) this.spec.sigMarks = []
+      return this.spec.sigMarks
+    },
+    addSigMark(mark) {
+      this.pushHistory()
+      const arr = this.ensureSigMarks()
+      arr.push({
+        kind: mark.kind || 'bracket',
+        group1: mark.group1 || '',
+        group2: mark.group2 || '',
+        label: mark.label || '*',
+        yPos: mark.yPos ?? null
+      })
+      return arr.length - 1
+    },
+    setSigMark(i, patch) {
+      const arr = this.ensureSigMarks()
+      if (!arr[i]) return
+      Object.assign(arr[i], patch)
+    },
+    removeSigMark(i) {
+      this.pushHistory()
+      const arr = this.ensureSigMarks()
+      if (i >= 0 && i < arr.length) arr.splice(i, 1)
+    },
+    clearSigMarks() {
+      this.pushHistory()
+      this.spec.sigMarks = []
     },
 
     // ---- 项目 ----

@@ -121,6 +121,8 @@ export const statsSummary = (source, prep, vars, groupBy) =>
 export const statsSuggest = (source, prep) => post('/api/stats/suggest', { source, prep })
 export const statsTest = (source, prep, { y = '', x = '', group = '', method = '' } = {}) =>
   post('/api/stats/test', { source, prep, y, x, group, method }, T_HEAVY)
+// 显著性标注规划（L3）：可选比较对 + 默认 y 位置
+export const sigPlan = (spec) => post('/api/sig/plan', { spec })
 
 // 手动编辑（编辑模式）：ops 针对 source 的加工+编辑后数据
 export const editAdd = async (source, prep, op) => {

@@ -418,6 +418,14 @@
       add_fn_pkg(meta$annotation_fn[[a$name %||% ""]], meta$fn_package)
     }
   }
+  # 显著性标注依赖：括号走 ggsignif，文字走 ggpubr（生成器已按可用性退化）
+  sig_marks <- spec$sigMarks %||% list()
+  if (length(sig_marks)) {
+    need_bracket <- any(vapply(sig_marks, function(m) identical(m$kind %||% "", "bracket"), logical(1)))
+    need_text <- any(vapply(sig_marks, function(m) !identical(m$kind %||% "", "bracket"), logical(1)))
+    if (need_bracket && .ggspec_has_pkg("ggsignif")) used <- c(used, "ggsignif")
+    if (need_text && .ggspec_has_pkg("ggpubr")) used <- c(used, "ggpubr")
+  }
   vapply(setdiff(unique(used), "ggplot2"), function(p) paste0("library(", p, ")"), character(1)) |> unname()
 }
 
@@ -489,6 +497,22 @@ spec_to_code <- function(spec, meta, state, var_name = "p", df_name = "df",
     if (!is.null(ac)) tail_lines <- c(tail_lines, ac)
   }
   tail_lines <- c(tail_lines, .theme_calls(spec$theme, meta))
+
+  # 显著性标注（L3）：依赖 ggsignif / ggpubr，缺失时退化为 annotate("text")
+  sig_marks <- spec$sigMarks %||% list()
+  if (length(sig_marks)) {
+    sig_lines <- tryCatch({
+      d <- NULL
+      if (!is.null(state)) {
+        d <- tryCatch(ggspec_resolve_data(spec, state), error = function(e) NULL)
+      }
+      .ggspec_sig_lines(spec, sig_marks, d)
+    }, error = function(e) {
+      warns <<- c(warns, sprintf("显著性标注生成失败: %s", conditionMessage(e)))
+      character(0)
+    })
+    tail_lines <- c(tail_lines, sig_lines)
+  }
 
   # 组装（+ 链）：ggplot 行与图层/附加项同处一条链，行尾统一接 +
   chain <- c(plot_line, layer_lines, tail_lines)

@@ -6,7 +6,7 @@ import { ElMessage } from 'element-plus'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
-import { statsColumns, statsSummary, statsSuggest, statsTest, downloadBlob } from '../api'
+import { statsColumns, statsSummary, statsSuggest, statsTest, sigPlan, downloadBlob } from '../api'
 
 const data = useDataStore()
 const spec = useSpecStore()
@@ -51,6 +51,83 @@ const testRunning = ref(false)
 const testCode = ref(false)
 const methods = ref([])
 const needPair = computed(() => ['t.test.paired'].includes(testMethod.value))
+
+// ---- L3 图上标注 ----
+const sigPlan_ = ref(null)          // 后端给的规划：xCol/yCol/levels/pairs/yStart/yStep
+const sigLoading = ref(false)
+const sigPick = ref([])             // 待添加的比较对（字符串 "A||B"）
+const sigKind = ref('bracket')      // bracket | text
+const sigLabelMode = ref('stars')   // stars | p | custom
+const sigCustomLabel = ref('*')
+const sigMarks = computed(() => spec.spec.sigMarks || [])
+const canMark = computed(() => !!sigPlan_.value && sigPlan_.value.ok && spec.spec.layers.length > 0)
+
+async function loadSigPlan() {
+  if (!spec.spec.layers.length) { sigPlan_.value = null; return }
+  sigLoading.value = true
+  try {
+    sigPlan_.value = await sigPlan(spec.spec)
+  } catch (e) {
+    sigPlan_.value = { ok: false, reason: e.message }
+  } finally {
+    sigLoading.value = false
+  }
+}
+
+// 依据 L2 的检验结果或统一模板生成标注文字
+function labelFor(pair) {
+  if (sigLabelMode.value === 'custom') return sigCustomLabel.value || '*'
+  if (sigLabelMode.value === 'p' && testResult.value) {
+    const p = testResult.value.p
+    if (p === null || p === undefined) return 'p = ?'
+    return p < 0.0001 ? 'p < 0.0001' : `p = ${Number(p).toFixed(4)}`
+  }
+  // stars：用同一套阈值，但这里没有逐对 p，给最常用的三档
+  return '***'
+}
+
+function addPicked() {
+  if (!sigPick.value.length) { ElMessage.warning('先选择要比较的分组对'); return }
+  const start = sigPlan_.value?.yStart ?? 0
+  const step = sigPlan_.value?.yStep ?? 1
+  let n = sigMarks.value.length
+  for (const key of sigPick.value) {
+    const [g1, g2] = key.split('||')
+    spec.addSigMark({
+      kind: sigKind.value,
+      group1: g1, group2: g2,
+      label: labelFor(key),
+      yPos: Number((start + step * n).toFixed(3))
+    })
+    n++
+  }
+  sigPick.value = []
+  spec.renderNow()
+}
+
+function autoAll() {
+  const pairs = sigPlan_.value?.pairs || []
+  if (!pairs.length) { ElMessage.warning('当前图没有可比较的离散分组'); return }
+  const start = sigPlan_.value?.yStart ?? 0
+  const step = sigPlan_.value?.yStep ?? 1
+  let n = sigMarks.value.length
+  for (const p of pairs) {
+    spec.addSigMark({
+      kind: sigKind.value, group1: p.group1, group2: p.group2,
+      label: labelFor(p), yPos: Number((start + step * n).toFixed(3))
+    })
+    n++
+  }
+  spec.renderNow()
+  ElMessage.success(`已添加 ${pairs.length} 个标注`)
+}
+
+function resetY() {
+  const start = sigPlan_.value?.yStart ?? 0
+  const step = sigPlan_.value?.yStep ?? 1
+  sigMarks.value.forEach((m, i) => spec.setSigMark(i, { yPos: Number((start + step * i).toFixed(3)) }))
+  spec.renderNow()
+}
 const isCorr = computed(() => testMethod.value.startsWith('cor.test'))
 const canRunTest = computed(() => {
   if (!hasSource.value) return false
@@ -166,6 +243,13 @@ let timer = null
 watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.value.mutate || []).map(m => m.expr).join('|')}`,
   () => { clearTimeout(timer); timer = setTimeout(refreshColumns, 400) },
   { immediate: true })
+
+// 图层 x/y 映射变化时，重新规划显著性标注
+let sigTimer = null
+watch(() => JSON.stringify((spec.spec.layers || []).map(l => [l.geom, l.aes?.x?.map, l.aes?.y?.map])),
+  () => { clearTimeout(sigTimer); sigTimer = setTimeout(loadSigPlan, 350) },
+  { immediate: true })
+watch(tab, (v) => { if (v === 'mark') loadSigPlan() })
 </script>
 <template>
   <div class="stats-drawer" :class="{ open: ui.statsOpen }">
@@ -180,6 +264,7 @@ watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.va
         <el-radio-group v-model="tab" size="small" class="sd-tabs">
           <el-radio-button value="desc">描述统计</el-radio-button>
           <el-radio-button value="test">统计检验</el-radio-button>
+          <el-radio-button value="mark">图上标注</el-radio-button>
         </el-radio-group>
       </template>
 
@@ -399,6 +484,92 @@ watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.va
             </div>
           </section>
         </div>
+
+        <!-- ================= 图上标注（L3）================= -->
+        <div v-show="tab === 'mark'" class="sd-pane">
+          <aside class="sd-params">
+            <div v-if="!spec.spec.layers.length" class="sp-hint">
+              先在右侧添加图层并映射 x / y，才能添加标注。
+            </div>
+            <template v-else>
+              <div class="sp-field">
+                <label>标注形态</label>
+                <el-radio-group v-model="sigKind" size="small">
+                  <el-radio-button value="bracket">括号</el-radio-button>
+                  <el-radio-button value="text">文字</el-radio-button>
+                </el-radio-group>
+              </div>
+              <div class="sp-field">
+                <label>标签内容</label>
+                <el-select v-model="sigLabelMode" size="small" style="width:100%">
+                  <el-option value="stars" label="星号（* / ** / ***）" />
+                  <el-option value="p" label="p 值（用最近一次检验结果）" />
+                  <el-option value="custom" label="自定义文字" />
+                </el-select>
+              </div>
+              <div v-if="sigLabelMode === 'custom'" class="sp-field">
+                <el-input v-model="sigCustomLabel" size="small" placeholder="如 n.s. 或 p&lt;0.05" />
+              </div>
+              <div class="sp-field">
+                <label>比较分组对</label>
+                <el-select v-model="sigPick" size="small" multiple filterable collapse-tags
+                  collapse-tags-tooltip placeholder="选择分组对" style="width:100%">
+                  <el-option v-for="p in (sigPlan_?.pairs || [])" :key="p.group1 + '||' + p.group2"
+                    :value="p.group1 + '||' + p.group2" :label="`${p.group1} vs ${p.group2}`" />
+                </el-select>
+              </div>
+              <div class="sp-actions">
+                <el-button size="small" type="primary" :disabled="!canMark || !sigPick.length" @click="addPicked">
+                  <el-icon class="el-icon--left"><Plus /></el-icon>添加
+                </el-button>
+                <el-button size="small" :disabled="!canMark" @click="autoAll">全部分组两两比较</el-button>
+              </div>
+              <div v-if="sigMarks.length" class="sp-actions">
+                <el-button size="small" text @click="resetY"><el-icon><Refresh /></el-icon>重排 y 位置</el-button>
+                <el-button size="small" text type="danger" @click="spec.clearSigMarks(); spec.renderNow()">清空</el-button>
+              </div>
+              <div class="sp-hint">
+                {{ sigPlan_?.discrete ? '当前 x 轴为离散分组，可用括号标注。' : '当前 x 轴为连续值，建议用文字标注。' }}
+              </div>
+              <div v-if="sigPlan_ && !sigPlan_.ok" class="sp-hint warn">{{ sigPlan_.reason }}</div>
+            </template>
+          </aside>
+
+          <section class="sd-result">
+            <template v-if="sigMarks.length">
+              <div class="res-head">
+                <span class="gg-mono">{{ sigMarks.length }} 个标注 · 自动 y 起点 {{ num(sigPlan_?.yStart) }}</span>
+              </div>
+              <div class="gg-scroll mark-list">
+                <div v-for="(m, i) in sigMarks" :key="i" class="mark-row">
+                  <el-select v-model="m.kind" size="small" style="width:78px"
+                    @change="spec.renderNow()">
+                    <el-option value="bracket" label="括号" />
+                    <el-option value="text" label="文字" />
+                  </el-select>
+                  <span class="mk-g gg-mono">{{ m.group1 || '—' }}</span>
+                  <span class="mk-vs">vs</span>
+                  <span class="mk-g gg-mono">{{ m.group2 || '—' }}</span>
+                  <el-input v-model="m.label" size="small" class="mk-label" placeholder="*"
+                    @change="spec.renderNow()" />
+                  <el-input-number :model-value="m.yPos" size="small" :step="0.1" :controls="false"
+                    class="mk-y" placeholder="y"
+                    @update:model-value="(v) => { spec.setSigMark(i, { yPos: v }); spec.renderNow() }" />
+                  <el-button size="small" text type="danger" @click="spec.removeSigMark(i); spec.renderNow()">
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </div>
+              </div>
+              <div class="res-note">
+                括号标注需要 ggsignif，文字标注需要 ggpubr；缺失时自动退化为 annotate("text")。
+                生成的 R 代码会包含对应的 <span class="gg-mono">library()</span>。
+              </div>
+            </template>
+            <div v-else class="gg-empty-hint" style="padding:24px">
+              选择比较对后点「添加」，或直接「全部分组两两比较」
+            </div>
+          </section>
+        </div>
       </template>
     </div>
   </div>
@@ -518,4 +689,19 @@ watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.va
 .note-line { font-size: 10.5px; line-height: 1.55; color: var(--el-text-color-secondary); }
 .opt-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
 .opt-fn { font-size: 10.5px; color: var(--el-text-color-secondary); }
+
+/* ---------- 图上标注 ---------- */
+.mark-list { flex: 1; min-height: 0; }
+.mark-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 4px; border-bottom: 1px solid var(--gg-border);
+}
+.mk-g { font-size: 11.5px; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-vs { font-size: 10.5px; color: var(--el-text-color-secondary); }
+.mk-label { width: 92px; }
+.mk-y { width: 74px; }
+.res-note {
+  flex-shrink: 0; padding-top: 6px; font-size: 10.5px; line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
 </style>
