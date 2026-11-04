@@ -266,7 +266,9 @@ export const useSpecStore = defineStore('spec', {
     ensureDefaultTheme() {
       if (this.spec.theme.base !== 'prism') return
       const meta = useMetaStoreSafe()
-      if (!meta.themeByName || !meta.themeByName['prism']) {
+      // meta 尚未加载完成时不要下结论，否则会把 prism 误判成不可用而永久降级
+      if (!meta.loaded || !meta.themeByName) return
+      if (!meta.themeByName['prism']) {
         this.spec.theme.base = 'minimal'
         this.spec.theme.args = { base_size: 12 }
       }
@@ -387,6 +389,16 @@ export const useSpecStore = defineStore('spec', {
       merged.data = { ...base.data, ...((obj && obj.data) || {}) }
       merged.coord = { ...base.coord, ...((obj && obj.coord) || {}) }
       merged.theme = { ...base.theme, ...((obj && obj.theme) || {}) }
+      // 旧草稿/旧项目可能带着 theme: { base: '', args: {}, elements: {} }，
+      // 直接浅合并会把默认的 Prism 主题覆盖成空 → 恢复后图变成 ggplot 原始样式。
+      // 只有「用户确实表达过主题意图」（选了基础主题或改过元素）才保留，否则回落默认。
+      const otheme = (obj && obj.theme) || {}
+      const noBase = !otheme.base
+      const noArgs = !otheme.args || !Object.keys(otheme.args).length
+      const noEls = !otheme.elements || !Object.keys(otheme.elements).length
+      if (noBase && noArgs && noEls) {
+        merged.theme = JSON.parse(JSON.stringify(base.theme))
+      }
       merged.combine = { ...base.combine, ...((obj && obj.combine) || {}) }
       merged.layers = Array.isArray(obj && obj.layers) ? obj.layers : []
       merged.scales = Array.isArray(obj && obj.scales) ? obj.scales : []
