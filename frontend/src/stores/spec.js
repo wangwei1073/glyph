@@ -195,12 +195,20 @@ export const useSpecStore = defineStore('spec', {
     // ---- 图层 ----
     addLayer(geomName) {
       this.pushHistory()
-      const layer = { geom: geomName, stat: '', position: { type: '', params: {} }, aes: {}, params: {}, aesParams: {} }
+      const layer = { geom: geomName, stat: '', position: { type: '', params: {} }, aes: {}, params: {}, aesParams: {}, visible: true }
       this.guessAes(layer)
       this.spec.layers.push(layer)
       this.selectedLayer = this.spec.layers.length - 1
       this.syncDefaultPalette('fill')
       this.syncDefaultPalette('colour')
+    },
+    // 图层显隐：隐藏的层不参与出图，但仍保留在列表里（可随时恢复）
+    toggleLayerVisible(i) {
+      const layer = this.spec.layers[i]
+      if (!layer) return
+      this.pushHistory()
+      layer.visible = layer.visible === false
+      this.renderNow()
     },
     removeLayer(i) {
       this.pushHistory()

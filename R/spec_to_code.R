@@ -472,7 +472,9 @@
 }
 
 # ggplot 级 aes 提升判定：单层，或多层 aes 完全一致且全部继承
+# 只在「可见图层」之间判断：隐藏层不参与出图，也不应影响 aes 提升
 .ggplot_aes <- function(layers) {
+  layers <- Filter(function(l) !identical(l$visible, FALSE), layers)
   real <- Filter(function(l) !identical(l$inheritAes, FALSE), layers)
   if (!length(real)) return(NULL)
   first <- real[[1]]
@@ -511,6 +513,9 @@ spec_to_code <- function(spec, meta, state, var_name = "p", df_name = "df",
   layer_lines <- character(0)
   for (i in seq_along(layers)) {
     l <- layers[[i]]
+    # 图层显隐：visible = FALSE 的层不参与出图（但仍保留在 spec 里，方便随时恢复）。
+    # 注意不能简单跳过，否则「ggplot() 提升的 aes」会引用到不存在的图层数据。
+    if (identical(l$visible, FALSE)) next
     ll <- l
     # 已提升到 ggplot() 的 aes 从图层中去掉
     if (!is.null(g_aes)) {
@@ -520,6 +525,7 @@ spec_to_code <- function(spec, meta, state, var_name = "p", df_name = "df",
     lc <- .layer_call(ll, meta)
     if (nzchar(lc)) layer_lines <- c(layer_lines, lc)
   }
+  # 全部隐藏（或原本没有图层）时输出占位层，保证 ggplot 链合法
   if (!length(layer_lines)) layer_lines <- c("geom_blank()")
 
   tail_lines <- character(0)

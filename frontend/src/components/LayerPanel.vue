@@ -56,17 +56,24 @@ function change(i, geomName) {
   </div>
 
   <div class="gg-scroll">
-    <div v-for="(l, i) in spec.spec.layers" :key="i" class="layer-card" :class="{ active: i === spec.selectedLayer }"
+    <div v-for="(l, i) in spec.spec.layers" :key="i" class="layer-card"
+      :class="{ active: i === spec.selectedLayer, hidden: l.visible === false }"
       @click="spec.selectLayer(i)">
       <div class="drag-no">{{ i + 1 }}</div>
       <div style="min-width:0">
         <div class="layer-name">
           {{ meta.geomByName[l.geom]?.label || l.geom }}
-          <span v-if="l.geom !== (meta.geomByName[l.geom]?.name)" class="gg-mono" style="font-size: 11px;color:var(--el-text-color-secondary)"></span>
+          <span v-if="l.visible === false" class="hidden-tag">已隐藏</span>
         </div>
         <div class="layer-sub gg-mono">{{ describe(l) }}</div>
       </div>
       <div class="layer-ops" @click.stop>
+        <el-tooltip :content="l.visible === false ? '显示此图层' : '隐藏此图层'" placement="top">
+          <el-button size="small" text class="eye-btn" :class="{ off: l.visible === false }"
+            @click="spec.toggleLayerVisible(i)">
+            <el-icon><component :is="l.visible === false ? 'Hide' : 'View'" /></el-icon>
+          </el-button>
+        </el-tooltip>
         <el-button size="small" text :disabled="i === 0" @click="spec.moveLayer(i, -1)">
           <el-icon><ArrowUp /></el-icon></el-button>
         <el-button size="small" text :disabled="i === spec.spec.layers.length - 1" @click="spec.moveLayer(i, 1)">

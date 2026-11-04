@@ -238,6 +238,17 @@ html.dark .col-type.date { background: #4f2611; color: #e89a6b; }
 }
 .layer-card:hover { border-color: var(--gg-brand); box-shadow: var(--gg-shadow-1); }
 .layer-card.active { border-color: var(--gg-brand); box-shadow: 0 0 0 2px rgba(47, 111, 191, .16); }
+/* 隐藏的图层：整体淡化 + 虚线边框，序号与文字降饱和，避免与正常层混淆 */
+.layer-card.hidden { opacity: .5; border-style: dashed; background: transparent; }
+.layer-card.hidden .drag-no { background: var(--gg-text-3, #9aa5b1); }
+.layer-card.hidden:hover { opacity: .8; }
+.hidden-tag {
+  display: inline-block; margin-left: 5px; padding: 0 4px;
+  font-size: 9.5px; line-height: 14px; border-radius: 3px;
+  background: rgba(128, 128, 128, .16); color: var(--gg-text-3, #6b7480);
+  vertical-align: 1px; font-weight: 400;
+}
+.eye-btn.off { color: var(--gg-text-3, #9aa5b1); }
 .layer-card .drag-no {
   width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
   background: var(--gg-brand); color: #fff; font-size: 11px;
