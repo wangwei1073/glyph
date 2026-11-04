@@ -440,6 +440,43 @@ const sigClass = computed(() => {
   return Number(p) < 0.05 ? 'sig' : 'ns'
 })
 
+// 顶栏摘要徽标：优先显示「当前页签」的结果，没有结果时不显示（不再放占位文案）
+const summaryBadge = computed(() => {
+  const t = tab.value
+  if (t === 'test') {
+    if (!testResult.value) return null
+    const p = testResult.value.p
+    return {
+      text: `${testResult.value.methodLabel} · p = ${pval(p)}`,
+      cls: sigClass.value
+    }
+  }
+  if (t === 'desc') {
+    if (!result.value?.summary?.length) return null
+    return { text: `描述统计 · ${result.value.summary.length} 行`, cls: '' }
+  }
+  if (t === 'reg') {
+    const r = regResult.value
+    if (!r) return null
+    const fit = r.method === 'lm' ? `R² = ${num(r.fitStats?.r2)}`
+      : (r.method === 'corr' ? `${r.coefs?.length ?? 0} 对相关` : `AIC = ${num(r.fitStats?.aic)}`)
+    return { text: `${r.methodLabel} · ${fit}`, cls: '' }
+  }
+  if (t === 'table1') {
+    if (!t1Result.value) return null
+    return { text: `基线表 · ${t1Result.value.vars?.length ?? 0} 变量`, cls: '' }
+  }
+  if (t === 'mark') {
+    const n = sigMarks.value.length
+    return n ? { text: `${n} 个标注`, cls: '' } : null
+  }
+  if (t === 'idea') {
+    const n = chartIdeas.value.length
+    return n ? { text: `${n} 条建议`, cls: '' } : null
+  }
+  return null
+})
+
 function copyText(text, okMsg) {
   if (!text) return
   navigator.clipboard.writeText(text)
@@ -490,13 +527,9 @@ watch(tab, (v) => {
         </el-radio-group>
       </template>
 
-      <span v-if="testResult" class="sd-badge" :class="sigClass">
-        {{ testResult.methodLabel }} · p = {{ pval(testResult.p) }}
+      <span v-if="summaryBadge" class="sd-badge" :class="summaryBadge.cls">
+        {{ summaryBadge.text }}
       </span>
-      <span v-else-if="result && result.summary" class="sd-badge">
-        描述统计 · {{ result.summary.length }} 行
-      </span>
-      <span v-else class="sd-hint">描述统计 / 统计检验</span>
 
       <span style="flex:1" />
       <span class="sd-toggle" @click="ui.toggleStats()">{{ ui.statsOpen ? '收起' : '展开' }}</span>
@@ -1133,7 +1166,7 @@ watch(tab, (v) => {
 .sd-collapse:hover { background: rgba(74, 144, 217, .08); }
 .sd-title { font-weight: 600; }
 .sd-tabs :deep(.el-radio-button__inner) { padding: 4px 12px; font-size: 11.5px; }
-.sd-hint, .sd-toggle { font-size: 11px; color: var(--el-text-color-secondary); }
+.sd-toggle { font-size: 11px; color: var(--el-text-color-secondary); }
 .sd-toggle { cursor: pointer; }
 .sd-toggle:hover { color: var(--gg-accent); }
 .sd-badge {
