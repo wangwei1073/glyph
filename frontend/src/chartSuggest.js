@@ -81,7 +81,7 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
         geom: 'boxplot',
         title: isTwo ? '箱线图（两组对比）' : '箱线图（多组对比）',
         reason: `刚才的「${testRes.methodLabel}」比较了 ${testRes.groups.length} 组，箱线图能同时展示分布形状与中位数差异，并可在图上标注显著性`,
-        aes: { x: { map: groupVar }, y: { map: gv } },
+        aes: { x: { map: groupVar }, y: { map: gv }, fill: { map: groupVar } },
         extra: '建议切到「图上标注」页签，一键把检验结果画到图上',
         score: 120
       })
@@ -89,7 +89,7 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
         geom: 'violin',
         title: '小提琴图（分布对比）',
         reason: '小提琴图额外显示各组的概率密度，比箱线图更能看出分布形状差异',
-        aes: { x: { map: groupVar }, y: { map: gv } }
+        aes: { x: { map: groupVar }, y: { map: gv }, fill: { map: groupVar } }
       })
       push(86, {
         geom: 'point',
@@ -137,7 +137,7 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
           geom: 'boxplot',
           title: '箱线图（回归中的分类自变量）',
           reason: `回归里 ${yv} 的自变量「${catX}」是分类变量，用分组箱线图展示各组分布比拟合线更合适`,
-          aes: { x: { map: catX }, y: { map: yv } },
+          aes: { x: { map: catX }, y: { map: yv }, fill: { map: catX } },
           score: 116
         })
         push(90, {
@@ -202,7 +202,7 @@ export function suggestCharts(columns = [], { summary = null, testRes = null, re
       geom: 'boxplot',
       title: '箱线图（分类 vs 数值）',
       reason: `按「${cv}」分组比较「${nv}」的分布，箱线图能同时显示中位数、四分位与异常值`,
-      aes: { x: { map: cv }, y: { map: nv } }
+      aes: { x: { map: cv }, y: { map: nv }, fill: { map: cv } }
     })
     push(87, {
       geom: 'bar',

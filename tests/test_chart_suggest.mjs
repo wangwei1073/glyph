@@ -35,6 +35,7 @@ chk('分类+连续：首选箱线图', r3[0].geom === 'boxplot')
 chk('分类+连续：x 为分类列', r3[0].aes.x.map === 'Species')
 chk('分类+连续：y 为数值列', r3[0].aes.y.map === 'Sepal.Length')
 chk('分类+连续：含条形图建议', r3.some(s => s.geom === 'bar'))
+chk('分类+连续：箱线图带 fill', (r3.find(s => s.geom === 'boxplot')?.aes?.fill?.map) === 'Species')
 
 // ---------- 5) 时间 + 数值 → 折线 ----------
 const cols4 = [col('date', 'date', 500), col('unemploy', 'numeric', 500)]
@@ -173,6 +174,8 @@ const r19 = suggestCharts(colsMpgFull, { testRes: anovaRes })
 chk('检验结果：第一条是箱线图', r19[0].geom === 'boxplot')
 chk('检验结果：x 为分组列 drv', r19[0].aes.x.map === 'drv')
 chk('检验结果：y 为数值列 hwy', r19[0].aes.y.map === 'hwy')
+// 箱线图必须带 fill 映射，否则是空心黑白框（用户反馈「没用上默认主题」的真实原因）
+chk('检验结果：箱线图带 fill 映射', r19[0].aes.fill?.map === 'drv')
 chk('检验结果：箱线图分数高于折线图',
     r19[0].score > (r19.find(s => s.geom === 'line')?.score ?? 0))
 

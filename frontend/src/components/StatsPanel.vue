@@ -328,6 +328,11 @@ function applyIdea(idea) {
     spec.spec.layers[j].aes = JSON.parse(JSON.stringify(idea.addLayer.aes || {}))
     if (idea.addLayer.params) spec.spec.layers[j].params = { ...idea.addLayer.params }
   }
+  // 有分类 fill 映射时挂上默认 Prism 配色，否则箱线图是空心黑白的
+  if (idea.aes?.fill?.map) {
+    spec.syncDefaultPalette('fill')
+    spec.syncDefaultPalette('colour')
+  }
   spec.renderNow()
   ElMessage.success(`已应用：${idea.title}`)
 }
@@ -478,10 +483,10 @@ watch(tab, (v) => {
         <el-radio-group v-model="tab" size="small" class="sd-tabs">
           <el-radio-button value="desc">描述统计</el-radio-button>
           <el-radio-button value="test">统计检验</el-radio-button>
-          <el-radio-button value="mark">图上标注</el-radio-button>
           <el-radio-button value="reg">回归分析</el-radio-button>
           <el-radio-button value="table1">基线表</el-radio-button>
           <el-radio-button value="idea">图表建议</el-radio-button>
+          <el-radio-button value="mark">图上标注</el-radio-button>
         </el-radio-group>
       </template>
 
