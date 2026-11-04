@@ -1,12 +1,12 @@
 <script setup>
 // 画布：图表预览 / 代码视图 / 渲染与导出设置 / 状态行
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
 import { useDataStore } from '../stores/data'
 import { usePinStore } from '../stores/pins'
-import { exportPlot, downloadBlob, genCode, getPlotly, checkExport } from '../api'
+import { exportPlot, downloadBlob, genCode, getPlotly, checkExport, getJournalTemplates } from '../api'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
@@ -35,12 +35,110 @@ const statusParts = computed(() => {
 // 导出尺寸独立于预览尺寸（默认高清）
 const exportOpts = ref({ width: 1600, height: 1000, dpi: 300 })
 
+// ---- 物理尺寸模式（mm ⇄ px）----
+const pxToMm = (px, dpi) => Math.round((px / Math.max(dpi, 1)) * 25.4 * 10) / 10
+const mmToPx = (mm, dpi) => Math.max(1, Math.round((mm / 25.4) * dpi))
+const sizeMode = ref(localStorage.getItem('ggplotgui-size-mode') === 'mm' ? 'mm' : 'px')
+const renderMm = ref({
+  w: pxToMm(900, 150), h: pxToMm(560, 150)
+})
+const exportMm = ref({
+  w: pxToMm(1600, 300), h: pxToMm(1000, 300)
+})
+const PRESETS = [
+  { label: '单栏 85', mm: 85 },
+  { label: '1.5 栏 114', mm: 114 },
+  { label: '双栏 170', mm: 170 },
+  { label: 'Nature 89', mm: 89 }
+]
+const sizeLabel = computed(() => sizeMode.value === 'mm'
+  ? `${renderMm.value.w}×${renderMm.value.h} mm · ${spec.renderOpts.dpi}dpi`
+  : `${spec.renderOpts.width}×${spec.renderOpts.height} · ${spec.renderOpts.dpi}dpi`)
+const sizeHint = computed(() => {
+  const d = spec.renderOpts.dpi || 150
+  const ed = exportOpts.value.dpi || 300
+  const base = spec.spec.theme?.args?.base_size || 11
+  return `预览 ${pxToMm(spec.renderOpts.width, d)}×${pxToMm(spec.renderOpts.height, d)} mm`
+    + ` · 导出 ${pxToMm(exportOpts.value.width, ed)}×${pxToMm(exportOpts.value.height, ed)} mm`
+    + `。字号按 pt 输出、与 dpi 无关；当前主题基础字号 ${base}pt。`
+})
+
+function setSizeMode(mode) {
+  sizeMode.value = mode
+  try { localStorage.setItem('ggplotgui-size-mode', mode) } catch { /* 忽略 */ }
+  if (mode === 'mm') {
+    renderMm.value = {
+      w: pxToMm(spec.renderOpts.width, spec.renderOpts.dpi),
+      h: pxToMm(spec.renderOpts.height, spec.renderOpts.dpi)
+    }
+    exportMm.value = {
+      w: pxToMm(exportOpts.value.width, exportOpts.value.dpi),
+      h: pxToMm(exportOpts.value.height, exportOpts.value.dpi)
+    }
+  }
+}
+function applyRenderMm() {
+  const d = spec.renderOpts.dpi || 150
+  spec.renderOpts.width = mmToPx(renderMm.value.w, d)
+  spec.renderOpts.height = mmToPx(renderMm.value.h, d)
+}
+function setRenderMm(k, v) {
+  if (!v) return
+  renderMm.value[k] = v
+  applyRenderMm()
+}
+function setRenderDpi(v) {
+  spec.renderOpts.dpi = v
+  if (sizeMode.value === 'mm') applyRenderMm()
+}
+function applyExportMm() {
+  const d = exportOpts.value.dpi || 300
+  exportOpts.value.width = mmToPx(exportMm.value.w, d)
+  exportOpts.value.height = mmToPx(exportMm.value.h, d)
+}
+function setExportMm(k, v) {
+  if (!v) return
+  exportMm.value[k] = v
+  applyExportMm()
+}
+function setExportDpi(v) {
+  exportOpts.value.dpi = v
+  if (sizeMode.value === 'mm') applyExportMm()
+}
+function applyPreset(which, mm) {
+  const cur = which === 'render' ? renderMm.value : exportMm.value
+  const ratio = (cur.h / cur.w) || 0.66
+  const next = { w: mm, h: Math.max(20, Math.round(mm * ratio)) }
+  if (which === 'render') {
+    renderMm.value = next
+    applyRenderMm()
+  } else {
+    exportMm.value = next
+    applyExportMm()
+  }
+}
+
 // ---- 导出前检查 ----
 const checkVisible = ref(false)
 const checkIssues = ref([])
 const checkInfo = ref(null)
 const checking = ref(false)
 const pendingFormat = ref('png')
+
+// 期刊模板（可选）：选中后检查按模板的栏宽/字号/字体/格式判定
+const journals = ref([])
+const journalId = ref(localStorage.getItem('ggplotgui-journal') || '')
+onMounted(async () => {
+  try {
+    const r = await getJournalTemplates()
+    journals.value = r.templates || []
+  } catch { /* 模板不可用不影响导出 */ }
+})
+function setJournal(id) {
+  journalId.value = id || ''
+  try { localStorage.setItem('ggplotgui-journal', journalId.value) } catch { /* 忽略 */ }
+  if (checkVisible.value) runExportCheck(pendingFormat.value)
+}
 
 const checkIcon = (level) => ({
   pass: 'CircleCheck', warn: 'Warning', fail: 'CircleClose', info: 'InfoFilled'
@@ -49,7 +147,7 @@ const checkIcon = (level) => ({
 async function runExportCheck(format, { silentPass = false } = {}) {
   checking.value = true
   try {
-    const res = await checkExport(spec.spec, { ...exportOpts.value, format })
+    const res = await checkExport(spec.spec, { ...exportOpts.value, format, journal: journalId.value })
     checkIssues.value = res.issues || []
     checkInfo.value = res.info || null
     const blocking = checkIssues.value.some(i => i.level === 'warn' || i.level === 'fail')
@@ -61,6 +159,40 @@ async function runExportCheck(format, { silentPass = false } = {}) {
   } finally {
     checking.value = false
   }
+}
+
+// 一键修复：只改确定性的 spec/尺寸，然后自动重新检查
+function applyFix(fix) {
+  if (!fix) return
+  const f = fix.action
+  if (f === 'dpi') {
+    // 改 dpi 时保持物理尺寸不变（模板修复的语义），而不是保持像素不变
+    const mmW = pxToMm(exportOpts.value.width, exportOpts.value.dpi)
+    const mmH = pxToMm(exportOpts.value.height, exportOpts.value.dpi)
+    exportOpts.value.dpi = fix.value
+    exportOpts.value.width = mmToPx(mmW, fix.value)
+    exportOpts.value.height = mmToPx(mmH, fix.value)
+    exportMm.value = { w: mmW, h: mmH }
+  } else if (f === 'width') {
+    const ratio = (exportMm.value.h / exportMm.value.w) || 0.66
+    exportMm.value = { w: fix.value, h: Math.max(20, Math.round(fix.value * ratio)) }
+    applyExportMm()
+  } else if (f === 'textsize') {
+    const base = Math.max(8, Math.ceil(fix.value / 0.8))
+    if (!spec.spec.theme.base) spec.setTheme({ base: 'minimal', args: { base_size: base } })
+    else spec.setTheme({ args: { ...(spec.spec.theme.args || {}), base_size: base } })
+  } else if (f === 'white') {
+    const els = { ...(spec.spec.theme.elements || {}) }
+    els['plot.background'] = { type: 'rect', props: { fill: '#FFFFFF' } }
+    els['panel.background'] = { type: 'rect', props: { fill: '#FFFFFF' } }
+    spec.setTheme({ elements: els })
+  } else if (f === 'font') {
+    if (!spec.spec.theme.base) spec.setTheme({ base: 'minimal', args: { base_family: fix.value } })
+    else spec.setTheme({ args: { ...(spec.spec.theme.args || {}), base_family: fix.value } })
+  } else if (f === 'format') {
+    pendingFormat.value = fix.value
+  }
+  setTimeout(() => runExportCheck(pendingFormat.value), 350)
 }
 
 async function doExport(format) {
@@ -198,31 +330,78 @@ async function drawPlotly() {
       </el-button>
     </el-tooltip>
 
-    <el-popover v-model:visible="sizePopover" placement="bottom-start" :width="290" trigger="click">
+    <el-popover v-model:visible="sizePopover" placement="bottom-start" :width="310" trigger="click">
       <template #reference>
         <el-button size="small" text class="gg-mono size-btn" title="预览 / 导出尺寸">
-          <span class="size-text">{{ spec.renderOpts.width }}×{{ spec.renderOpts.height }} · {{ spec.renderOpts.dpi }}dpi</span>
+          <span class="size-text">{{ sizeLabel }}</span>
         </el-button>
       </template>
-      <div class="gg-subhead" style="padding:0 0 6px">预览尺寸</div>
-      <div style="display:flex; gap:6px; align-items:center">
-        <el-input-number v-model="spec.renderOpts.width" :min="200" :max="4000" :step="20" size="small" controls-position="right" style="width:88px" />
-        <el-input-number v-model="spec.renderOpts.height" :min="150" :max="4000" :step="20" size="small" controls-position="right" style="width:88px" />
-        <el-select v-model="spec.renderOpts.dpi" size="small" style="width:80px">
+
+      <div class="size-mode">
+        <el-radio-group :model-value="sizeMode" size="small" @update:model-value="setSizeMode">
+          <el-radio-button value="px">像素</el-radio-button>
+          <el-radio-button value="mm">毫米</el-radio-button>
+        </el-radio-group>
+        <span class="gg-hint">{{ sizeMode === 'mm' ? '按最终印刷尺寸设置' : '按屏幕像素设置' }}</span>
+      </div>
+
+      <div class="gg-subhead" style="padding:10px 0 4px">预览</div>
+      <div class="size-row">
+        <template v-if="sizeMode === 'mm'">
+          <el-input-number :model-value="renderMm.w" :min="30" :max="500" :step="1" size="small"
+            controls-position="right" style="width:84px" @update:model-value="setRenderMm('w', $event)" />
+          <span class="unit">×</span>
+          <el-input-number :model-value="renderMm.h" :min="20" :max="500" :step="1" size="small"
+            controls-position="right" style="width:84px" @update:model-value="setRenderMm('h', $event)" />
+          <span class="unit">mm</span>
+        </template>
+        <template v-else>
+          <el-input-number v-model="spec.renderOpts.width" :min="200" :max="4000" :step="20" size="small"
+            controls-position="right" style="width:84px" />
+          <span class="unit">×</span>
+          <el-input-number v-model="spec.renderOpts.height" :min="150" :max="4000" :step="20" size="small"
+            controls-position="right" style="width:84px" />
+          <span class="unit">px</span>
+        </template>
+        <el-select :model-value="spec.renderOpts.dpi" size="small" style="width:78px"
+          @update:model-value="setRenderDpi">
           <el-option v-for="d in [72, 96, 150, 200, 300]" :key="d" :value="d" :label="d + ' dpi'" />
         </el-select>
       </div>
-      <div class="gg-subhead" style="padding:10px 0 6px">导出尺寸</div>
-      <div style="display:flex; gap:6px; align-items:center">
-        <el-input-number v-model="exportOpts.width" :min="200" :max="12000" :step="100" size="small" controls-position="right" style="width:88px" />
-        <el-input-number v-model="exportOpts.height" :min="150" :max="12000" :step="100" size="small" controls-position="right" style="width:88px" />
-        <el-select v-model="exportOpts.dpi" size="small" style="width:80px">
+      <div class="size-presets">
+        <el-button v-for="p in PRESETS" :key="'r' + p.mm" size="small" text
+          @click="applyPreset('render', p.mm)">{{ p.label }}</el-button>
+      </div>
+
+      <div class="gg-subhead" style="padding:10px 0 4px">导出</div>
+      <div class="size-row">
+        <template v-if="sizeMode === 'mm'">
+          <el-input-number :model-value="exportMm.w" :min="30" :max="500" :step="1" size="small"
+            controls-position="right" style="width:84px" @update:model-value="setExportMm('w', $event)" />
+          <span class="unit">×</span>
+          <el-input-number :model-value="exportMm.h" :min="20" :max="500" :step="1" size="small"
+            controls-position="right" style="width:84px" @update:model-value="setExportMm('h', $event)" />
+          <span class="unit">mm</span>
+        </template>
+        <template v-else>
+          <el-input-number v-model="exportOpts.width" :min="200" :max="12000" :step="100" size="small"
+            controls-position="right" style="width:84px" />
+          <span class="unit">×</span>
+          <el-input-number v-model="exportOpts.height" :min="150" :max="12000" :step="100" size="small"
+            controls-position="right" style="width:84px" />
+          <span class="unit">px</span>
+        </template>
+        <el-select :model-value="exportOpts.dpi" size="small" style="width:78px"
+          @update:model-value="setExportDpi">
           <el-option v-for="d in [96, 150, 200, 300, 600]" :key="d" :value="d" :label="d + ' dpi'" />
         </el-select>
       </div>
-      <div style="padding-top:8px;font-size:11px;color:var(--el-text-color-secondary)">
-        导出按上述分辨率独立出图，与预览互不影响
+      <div class="size-presets">
+        <el-button v-for="p in PRESETS" :key="'e' + p.mm" size="small" text
+          @click="applyPreset('export', p.mm)">{{ p.label }}</el-button>
       </div>
+
+      <div class="gg-hint" style="padding-top:8px">{{ sizeHint }}</div>
     </el-popover>
 
     <span style="flex:1" />
@@ -310,7 +489,7 @@ async function drawPlotly() {
 
   <div class="gg-status gg-mono" :title="statusParts">{{ statusParts }}</div>
 
-  <el-dialog v-model="checkVisible" title="导出前检查" width="560px">
+  <el-dialog v-model="checkVisible" title="导出前检查" width="580px">
     <div class="check-head">
       <el-icon :class="['check-dot', checkSummary === '全部通过' ? 'ok' : 'warn']"><CircleCheckFilled v-if="checkSummary === '全部通过'" /><WarningFilled v-else /></el-icon>
       <b>{{ checkSummary }}</b>
@@ -318,6 +497,15 @@ async function drawPlotly() {
         {{ checkInfo.widthMm }} × {{ checkInfo.heightMm }} mm · {{ checkInfo.dpi }} dpi ·
         {{ (checkInfo.format || 'png').toUpperCase() }}
       </span>
+      <span style="flex:1" />
+      <el-select :model-value="journalId" size="small" class="journal-sel"
+        placeholder="目标期刊" @update:model-value="setJournal">
+        <el-option value="" label="不套模板" />
+        <el-option v-for="t in journals" :key="t.id" :value="t.id" :label="t.label" />
+      </el-select>
+    </div>
+    <div v-if="journalId" class="check-note">
+      {{ journals.find(t => t.id === journalId)?.note }}
     </div>
     <div class="check-list">
       <div v-for="(it, i) in checkIssues" :key="i" class="check-item" :class="it.level">
@@ -326,6 +514,9 @@ async function drawPlotly() {
           <div class="ci-title">{{ it.title }}</div>
           <div class="ci-detail">{{ it.detail }}</div>
         </div>
+        <el-button v-if="it.fix" size="small" text class="ci-fix" @click="applyFix(it.fix)">
+          {{ it.fix.label }}
+        </el-button>
       </div>
     </div>
     <template #footer>
@@ -366,6 +557,14 @@ async function drawPlotly() {
 .gg-empty-hint .t { font-size: 14px; font-weight: 600; color: var(--gg-text-2); margin-bottom: 12px; }
 .gg-empty-hint .sub { margin-top: 10px; font-size: 12px; color: var(--gg-text-3); }
 
+/* 尺寸设置 */
+.size-mode { display: flex; align-items: center; gap: 8px; }
+.size-row { display: flex; align-items: center; gap: 4px; }
+.size-row .unit { font-size: 11px; color: var(--gg-text-4); }
+.size-presets { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px; }
+.size-presets .el-button { margin: 0; padding: 0 6px; height: 22px; font-size: 11px; color: var(--gg-text-3); }
+.size-presets .el-button:hover { color: var(--gg-brand); background: transparent; }
+
 /* 导出前检查 */
 .check-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; }
 .check-head .check-dot { font-size: 18px; }
@@ -382,4 +581,8 @@ async function drawPlotly() {
 .check-item.info .ci-icon { color: var(--gg-brand); }
 .ci-title { font-size: 12.5px; font-weight: 600; color: var(--gg-text-1); }
 .ci-detail { font-size: 12px; color: var(--gg-text-3); line-height: 1.55; margin-top: 2px; }
+.check-item { align-items: flex-start; }
+.ci-fix { flex-shrink: 0; margin-left: auto; padding: 0 4px; font-size: 12px; color: var(--gg-brand); }
+.journal-sel { width: 130px; flex-shrink: 0; }
+.check-note { font-size: 11px; color: var(--gg-text-3); margin: -2px 0 8px 26px; }
 </style>

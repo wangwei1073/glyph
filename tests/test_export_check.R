@@ -85,5 +85,30 @@ ok("渲染期错误：判定 fail", !isTRUE(r$ok) && has_issue(r, "render", "fai
 r <- ggspec_export_check(mk_spec(), META, STATE, 1600, 1000, 300, "pdf")
 ok("PDF：矢量格式通过", has_issue(r, "vector", "pass"))
 
+# 8) 期刊模板：Nature 小图给出 dpi/栏宽建议 + 可执行修复
+r <- ggspec_export_check(mk_spec(), META, STATE, 900, 560, 150, "png", journal = "nature")
+ok("Nature：dpi 建议带 fix", has_issue(r, "dpi", "warn") &&
+     identical(r$issues[[which(vapply(r$issues, function(i) i$id == "dpi", TRUE))[1]]]$fix$action, "dpi"))
+ok("Nature：栏宽建议指向 89mm",
+   any(vapply(r$issues, function(i) identical(i$id, "size") && identical(i$fix$value, 89), TRUE)))
+
+# 9) 按建议修正后应通过
+r <- ggspec_export_check(mk_spec(), META, STATE, 1004, 600, 300, "png", journal = "nature")
+ok("Nature：修正尺寸/分辨率后无 dpi/栏宽警告",
+   !has_issue(r, "dpi", "warn") && !has_issue(r, "size", "warn"))
+
+# 10) IEEE 8pt 下限：小字号应提示
+r <- ggspec_export_check(
+  mk_spec(elements = list(axis.text = list(type = "text", props = list(size = 6)))),
+  META, STATE, 1040, 620, 300, "png", journal = "ieee")
+ok("IEEE：6pt 低于 8pt 下限", has_issue(r, "textsize", "warn") &&
+     identical(r$issues[[which(vapply(r$issues, function(i) i$id == "textsize", TRUE))[1]]]$fix$value, 8))
+
+# 11) PLOS 不接受 PNG → 建议改 PDF
+r <- ggspec_export_check(mk_spec(), META, STATE, 980, 600, 300, "png", journal = "plos")
+ok("PLOS：PNG 格式警告 + 建议 PDF",
+   has_issue(r, "format", "warn") &&
+     identical(r$issues[[which(vapply(r$issues, function(i) i$id == "format", TRUE))[1]]]$fix$value, "pdf"))
+
 cat(sprintf("\n===== 导出检查测试: %d 通过 / %d 失败 =====\n", pass, fail))
 quit(status = if (fail > 0) 1 else 0)

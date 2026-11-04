@@ -222,16 +222,20 @@ ggspec_export <- function(spec, meta, state, width, height, dpi, format) {
 }
 
 ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
-                                dpi = 300, format = "png") {
+                                dpi = 300, format = "png", journal = NULL) {
   format <- match.arg(format, c("png", "svg", "pdf"))
+  tpl <- journal_get(journal)
   issues <- list()
-  add <- function(id, level, title, detail) {
-    issues[[length(issues) + 1]] <<- list(id = id, level = level, title = title, detail = detail)
+  add <- function(id, level, title, detail, fix = NULL) {
+    issues[[length(issues) + 1]] <<- list(id = id, level = level, title = title,
+                                          detail = detail, fix = fix)
   }
   w_mm <- width / max(dpi, 1) * 25.4
   h_mm <- height / max(dpi, 1) * 25.4
   info <- list(widthMm = round(w_mm, 1), heightMm = round(h_mm, 1), dpi = dpi,
-               format = format, fonts = character(0), minTextPt = NA_real_)
+               format = format, fonts = character(0), minTextPt = NA_real_,
+               journal = if (is.null(tpl)) NULL else tpl$id,
+               journalLabel = if (is.null(tpl)) NULL else tpl$label)
 
   has_layers <- length(spec$layers %||% list()) > 0 || isTRUE((spec$combine %||% list())$active)
   if (!has_layers) {
@@ -284,9 +288,11 @@ ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
     bg <- tryCatch(ggplot2::calc_element("plot.background", plot$theme), error = function(e) NULL)
     fill <- bg$fill %||% "white"
     if (length(fill) == 0 || is.na(fill) || identical(tolower(as.character(fill)), "transparent")) {
-      add("background", "fail", "背景透明", "导出图背景为透明；多数期刊要求白底（白色背景）。")
+      add("background", "fail", "背景透明", "导出图背景为透明；多数期刊要求白底（白色背景）。",
+          fix = list(action = "white", label = "改为白底"))
     } else if (!.ggspec_is_whiteish(fill)) {
-      add("background", "warn", "背景不是白色", sprintf("当前背景色 %s；投稿通常要求白色背景。", fill))
+      add("background", "warn", "背景不是白色", sprintf("当前背景色 %s；投稿通常要求白色背景。", fill),
+          fix = list(action = "white", label = "改为白底"))
     } else {
       add("background", "pass", "白底", "背景为白色。")
     }
@@ -299,21 +305,46 @@ ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
     }
   }
 
-  # 2) 分辨率 / 矢量
+  # 2) 分辨率 / 矢量 / 格式
+  min_dpi <- if (!is.null(tpl) && !is.null(tpl$minDpi)) tpl$minDpi else 300
   if (format == "png") {
-    if (dpi < 300) {
-      add("dpi", "warn", "位图分辨率偏低", sprintf("当前 %d dpi；多数期刊要求位图 ≥300 dpi（照片 600 dpi）。", dpi))
+    if (dpi < min_dpi) {
+      add("dpi", "warn", "位图分辨率偏低",
+          sprintf("当前 %d dpi；%s要求位图 ≥%d dpi。", dpi,
+                  if (is.null(tpl)) "多数期刊" else tpl$label, min_dpi),
+          fix = list(action = "dpi", value = min_dpi, label = sprintf("改为 %d dpi", min_dpi)))
     } else {
-      add("dpi", "pass", "位图分辨率", sprintf("%d dpi，达到 300 dpi 要求。", dpi))
+      add("dpi", "pass", "位图分辨率", sprintf("%d dpi，达到 %d dpi 要求。", dpi, min_dpi))
     }
   } else {
     add("vector", "pass", "矢量格式", sprintf("%s 为矢量格式，缩放不失真。", toupper(format)))
   }
+  if (!is.null(tpl) && length(tpl$formats) && !format %in% tpl$formats) {
+    preferred <- if ("pdf" %in% tpl$formats) "pdf" else tpl$formats[1]
+    add("format", "warn", "格式不在模板要求内",
+        sprintf("%s 接受：%s；当前为 %s。", tpl$label,
+                paste(toupper(tpl$formats), collapse = " / "), toupper(format)),
+        fix = if (preferred %in% c("png", "svg", "pdf"))
+          list(action = "format", value = preferred, label = sprintf("改用 %s", toupper(preferred))) else NULL)
+  }
 
-  # 3) 物理尺寸
-  if (w_mm < 80 || w_mm > 180) {
+  # 3) 物理尺寸（模板优先）
+  min_text_pt <- if (!is.null(tpl) && !is.null(tpl$minTextPt)) tpl$minTextPt else 6
+  if (!is.null(tpl) && !is.null(tpl$widthMm)) {
+    target <- tpl$widthMm
+    ok_w <- abs(w_mm - target) <= 6 || abs(w_mm - 2 * target) <= 10
+    if (!ok_w) {
+      add("size", "warn", "宽度与模板栏宽不符",
+          sprintf("%s 单栏约 %d mm（双栏约 %d mm）；当前 %.0f mm。", tpl$label, target,
+                  2 * target, w_mm),
+          fix = list(action = "width", value = target, label = sprintf("套用 %d mm 栏宽", target)))
+    } else {
+      add("size", "pass", "物理尺寸", sprintf("约 %.0f × %.0f mm，符合 %s 栏宽。", w_mm, h_mm, tpl$label))
+    }
+  } else if (w_mm < 80 || w_mm > 180) {
     add("size", "warn", "物理宽度非常见栏宽",
-        sprintf("当前约 %.0f mm 宽；单栏常见 85 mm、双栏 170 mm。", w_mm))
+        sprintf("当前约 %.0f mm 宽；单栏常见 85 mm、双栏 170 mm。", w_mm),
+        fix = list(action = "width", value = 85, label = "套用 85 mm 栏宽"))
   } else {
     add("size", "pass", "物理尺寸", sprintf("约 %.0f × %.0f mm（宽 × 高）。", w_mm, h_mm))
   }
@@ -338,6 +369,13 @@ ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
       if (length(missing)) {
         add("font", "warn", "字体可能不可用",
             sprintf("未在本机找到：%s；导出会自动回退，可能影响最终字形。", paste(missing, collapse = "、")))
+      } else if (!is.null(tpl) && length(tpl$fonts) &&
+                 !all(tolower(check_fams) %in% tolower(tpl$fonts))) {
+        add("font", "warn", "字体不在模板白名单",
+            sprintf("%s 建议：%s；当前：%s。", tpl$label,
+                    paste(tpl$fonts, collapse = " / "), paste(check_fams, collapse = " / ")),
+            fix = list(action = "font", value = tpl$fonts[1],
+                       label = sprintf("改用 %s", tpl$fonts[1])))
       } else {
         add("font", "pass", "字体可用", paste(check_fams, collapse = "、"))
       }
@@ -351,11 +389,15 @@ ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
     min_pt <- suppressWarnings(min(sizes, na.rm = TRUE))
     if (is.finite(min_pt)) {
       info$minTextPt <- round(min_pt, 1)
-      if (min_pt < 6) {
+      if (min_pt < min_text_pt - 0.05) {
         add("textsize", "warn", "文字偏小",
-            sprintf("最小有效字号约 %.1f pt；多数期刊要求 ≥6–7 pt。", min_pt))
+            sprintf("最小有效字号约 %.1f pt；%s要求 ≥%.0f pt。", min_pt,
+                    if (is.null(tpl)) "多数期刊" else tpl$label, min_text_pt),
+            fix = list(action = "textsize", value = min_text_pt,
+                       label = sprintf("字号提到 %.0f pt", min_text_pt)))
       } else {
-        add("textsize", "pass", "文字字号", sprintf("最小约 %.1f pt。", min_pt))
+        add("textsize", "pass", "文字字号",
+            sprintf("最小约 %.1f pt（要求 ≥%.0f pt）。", min_pt, min_text_pt))
       }
     }
   }

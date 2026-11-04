@@ -298,13 +298,20 @@ ggspec_api_app <- function(state) {
                   body = bytes))
     }
 
+    ## ---- 期刊模板 ----
+    if (path == "/api/journal/templates" && method == "GET") {
+      return(json_response(list(ok = TRUE, templates = journal_templates())))
+    }
+
     ## ---- 导出 ----
     if (path == "/api/export/check" && method == "POST") {
       spec <- body$spec %||% list()
       format <- body$format %||% "png"
       width <- as.integer(body$width %||% 1600); height <- as.integer(body$height %||% 1000)
       dpi <- as.integer(body$dpi %||% 300)
-      res <- tryCatch(ggspec_export_check(spec, state$meta, state, width, height, dpi, format),
+      journal <- body$journal %||% NULL
+      res <- tryCatch(ggspec_export_check(spec, state$meta, state, width, height, dpi, format,
+                                          journal = journal),
                       error = function(e) e)
       if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
       return(json_response(res))
