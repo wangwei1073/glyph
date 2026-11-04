@@ -18,7 +18,8 @@ const error = ref('')
 const numericCols = ref([])
 const groupCols = ref([])
 const catCols = ref([])
-const openSections = ref(['desc', 'test'])
+// 抽屉内的页签：desc 描述统计 / test 统计检验
+const tab = ref('desc')
 
 const hasSource = computed(() => !!data.current && data.current.type !== 'none')
 
@@ -166,12 +167,22 @@ watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.va
   () => { clearTimeout(timer); timer = setTimeout(refreshColumns, 400) },
   { immediate: true })
 </script>
-
 <template>
   <div class="stats-drawer" :class="{ open: ui.statsOpen }">
-    <div class="sd-head" @click="ui.toggleStats()">
-      <el-icon :size="13"><component :is="ui.statsOpen ? 'ArrowDown' : 'ArrowRight'" /></el-icon>
-      <span class="sd-title">数据统计</span>
+    <!-- 标题栏：折叠 + 页签 + 结果摘要 -->
+    <div class="sd-head">
+      <span class="sd-collapse" @click="ui.toggleStats()">
+        <el-icon :size="13"><component :is="ui.statsOpen ? 'ArrowDown' : 'ArrowRight'" /></el-icon>
+        <span class="sd-title">数据统计</span>
+      </span>
+
+      <template v-if="ui.statsOpen">
+        <el-radio-group v-model="tab" size="small" class="sd-tabs">
+          <el-radio-button value="desc">描述统计</el-radio-button>
+          <el-radio-button value="test">统计检验</el-radio-button>
+        </el-radio-group>
+      </template>
+
       <span v-if="testResult" class="sd-badge" :class="sigClass">
         {{ testResult.methodLabel }} · p = {{ pval(testResult.p) }}
       </span>
@@ -179,298 +190,332 @@ watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.va
         描述统计 · {{ result.summary.length }} 行
       </span>
       <span v-else class="sd-hint">描述统计 / 统计检验</span>
+
       <span style="flex:1" />
-      <span class="sd-toggle">{{ ui.statsOpen ? '收起' : '展开' }}</span>
+      <span class="sd-toggle" @click="ui.toggleStats()">{{ ui.statsOpen ? '收起' : '展开' }}</span>
     </div>
 
-    <div v-if="ui.statsOpen" class="sd-body gg-scroll">
-    <div v-if="!hasSource" class="gg-empty-hint" style="padding:30px">
-      <el-icon class="big"><Coin /></el-icon>
-      <div>先在左侧选择数据源</div>
-    </div>
+    <div v-if="ui.statsOpen" class="sd-body">
+      <div v-if="!hasSource" class="gg-empty-hint" style="padding:30px">
+        <el-icon class="big"><Coin /></el-icon>
+        <div>先在左侧选择数据源</div>
+      </div>
 
-    <template v-else>
-      <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon style="margin:8px 12px" />
-
-      <el-collapse v-model="openSections">
-        <!-- ================= L1 描述统计 ================= -->
-        <el-collapse-item name="desc" title="描述统计">
-          <div class="p-row">
-            <label>统计变量</label>
-            <el-select v-model="vars" size="small" multiple filterable collapse-tags
-              collapse-tags-tooltip placeholder="选择数值列" style="width:100%">
-              <el-option v-for="c in numericCols" :key="c" :value="c" :label="c" />
-            </el-select>
-          </div>
-          <div class="p-row">
-            <label>分组变量</label>
-            <el-select v-model="groupBy" size="small" multiple filterable clearable collapse-tags
-              collapse-tags-tooltip placeholder="（可选）按列分组" style="width:100%">
-              <el-option v-for="c in groupCols" :key="c" :value="c" :label="c" />
-            </el-select>
-          </div>
-          <div class="p-row" style="padding-top:2px">
-            <label />
-            <el-button size="small" type="primary" :loading="descRunning" :disabled="!canRunDesc" @click="runDesc">
-              <el-icon class="el-icon--left"><DataAnalysis /></el-icon>计算
-            </el-button>
-            <el-button size="small" text @click="refreshColumns" :loading="loading">
-              <el-icon><Refresh /></el-icon>
-            </el-button>
-          </div>
-
-          <div v-if="!numericCols.length && !loading" class="gg-empty-hint" style="padding:16px">
-            当前数据没有数值列可汇总
-          </div>
-
-          <template v-if="result && result.summary && result.summary.length">
-            <div class="stat-head">
-              <span class="gg-mono">{{ result.nrow }} 行 · {{ result.vars.length }} 变量<template v-if="result.groupBy.length"> · 按 {{ result.groupBy.join(' × ') }} 分组</template></span>
-              <span style="flex:1" />
-              <el-button size="small" text @click="showCode = !showCode">
-                <el-icon><Document /></el-icon>{{ showCode ? '隐藏代码' : '代码' }}
+      <template v-else>
+        <!-- ================= 描述统计 ================= -->
+        <div v-show="tab === 'desc'" class="sd-pane">
+          <aside class="sd-params">
+            <div class="sp-field">
+              <label>统计变量</label>
+              <el-select v-model="vars" size="small" multiple filterable collapse-tags
+                collapse-tags-tooltip placeholder="选择数值列" style="width:100%">
+                <el-option v-for="c in numericCols" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div class="sp-field">
+              <label>分组变量</label>
+              <el-select v-model="groupBy" size="small" multiple filterable clearable collapse-tags
+                collapse-tags-tooltip placeholder="（可选）按列分组" style="width:100%">
+                <el-option v-for="c in groupCols" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div class="sp-actions">
+              <el-button size="small" type="primary" :loading="descRunning" :disabled="!canRunDesc" @click="runDesc">
+                <el-icon class="el-icon--left"><DataAnalysis /></el-icon>计算
+              </el-button>
+              <el-button size="small" text @click="refreshColumns" :loading="loading">
+                <el-icon><Refresh /></el-icon>
               </el-button>
             </div>
-
-            <div class="gg-scroll stat-table-wrap">
-              <table class="stat-table">
-                <thead>
-                  <tr>
-                    <th>变量</th><th>分组</th>
-                    <th class="n">n</th><th class="n">缺失</th><th class="n">均值</th>
-                    <th class="n">SD</th><th class="n">中位数</th><th class="n">Q1</th>
-                    <th class="n">Q3</th><th class="n">最小</th><th class="n">最大</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(r, i) in result.summary" :key="i" :class="{ total: r.group === '（合计）' }">
-                    <td class="gg-mono">{{ r.variable }}</td>
-                    <td>{{ r.group }}</td>
-                    <td class="n">{{ r.n }}</td>
-                    <td class="n">{{ r.nMissing }}</td>
-                    <td class="n">{{ num(r.mean) }}</td>
-                    <td class="n">{{ num(r.sd) }}</td>
-                    <td class="n">{{ num(r.median) }}</td>
-                    <td class="n">{{ num(r.q1) }}</td>
-                    <td class="n">{{ num(r.q3) }}</td>
-                    <td class="n">{{ num(r.min) }}</td>
-                    <td class="n">{{ num(r.max) }}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div v-if="!numericCols.length && !loading" class="sp-hint">当前数据没有数值列可汇总</div>
+            <div v-else class="sp-hint">
+              均值 / SD 按列忽略缺失；有分组时自动追加「合计」行。
             </div>
+          </aside>
 
-            <div v-if="showCode" class="stat-code">
-              <div class="stat-code-head">
-                <span>可复现 R 代码</span><span style="flex:1" />
-                <el-button size="small" text @click="copyText(result.code, '统计代码已复制')">
-                  <el-icon><CopyDocument /></el-icon>
-                </el-button>
-                <el-button size="small" text
-                  @click="downloadBlob(new Blob([result.code], { type: 'text/plain;charset=utf-8' }), 'stats-summary.R')">
-                  <el-icon><Download /></el-icon>
-                </el-button>
-              </div>
-              <pre class="gg-mono">{{ result.code }}</pre>
-            </div>
-          </template>
-        </el-collapse-item>
-
-        <!-- ================= L2 统计检验 ================= -->
-        <el-collapse-item name="test" title="统计检验">
-          <div class="p-row">
-            <label>检验方法</label>
-            <el-select v-model="testMethod" size="small" filterable clearable
-              placeholder="自动选择" style="width:100%">
-              <el-option v-for="m in methods" :key="m.id" :value="m.id" :label="m.label">
-                <span class="opt-row"><span>{{ m.label }}</span><span class="opt-fn gg-mono">{{ m.id }}</span></span>
-              </el-option>
-            </el-select>
-          </div>
-          <div class="p-row">
-            <label>{{ isCorr ? '变量 Y' : '数值变量' }}</label>
-            <el-select v-model="testY" size="small" filterable clearable placeholder="选择列" style="width:100%">
-              <el-option v-for="c in numericCols" :key="c" :value="c" :label="c" />
-            </el-select>
-          </div>
-          <div v-if="isCorr" class="p-row">
-            <label>变量 X</label>
-            <el-select v-model="testX" size="small" filterable clearable placeholder="选择列" style="width:100%">
-              <el-option v-for="c in numericCols.filter(c => c !== testY)" :key="c" :value="c" :label="c" />
-            </el-select>
-          </div>
-          <div v-else class="p-row">
-            <label>分组变量</label>
-            <el-select v-model="testGroup" size="small" filterable clearable placeholder="选择分组列" style="width:100%">
-              <el-option v-for="c in groupCols" :key="c" :value="c" :label="c" />
-            </el-select>
-          </div>
-          <div v-if="needPair" class="stat-tip-inline">
-            配对检验按分组变量的水平顺序，逐位置配对；
-            <b>请确认分组恰好是「同一样本的两次测量」</b>。
-          </div>
-          <div class="p-row" style="padding-top:2px">
-            <label />
-            <el-button size="small" type="primary" :loading="testRunning" :disabled="!canRunTest" @click="runTest">
-              <el-icon class="el-icon--left"><TrendCharts /></el-icon>运行检验
-            </el-button>
-          </div>
-
-          <template v-if="testResult">
-            <div class="test-card" :class="sigClass">
-              <div class="test-title">
-                <span class="gg-mono">{{ testResult.methodLabel }}</span>
+          <section class="sd-result">
+            <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon />
+            <template v-if="result && result.summary && result.summary.length">
+              <div class="res-head">
+                <span class="gg-mono">
+                  {{ result.nrow }} 行 · {{ result.vars.length }} 变量<template v-if="result.groupBy.length"> · 按 {{ result.groupBy.join(' × ') }} 分组</template>
+                </span>
                 <span style="flex:1" />
-                <el-tag :type="sigClass === 'sig' ? 'success' : 'info'" size="small" :disable-transitions="true">
-                  {{ sigClass === 'sig' ? '显著' : '不显著' }}
-                </el-tag>
-              </div>
-              <div class="test-metrics">
-                <div class="tm">
-                  <span class="tm-l">{{ testResult.estimateName || '统计量' }}</span>
-                  <span class="tm-v gg-mono">
-                    {{ testResult.estimateName ? num(testResult.estimate) : num(testResult.statistic) }}
-                  </span>
-                </div>
-                <div class="tm">
-                  <span class="tm-l">p 值</span>
-                  <span class="tm-v gg-mono">
-                    {{ pval(testResult.p) }}<span class="stars">{{ stars(testResult.p) }}</span>
-                  </span>
-                </div>
-                <div v-if="testResult.statistic !== null && testResult.estimateName" class="tm">
-                  <span class="tm-l">{{ isCorr ? 't 值' : '统计量' }}</span>
-                  <span class="tm-v gg-mono">{{ num(testResult.statistic) }}<template v-if="testResult.df"> , df={{ num(testResult.df) }}</template></span>
-                </div>
-                <div class="tm">
-                  <span class="tm-l">样本量</span>
-                  <span class="tm-v gg-mono">n = {{ testResult.n }}</span>
-                </div>
-              </div>
-
-              <div v-if="testResult.groups && testResult.groups.length" class="test-groups">
-                <span v-for="(g, i) in testResult.groups" :key="i" class="tg">{{ g }}</span>
-              </div>
-
-              <el-alert v-if="testResult.notes && testResult.notes.length" type="info" :closable="false"
-                class="test-notes">
-                <div v-for="(n, i) in testResult.notes" :key="i" class="note-line">· {{ n }}</div>
-              </el-alert>
-
-              <div class="stat-code-head" style="margin-top:6px">
-                <span>可复现 R 代码</span><span style="flex:1" />
-                <el-button size="small" text @click="testCode = !testCode">
-                  <el-icon><Document /></el-icon>{{ testCode ? '隐藏' : '查看' }}
-                </el-button>
-                <el-button size="small" text @click="copyText(testResult.code, '检验代码已复制')">
-                  <el-icon><CopyDocument /></el-icon>
+                <el-button size="small" text @click="showCode = !showCode">
+                  <el-icon><Document /></el-icon>{{ showCode ? '隐藏代码' : '代码' }}
                 </el-button>
               </div>
-              <pre v-if="testCode" class="gg-mono code-pre">{{ testResult.code }}</pre>
+
+              <div class="gg-scroll res-table-wrap">
+                <table class="stat-table">
+                  <thead>
+                    <tr>
+                      <th>变量</th><th>分组</th>
+                      <th class="n">n</th><th class="n">缺失</th><th class="n">均值</th>
+                      <th class="n">SD</th><th class="n">中位数</th><th class="n">Q1</th>
+                      <th class="n">Q3</th><th class="n">最小</th><th class="n">最大</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(r, i) in result.summary" :key="i" :class="{ total: r.group === '（合计）' }">
+                      <td class="gg-mono">{{ r.variable }}</td>
+                      <td>{{ r.group }}</td>
+                      <td class="n">{{ r.n }}</td>
+                      <td class="n">{{ r.nMissing }}</td>
+                      <td class="n">{{ num(r.mean) }}</td>
+                      <td class="n">{{ num(r.sd) }}</td>
+                      <td class="n">{{ num(r.median) }}</td>
+                      <td class="n">{{ num(r.q1) }}</td>
+                      <td class="n">{{ num(r.q3) }}</td>
+                      <td class="n">{{ num(r.min) }}</td>
+                      <td class="n">{{ num(r.max) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div v-if="showCode" class="res-code">
+                <div class="res-code-head">
+                  <span>可复现 R 代码</span><span style="flex:1" />
+                  <el-button size="small" text @click="copyText(result.code, '统计代码已复制')">
+                    <el-icon><CopyDocument /></el-icon>
+                  </el-button>
+                  <el-button size="small" text
+                    @click="downloadBlob(new Blob([result.code], { type: 'text/plain;charset=utf-8' }), 'stats-summary.R')">
+                    <el-icon><Download /></el-icon>
+                  </el-button>
+                </div>
+                <pre class="gg-mono code-pre">{{ result.code }}</pre>
+              </div>
+            </template>
+            <div v-else class="gg-empty-hint" style="padding:24px">
+              选择变量后点「计算」
             </div>
-          </template>
-        </el-collapse-item>
-      </el-collapse>
+          </section>
+        </div>
 
-      <div class="stat-note">
-        两项统计都基于「数据加工 + 手工编辑后」的 {{ data.preview.nrow }} 行计算，与画布一致。
-        检验结果会同时给出假设检查提示，请结合前提选择方法。
-      </div>
-    </template>
+        <!-- ================= 统计检验 ================= -->
+        <div v-show="tab === 'test'" class="sd-pane">
+          <aside class="sd-params">
+            <div class="sp-field">
+              <label>检验方法</label>
+              <el-select v-model="testMethod" size="small" filterable clearable
+                placeholder="自动选择" style="width:100%">
+                <el-option v-for="m in methods" :key="m.id" :value="m.id" :label="m.label">
+                  <span class="opt-row"><span>{{ m.label }}</span><span class="opt-fn gg-mono">{{ m.id }}</span></span>
+                </el-option>
+              </el-select>
+            </div>
+            <div class="sp-field">
+              <label>{{ isCorr ? '变量 Y' : '数值变量' }}</label>
+              <el-select v-model="testY" size="small" filterable clearable placeholder="选择列" style="width:100%">
+                <el-option v-for="c in numericCols" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div v-if="isCorr" class="sp-field">
+              <label>变量 X</label>
+              <el-select v-model="testX" size="small" filterable clearable placeholder="选择列" style="width:100%">
+                <el-option v-for="c in numericCols.filter(c => c !== testY)" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div v-else class="sp-field">
+              <label>分组变量</label>
+              <el-select v-model="testGroup" size="small" filterable clearable placeholder="选择分组列" style="width:100%">
+                <el-option v-for="c in groupCols" :key="c" :value="c" :label="c" />
+              </el-select>
+            </div>
+            <div class="sp-actions">
+              <el-button size="small" type="primary" :loading="testRunning" :disabled="!canRunTest" @click="runTest">
+                <el-icon class="el-icon--left"><TrendCharts /></el-icon>运行检验
+              </el-button>
+            </div>
+            <div v-if="needPair" class="sp-hint warn">
+              配对检验按分组水平顺序逐位置配对，请确认是「同一样本的两次测量」。
+            </div>
+            <div v-else class="sp-hint">
+              不选方法时按变量角色自动推荐；结果附带正态性 / 方差齐性检查。
+            </div>
+          </aside>
+
+          <section class="sd-result">
+            <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon />
+            <template v-if="testResult">
+              <div class="test-card" :class="sigClass">
+                <div class="test-title">
+                  <span class="gg-mono">{{ testResult.methodLabel }}</span>
+                  <span style="flex:1" />
+                  <el-tag :type="sigClass === 'sig' ? 'success' : 'info'" size="small" :disable-transitions="true">
+                    {{ sigClass === 'sig' ? '显著' : '不显著' }}
+                  </el-tag>
+                </div>
+
+                <div class="test-metrics">
+                  <div class="tm">
+                    <span class="tm-l">{{ testResult.estimateName || '统计量' }}</span>
+                    <span class="tm-v gg-mono">
+                      {{ testResult.estimateName ? num(testResult.estimate) : num(testResult.statistic) }}
+                    </span>
+                  </div>
+                  <div class="tm">
+                    <span class="tm-l">p 值</span>
+                    <span class="tm-v gg-mono">
+                      {{ pval(testResult.p) }}<span class="stars">{{ stars(testResult.p) }}</span>
+                    </span>
+                  </div>
+                  <div v-if="testResult.statistic !== null && testResult.estimateName" class="tm">
+                    <span class="tm-l">{{ isCorr ? 't 值' : '统计量' }}</span>
+                    <span class="tm-v gg-mono">
+                      {{ num(testResult.statistic) }}<template v-if="testResult.df">, df={{ num(testResult.df) }}</template>
+                    </span>
+                  </div>
+                  <div class="tm">
+                    <span class="tm-l">样本量</span>
+                    <span class="tm-v gg-mono">n = {{ testResult.n }}</span>
+                  </div>
+                </div>
+
+                <div v-if="testResult.groups && testResult.groups.length" class="test-groups">
+                  <span v-for="(g, i) in testResult.groups" :key="i" class="tg">{{ g }}</span>
+                </div>
+
+                <div v-if="testResult.notes && testResult.notes.length" class="test-notes">
+                  <div v-for="(n, i) in testResult.notes" :key="i" class="note-line">· {{ n }}</div>
+                </div>
+
+                <div class="res-code-head" style="margin-top:6px">
+                  <span>可复现 R 代码</span><span style="flex:1" />
+                  <el-button size="small" text @click="testCode = !testCode">
+                    <el-icon><Document /></el-icon>{{ testCode ? '隐藏' : '查看' }}
+                  </el-button>
+                  <el-button size="small" text @click="copyText(testResult.code, '检验代码已复制')">
+                    <el-icon><CopyDocument /></el-icon>
+                  </el-button>
+                </div>
+                <pre v-if="testCode" class="gg-mono code-pre">{{ testResult.code }}</pre>
+              </div>
+            </template>
+            <div v-else class="gg-empty-hint" style="padding:24px">
+              选择变量后点「运行检验」
+            </div>
+          </section>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* 底栏抽屉：占据画布下方，可折叠；与右栏面板解耦 */
+/* ---------- 抽屉外壳 ---------- */
 .stats-drawer {
   flex-shrink: 0; display: flex; flex-direction: column;
   border-top: 1px solid var(--gg-border);
   background: var(--gg-panel); min-height: 0;
 }
-.stats-drawer.open { height: 300px; }
+.stats-drawer.open { height: 304px; }
+
 .sd-head {
-  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
-  padding: 5px 10px; cursor: pointer; user-select: none;
-  border-bottom: 1px solid var(--gg-border);
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  padding: 4px 10px; border-bottom: 1px solid var(--gg-border);
   font-size: 12px;
 }
-.sd-head:hover { background: rgba(74, 144, 217, .06); }
+.sd-collapse {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none; padding: 2px 4px; border-radius: 4px;
+}
+.sd-collapse:hover { background: rgba(74, 144, 217, .08); }
 .sd-title { font-weight: 600; }
+.sd-tabs :deep(.el-radio-button__inner) { padding: 4px 12px; font-size: 11.5px; }
 .sd-hint, .sd-toggle { font-size: 11px; color: var(--el-text-color-secondary); }
+.sd-toggle { cursor: pointer; }
+.sd-toggle:hover { color: var(--gg-accent); }
 .sd-badge {
   font-size: 10.5px; padding: 1px 7px; border-radius: 9px;
   background: rgba(128, 128, 128, .12); color: var(--el-text-color-secondary);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .sd-badge.sig { background: rgba(84, 178, 142, .16); color: #2f8b68; }
-.sd-body { flex: 1; min-height: 0; padding: 2px 4px 8px; }
-</style>
 
-<style scoped>
-.stat-head {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 4px 4px; font-size: 11px; color: var(--el-text-color-secondary);
+/* ---------- 内容区：左参数 + 右结果 ---------- */
+.sd-body { flex: 1; min-height: 0; display: flex; }
+.sd-pane { flex: 1; min-width: 0; display: flex; }
+
+.sd-params {
+  width: 264px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; border-right: 1px solid var(--gg-border);
+  overflow-y: auto;
 }
-.stat-table-wrap { max-height: 300px; border: 1px solid var(--gg-border); border-radius: 6px; }
+.sp-field { display: flex; flex-direction: column; gap: 3px; }
+.sp-field > label { font-size: 11px; color: var(--el-text-color-secondary); }
+.sp-actions { display: flex; align-items: center; gap: 6px; padding-top: 2px; }
+.sp-hint {
+  font-size: 10.5px; line-height: 1.5; color: var(--el-text-color-secondary);
+  padding-top: 2px;
+}
+.sp-hint.warn { color: #c07f18; }
+
+.sd-result {
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  padding: 8px 12px 10px; overflow: hidden;
+}
+.res-head {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding-bottom: 5px; font-size: 11px; color: var(--el-text-color-secondary);
+}
+.res-table-wrap {
+  flex: 1; min-height: 0; border: 1px solid var(--gg-border); border-radius: 6px;
+}
+.res-code { flex-shrink: 0; margin-top: 6px; }
+.res-code-head {
+  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  font-size: 11px; color: var(--el-text-color-secondary);
+}
+
+/* ---------- 表格 ---------- */
 .stat-table { border-collapse: collapse; width: 100%; font-size: 11.5px; }
 .stat-table th {
   position: sticky; top: 0; z-index: 1; background: var(--gg-panel);
   text-align: left; font-weight: 600; white-space: nowrap;
-  padding: 3px 6px; border-bottom: 1px solid var(--gg-border);
+  padding: 4px 8px; border-bottom: 1px solid var(--gg-border);
 }
 .stat-table td {
-  padding: 2px 6px; border-bottom: 1px solid var(--gg-border);
-  white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+  padding: 2px 8px; border-bottom: 1px solid var(--gg-border);
+  white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis;
 }
 .stat-table .n { text-align: right; font-variant-numeric: tabular-nums; }
 .stat-table tbody tr:hover td { background: rgba(74, 144, 217, .06); }
-.stat-table tbody tr.total td { background: rgba(74, 144, 217, .08); font-weight: 600; }
+.stat-table tbody tr.total td { background: rgba(74, 144, 217, .09); font-weight: 600; }
 
-.stat-code { margin-top: 6px; }
-.stat-code-head {
-  display: flex; align-items: center; gap: 4px;
-  font-size: 11px; color: var(--el-text-color-secondary);
-}
-.code-pre, .stat-code pre {
-  margin: 4px 0 0; padding: 8px; max-height: 200px; overflow: auto;
+/* ---------- 代码块 ---------- */
+.code-pre {
+  margin: 4px 0 0; padding: 8px; max-height: 150px; overflow: auto;
   background: rgba(128, 128, 128, .08); border-radius: 6px;
   font-size: 11px; line-height: 1.45; white-space: pre-wrap; word-break: break-all;
 }
 
+/* ---------- 检验结果卡片 ---------- */
 .test-card {
-  margin-top: 8px; padding: 8px 10px;
-  border: 1px solid var(--gg-border); border-left-width: 3px; border-radius: 6px;
-  background: var(--gg-panel);
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 9px 11px; border: 1px solid var(--gg-border);
+  border-left-width: 3px; border-radius: 6px; background: var(--gg-panel);
 }
 .test-card.sig { border-left-color: #54b28e; }
 .test-card.ns { border-left-color: #b0b8c0; }
 .test-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
 .test-metrics {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 10px; margin-top: 6px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 16px; margin-top: 7px;
 }
 .tm { display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; }
-.tm-l { color: var(--el-text-color-secondary); min-width: 42px; }
+.tm-l { color: var(--el-text-color-secondary); min-width: 46px; flex-shrink: 0; }
 .tm-v { font-variant-numeric: tabular-nums; }
 .stars { color: #e8734a; font-weight: 700; margin-left: 3px; }
-.test-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.test-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
 .tg {
   font-size: 10.5px; padding: 1px 6px; border-radius: 8px;
   background: rgba(128, 128, 128, .1); color: var(--el-text-color-secondary);
 }
-.test-notes { margin-top: 6px; }
-.test-notes :deep(.el-alert__content) { padding: 0; }
-.note-line { font-size: 10.5px; line-height: 1.5; }
-.stat-tip-inline {
-  padding: 2px 12px 4px; font-size: 10.5px; line-height: 1.5;
-  color: var(--el-text-color-secondary);
-}
+.test-notes { margin-top: 7px; padding-top: 6px; border-top: 1px dashed var(--gg-border); }
+.note-line { font-size: 10.5px; line-height: 1.55; color: var(--el-text-color-secondary); }
 .opt-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
 .opt-fn { font-size: 10.5px; color: var(--el-text-color-secondary); }
-.stat-note {
-  padding: 8px 6px 0; font-size: 10.5px; line-height: 1.5;
-  color: var(--el-text-color-secondary);
-}
-:deep(.el-collapse-item__header) { font-size: 12px; font-weight: 600; }
-:deep(.el-collapse-item__content) { padding-bottom: 8px; }
 </style>
