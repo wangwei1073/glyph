@@ -91,6 +91,33 @@ out2 <- file.path(getwd(), "tests", "out", "patchwork_compose2.png")
 file.copy(rf2$path, out2, overwrite = TRUE); unlink(rf2$path)
 cat("组合2（collect + 行排）OK ->", out2, "\n")
 
+# ---- 扩展包（ggprism 主题/标度）也要正确进 library() 行，不能生成 library(library(...)) ----
+j3 <- spec_json(
+  data = list(source = list(type = "dataset", name = "mpg")),
+  layers = list(list(geom = "boxplot", stat = "", position = list(type = "", params = list()),
+                     aes = list(x = list(map = "class"), y = list(map = "hwy"),
+                                fill = list(map = "class")),
+                     params = list(), aesParams = list())),
+  scales = list(list(aes = "fill", type = "prism", params = list(palette = "floral"))),
+  theme = list(base = "prism", args = list(palette = "black_and_white", base_size = 12),
+               elements = list())
+)
+id3 <- Pins$add(j3, "Prism 箱线图")
+combine4 <- list(active = TRUE, slots = list(list(pin = "P1", op = "+"), list(pin = id3, op = "+")),
+                 layout = list(ncol = 1), annotation = list())
+gen4 <- ggspec_pipeline(list(layers = list(), combine = combine4), META, STATE)
+stopifnot(grepl("library\\(ggprism\\)", gen4$eval_code, fixed = FALSE))
+stopifnot(!grepl("library\\(library\\(", gen4$eval_code))
+parsed4 <- tryCatch(parse(text = gen4$eval_code), error = function(e) e)
+stopifnot(!inherits(parsed4, "error"))
+rf4 <- tryCatch(ggspec_render_file(gen4$eval_code, gen4$env_list,
+                                   width = 800, height = 700, dpi = 96, format = "png"),
+                error = function(e) e)
+stopifnot(!inherits(rf4, "error"))
+out4 <- file.path(getwd(), "tests", "out", "patchwork_compose_prism.png")
+file.copy(rf4$path, out4, overwrite = TRUE); unlink(rf4$path)
+cat("组合3（ggprism 主题）OK ->", out4, "\n")
+
 # ---- 引用不存在槽位的容错 ----
 combine3 <- list(active = TRUE, slots = list(list(pin = "PX", op = "+")), layout = list())
 err3 <- tryCatch(ggspec_pipeline(list(layers = list(), combine = combine3), META, STATE),

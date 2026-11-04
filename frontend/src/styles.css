@@ -51,6 +51,7 @@
 
   /* 布局与控件 */
   --gg-header-h: 52px;
+  --gg-strip-h: 42px;   /* 左侧栏标题与画布工具栏的统一高度 */
   --gg-ctl-h: 28px;
 
   /* ---- Element Plus 主题变量（一次覆盖，组件不再各自染蓝） ---- */
@@ -152,7 +153,8 @@ body {
 .gg-boot-logo { font-size: 20px; font-weight: 700; letter-spacing: .3px; color: var(--gg-text-1); }
 .gg-boot-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--gg-text-3); }
 .gg-panel-title {
-  padding: 10px 12px; font-size: var(--gg-fs-lg); font-weight: 600; color: var(--gg-text-1);
+  height: var(--gg-strip-h); padding: 0 12px;
+  font-size: var(--gg-fs-lg); font-weight: 600; color: var(--gg-text-1);
   border-bottom: 1px solid var(--gg-border);
   display: flex; align-items: center; gap: 6px; flex-shrink: 0;
   letter-spacing: .2px;

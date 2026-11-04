@@ -545,17 +545,23 @@ ggspec_compose_code <- function(combine, meta, state) {
     gen <- spec_to_code(pin_spec, meta, state, var_name = pn, df_name = dn,
                         include_data = FALSE, with_final = FALSE)
     warns <- c(warns, gen$warnings)
-    pkgs <- union(pkgs, gen$packages)
+    # gen$packages 是 "library(pkg)" 文本；这里要的是包名，否则会生成 library(library(pkg))
+    gen_pkgs <- sub("^library\\((.*)\\)$", "\\1", gen$packages %||% character(0))
+    pkgs <- union(pkgs, gen_pkgs)
+    # 每个子图的代码顶部会重复 library()；统一提到最外层，子图块里去掉
+    gen_lines <- strsplit(gen$code, "\n", fixed = TRUE)[[1]]
+    gen_lines <- gen_lines[!grepl("^library\\(", gen_lines)]
+    gen_code <- paste(gen_lines, collapse = "\n")
     label <- state$pin_store$label(pid) %||% pid
     chunks_display <- c(chunks_display,
                         sprintf("# ---- %s (%s) ----", label, pn),
                         .data_lines(pin_spec, state, dn),
                         "",
-                        gen$code,
+                        gen_code,
                         "")
     chunks_eval <- c(chunks_eval,
                      sprintf("# ---- %s (%s) ----", label, pn),
-                     gen$code,
+                     gen_code,
                      "")
     plot_names <- c(plot_names, pn)
     used_ops <- c(used_ops, as.character(sl$op %||% "+"))

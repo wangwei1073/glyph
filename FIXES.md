@@ -107,6 +107,14 @@ Rscript tests/review_findings.R     # 走查证据脚本，逐条对照修复状
 | 预览表格紧凑化 | 字号 11.5px、行高 ~19px、表头按钮缩小并悬停变实、行悬停高亮 |
 | 映射操作左移 | 新增 [ColumnActions.vue](frontend/src/components/ColumnActions.vue)：点击左栏列行就地展开「映射到第 N 层（按 geom 过滤 aes）+ 插入列名 + 统计 + 取值预览」，预览弹窗的列菜单复用同一组件 |
 
+## 批次 9 — 拼图与扩展包（2026-11-04）
+
+| 问题 | 改动 | 位置 |
+|---|---|---|
+| 拼图渲染报 `'package' must be of length 1` | `ggspec_compose_code()` 里的 `pkgs` 收集的是 `spec_to_code()` 返回的 `library(pkg)` 文本，又被二次包成 `library(library(pkg))`。改为先剥成包名再 union；同时去掉子图块里重复的 `library()` 行，只保留顶层一次 | [R/spec_to_code.R](R/spec_to_code.R) |
+| 回归缺失 | `test_patchwork.R` 新增「ggprism 主题 + 标度」的拼图用例（两个 Prism 图），断言代码含 `library(ggprism)`、不含 `library(library(`，并真实渲染 | [tests/test_patchwork.R](tests/test_patchwork.R) |
+
+触发条件：图库里的图用了扩展包（默认 Prism 主题就会带 `ggprism`），普通 ggplot2 图不会触发，所以此前测试没覆盖。
 ## 仍未处理（有意留下）
 
 1. **httpuv 单线程**：已用前端串行化 + 长超时缓解，但重渲染期间取图仍会排队；彻底解决需要异步任务队列或子进程渲染。

@@ -537,11 +537,12 @@ async function drawPlotly() {
 
 <style scoped>
 .gg-canvas-head {
-  display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+  display: flex; align-items: center; gap: 6px; padding: 0 12px;
+  height: var(--gg-strip-h);
   border-bottom: 1px solid var(--gg-border); background: var(--gg-panel); flex-shrink: 0;
   flex-wrap: nowrap; min-width: 0;
 }
-.render-spin { position: absolute; top: 56px; right: 22px; z-index: 5; }
+.render-spin { position: absolute; top: var(--gg-strip-h); right: 22px; z-index: 5; }
 .err-box { padding: 8px 14px; flex-shrink: 0; }
 .err-pre { margin: 4px 0 0; white-space: pre-wrap; font-size: 12px; font-family: Consolas, monospace; max-height: 140px; overflow: auto; }
 .warn-box { padding: 4px 14px 8px; flex-shrink: 0; }
