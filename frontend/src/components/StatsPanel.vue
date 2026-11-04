@@ -521,9 +521,9 @@ watch(tab, (v) => {
           <el-radio-button value="desc">描述统计</el-radio-button>
           <el-radio-button value="test">统计检验</el-radio-button>
           <el-radio-button value="reg">回归分析</el-radio-button>
-          <el-radio-button value="table1">基线表</el-radio-button>
           <el-radio-button value="idea">图表建议</el-radio-button>
           <el-radio-button value="mark">图上标注</el-radio-button>
+          <el-radio-button value="table1">基线表</el-radio-button>
         </el-radio-group>
       </template>
 
