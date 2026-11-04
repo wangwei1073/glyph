@@ -63,6 +63,7 @@ async function boot() {
   try {
     await retry(() => meta.load())
     await retry(() => data.load())
+    spec.ensureDefaultTheme()
     spec.renderNow()
   } catch (e) {
     ElMessage.error('后端服务不可用: ' + e.message)

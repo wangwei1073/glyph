@@ -59,6 +59,8 @@
 - annotate()（任意 geom）与 annotation_logticks 等函数；ggprism 的 annotation_ticks 轴刻度
 - **全部 160+ 个 theme() 元素**：中文标签、按类型（text / line / rect / …）渲染对应属性；
   9 个内置主题 + ggthemes 主题 + **ggprism 的 Prism 期刊风主题**；base_family 支持微软雅黑/黑体等中文字体预设
+- **默认出图风格**：Prism 期刊风（`theme_prism` + `floral` 配色），新建图时自动套用；
+  在「主题」「标度」面板可随时更换（未安装 ggprism 时自动回落为 minimal）
 
 ### 输出
 - 实时自动渲染（可暂停手动），预览尺寸 / dpi 可调

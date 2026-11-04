@@ -48,10 +48,12 @@ function addScale(aes) {
   showAdd.value = false
 }
 function setType(sc, type) {
+  sc.auto = false
   sc.type = type
   sc.params = {}
 }
 function setParam(sc, name, v) {
+  sc.auto = false
   if (v === null) delete sc.params[name]
   else sc.params[name] = v
 }

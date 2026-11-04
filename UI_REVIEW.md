@@ -264,3 +264,44 @@ theme_minimal / Prism / theme_pubr 等更好的选择。
 - geom 缩略图风格不统一（彩色块 vs 黑白线稿）。
 - 剩余约 100 处内联 style 的全量迁移。
 
+---
+
+## 十三、V3 实施记录：默认出图风格（2026-11-04）
+
+### 13.1 选型
+
+三套候选（各用柱状/箱线/散点三种图型渲染对比）：A Minimal + Okabe-Ito、B Prism + ggprism floral、
+C theme_bw + ggsci NPG。**选定 B**：辨识度最高、与已集成的 ggprism 形成"主题 + 配色 + guide"闭环，
+符合「科研出图」定位。
+
+### 13.2 落地内容
+
+| 项 | 内容 |
+|---|---|
+| 默认主题 | `defaultSpec().theme = { base: 'prism', args: { palette: 'black_and_white', base_size: 12 } }` |
+| 默认配色 | 离散 `fill` / `colour` 映射且用户未设标度时，自动挂 `{ type: 'prism', params: { palette: 'floral' }, auto: true }` |
+| 智能判定 | 只有 `factor / character / logical` 列才挂 Prism（连续列不挂，避免"离散标度喂连续值"报错） |
+| 取消映射 | 自动标度会随映射移除而移除；用户改过类型/参数则保留（`auto` 置 false） |
+| 缺失兜底 | 未安装 ggprism 时，启动/重置/载入项目后自动把默认主题回落为 `minimal` |
+| 默认画幅 | 预览 800×520 → **900×560 @150dpi** |
+| 可见性 | 主题面板显示「Prism 期刊风 (ggprism)」，标度面板显示「Prism 配色 (ggprism) / floral」，代码面板同步出现 `theme_prism()` + `scale_*_prism()` |
+
+### 13.3 实测验证
+
+| 检查 | 结果 |
+|---|---|
+| 新建 → 选 mpg → 柱状图 → fill=class | 代码含 `library(ggprism)`、`scale_fill_prism(palette = "floral")`、`theme_prism(palette = "black_and_white", base_size = 12)` |
+| 主题面板 | 默认选中「Prism 期刊风 (ggprism)」，8 个参数可调 |
+| 标度面板 | fill 显示「Prism 配色 (ggprism)」，未选类型前即已带 floral |
+| 连续列守卫 | 把 fill 改成数值列 `displ` → 自动移除 prism 标度，代码回到 ggplot2 默认连续标度 |
+| 画幅 | 工具栏显示 900×560 · 150dpi |
+| 控制台 | 无异常 |
+
+截图：`default_plot.png`（默认出图）、`default_code.png`（生成代码）、`default_theme_panel.png`。
+
+### 13.4 仍可继续
+
+- geom 缩略图风格统一（彩色块 vs 黑白线稿）。
+- 剩余约 100 处内联 style 清理。
+- 默认配色目前只覆盖离散映射；连续色带若要统一，可再定一个 `scale_*_prism` 连续方案。
+

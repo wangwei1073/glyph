@@ -13,7 +13,8 @@ export function defaultSpec() {
     labs: {},
     guides: {},
     annotations: [],
-    theme: { base: '', args: {}, elements: {} },
+    // 默认出图风格：Prism 期刊风（未装 ggprism 时启动后会回退到 minimal）
+    theme: { base: 'prism', args: { palette: 'black_and_white', base_size: 12 }, elements: {} },
     combine: { active: false, slots: [], layout: {}, annotation: {} }
   }
 }
@@ -29,7 +30,7 @@ export const useSpecStore = defineStore('spec', {
     renderQueued: false,
     // pngUrl: /api/plot/xxx.png（后端落盘）；png: base64 备用
     last: { pngUrl: null, png: null, code: '', warnings: [], messages: [], error: null, elapsed: 0, ok: false },
-    renderOpts: { width: 800, height: 520, dpi: 150 },
+    renderOpts: { width: 900, height: 560, dpi: 150 },
     dark: false,
     history: [],
     future: [],
@@ -64,6 +65,7 @@ export const useSpecStore = defineStore('spec', {
   actions: {
     reset() {
       this.spec = defaultSpec()
+      this.ensureDefaultTheme()
       this.selectedLayer = 0
       this.history = []
       this.future = []
@@ -96,6 +98,8 @@ export const useSpecStore = defineStore('spec', {
         for (const l of this.spec.layers) {
           if (!Object.keys(l.aes).length) this.guessAes(l)
         }
+        this.syncDefaultPalette('fill')
+        this.syncDefaultPalette('colour')
       }
     },
     guessAes(layer) {
@@ -121,6 +125,8 @@ export const useSpecStore = defineStore('spec', {
       this.guessAes(layer)
       this.spec.layers.push(layer)
       this.selectedLayer = this.spec.layers.length - 1
+      this.syncDefaultPalette('fill')
+      this.syncDefaultPalette('colour')
     },
     removeLayer(i) {
       this.pushHistory()
@@ -149,6 +155,47 @@ export const useSpecStore = defineStore('spec', {
       if (!layer) return
       if (value === null || value === undefined || value === '') delete layer.aes[aesName]
       else layer.aes[aesName] = value
+      if (aesName === 'fill' || aesName === 'colour') this.syncDefaultPalette(aesName)
+    },
+    // 默认配色：离散 fill/colour 映射且用户没设过标度时，自动挂一个 Prism 配色
+    // （标度面板可见、可改；取消映射会移除，改过类型则保留用户选择）
+    syncDefaultPalette(aesName) {
+      const meta = useMetaStoreSafe()
+      if (!meta.ext || !meta.ext.ggprism) return
+      const ds = useDataStore()
+      const cols = new Set()
+      for (const l of this.spec.layers) {
+        const v = l.aes && l.aes[aesName]
+        if (v && typeof v === 'object' && v.map) cols.add(String(v.map))
+      }
+      let want = cols.size > 0
+      if (want) {
+        want = [...cols].every((name) => {
+          const c = (ds.columns || []).find(x => x.name === name)
+          return c && ['factor', 'character', 'logical'].includes(c.type)
+        })
+      }
+      const idx = this.spec.scales.findIndex(s => s.aes === aesName)
+      const existing = idx >= 0 ? this.spec.scales[idx] : null
+      if (want && (!existing || existing.auto)) {
+        const next = {
+          aes: aesName, type: 'prism', params: { palette: 'floral' },
+          position: '', secAxis: null, auto: true
+        }
+        if (existing) this.spec.scales[idx] = next
+        else this.spec.scales.push(next)
+      } else if (!want && existing && existing.auto) {
+        this.spec.scales.splice(idx, 1)
+      }
+    },
+    // 启动后兜底：没装 ggprism 时把默认 Prism 主题换成 minimal
+    ensureDefaultTheme() {
+      if (this.spec.theme.base !== 'prism') return
+      const meta = useMetaStoreSafe()
+      if (!meta.themeByName || !meta.themeByName['prism']) {
+        this.spec.theme.base = 'minimal'
+        this.spec.theme.args = { base_size: 12 }
+      }
     },
     setLayerAesParam(i, name, value) {
       const layer = this.spec.layers[i]
@@ -189,6 +236,8 @@ export const useSpecStore = defineStore('spec', {
       }
       layer.aesParams = aesParams
       layer.geom = newGeom
+      this.syncDefaultPalette('fill')
+      this.syncDefaultPalette('colour')
     },
     setLayerParam(i, name, value) {
       const layer = this.spec.layers[i]
@@ -239,6 +288,7 @@ export const useSpecStore = defineStore('spec', {
       merged.labs = (obj && obj.labs) || {}
       merged.guides = (obj && obj.guides) || {}
       this.spec = merged
+      this.ensureDefaultTheme()
       this.selectedLayer = 0
     },
     // 数据源切换后，丢弃指向不存在列的映射（否则渲染报「找不到对象 'xxx'」）
