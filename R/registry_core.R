@@ -5,6 +5,14 @@
 
 GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
 
+# 安全取数据形态分类：命名向量用 [[ ]] 访问不存在的键会抛错，
+# 扩展 geom 大量不在 GEOM_SHAPE 表里，必须做存在性检查兜底
+.shape_of <- function(name) {
+  if (!name %in% names(GEOM_SHAPE)) return("特殊")
+  v <- GEOM_SHAPE[[name]]
+  if (is.null(v) || !nzchar(v)) "特殊" else v
+}
+
 .ggspec_ns <- function() {
   if (is.null(GGSPEC_NS_ENV)) GGSPEC_NS_ENV <<- asNamespace("ggplot2")
   GGSPEC_NS_ENV
@@ -397,7 +405,7 @@ ggspec_build_meta <- function() {
     geoms[[length(geoms) + 1]] <- list(
       fn = fn, name = name, package = "ggplot2",
       label = (meta$label %||% name), group = (meta$group %||% "其他"),
-      shape = (GEOM_SHAPE[[name]] %||% "特殊"),
+      shape = (.shape_of(name)),
       desc = (meta$desc %||% ""),
       aes = aes_info,
       params = .ggspec_formals_params(fn),
@@ -407,7 +415,8 @@ ggspec_build_meta <- function() {
     )
   }
   # 扩展 geom
-  # 第一批接入：ggrepel / ggthemes（原有）+ ggpubr / ggbeeswarm / ggtext / ggside（新增）
+  # 第一批：ggrepel / ggthemes + ggpubr / ggbeeswarm / ggtext / ggside
+  # 第二批：ggstats / ggridges / ggh4x
   # 这些包的 geom_* 都在各自命名空间，代码生成会自动加 pkg:: 前缀（见 .qualified_fn）
   for (pkg in ext_active_for("geom")) {
     for (g in .ggspec_scan_pkg_geoms(pkg, NULL)) {
@@ -425,7 +434,7 @@ ggspec_build_meta <- function() {
       if (g$defaultStat %in% c("Stat", "StatIdentity", "ggproto", "gg")) g$defaultStat <- "identity"
       if (startsWith(g$defaultStat %||% "", "Stat")) g$defaultStat <- tolower(sub("^Stat", "", g$defaultStat))
       g$defaultPosition <- "identity"
-      g$shape <- GEOM_SHAPE[[g$name]] %||% "特殊"
+      g$shape <- .shape_of(g$name)
       geoms[[length(geoms) + 1]] <- g
     }
   }
@@ -461,6 +470,25 @@ ggspec_build_meta <- function() {
       desc = (meta$desc %||% ""),
       params = .ggspec_formals_params(fn, exclude = c("...", "orientation"))
     )
+  }
+  # 扩展包的 position（ggstats 的 position_likert / position_diverging）。
+  # 这些包没有导出 Position ggproto 对象，只能按函数名扫描。
+  # 它们对 ggstats 的部分 geom 是必需的（geom_likert 默认 position 依赖它）。
+  for (pkg in ext_active_for("geom")) {
+    pns <- tryCatch(asNamespace(pkg), error = function(e) NULL)
+    if (is.null(pns)) next
+    pfns <- grep("^position_", ls(pns), value = TRUE)
+    for (fn in pfns) {
+      name <- sub("^position_", "", fn)
+      if (any(vapply(positions, function(p) identical(p$name, name), logical(1)))) next
+      positions[[length(positions) + 1]] <- list(
+        name = name,
+        fn = paste0(pkg, "::", fn),
+        label = paste0("position_", name, "（", pkg, "）"),
+        desc = sprintf("%s 提供的 position 调整", pkg),
+        params = .ggspec_formals_params(fn, pkg = pkg, exclude = c("...", "orientation"))
+      )
+    }
   }
 
   ## coord_*

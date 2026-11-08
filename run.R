@@ -33,9 +33,11 @@ suppressPackageStartupMessages({
   library(jsonlite)
 })
 # 提前加载可能用到的扩展（缺失则跳过）
-# 第一批扩展：ggrepel / ggthemes / ggsci / ggprism + ggpubr / ggbeeswarm / ggtext / ggside
+# 第一批：ggrepel / ggthemes / ggsci / ggprism + ggpubr / ggbeeswarm / ggtext / ggside
+# 第二批：ggstats / ggridges / ggh4x / ggnewscale
 for (p in c("ggrepel", "ggsci", "ggthemes", "ggprism", "ggpubr", "ggbeeswarm",
-            "ggtext", "ggside", "patchwork", "plotly", "ragg",
+            "ggtext", "ggside", "ggstats", "ggridges", "ggh4x", "ggnewscale",
+            "patchwork", "plotly", "ragg",
             "readr", "readxl", "scales")) {
   if (requireNamespace(p, quietly = TRUE)) suppressPackageStartupMessages(do.call(library, list(p)))
 }

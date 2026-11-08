@@ -55,6 +55,32 @@ dmany$cat <- factor(sample(c("A", "B", "C"), nrow(dmany), replace = TRUE))
 dmany$z <- with(dmany, sin(x) * cos(y))
 dmany$lab <- "p"; dmany$sample <- dmany$y; dmany$group <- dmany$cat
 
+# ---- 扩展包 geom 需要的专用数据 ----
+# ggridges 的 ridgeline 需要 height 列（脊线高度）
+set.seed(3)
+dridge <- do.call(rbind, lapply(1:3, function(g) {
+  n <- 18
+  data.frame(x = seq_len(n), y = g, h = abs(sin(seq_len(n) / 4 + g)) * 0.9 + 0.1)
+}))
+dridge$cat <- factor(dridge$y)
+# vridgeline：x 为分类、y 为连续、height 沿 x
+dridge2 <- do.call(rbind, lapply(1:3, function(g) {
+  n <- 18
+  data.frame(x = g, y = seq_len(n), h = abs(cos(seq_len(n) / 4 + g)) * 0.9 + 0.1)
+}))
+dridge2$cat <- factor(dridge2$x)
+# ggstats 的 prop/likert 需要「长表」：每行一个观测，不预先汇总
+set.seed(5)
+dprop <- data.frame(
+  cat = factor(sample(c("Q1", "Q2", "Q3"), 120, TRUE)),
+  cat2 = factor(sample(c("低", "中", "高"), 120, TRUE), levels = c("低", "中", "高"))
+)
+dprop$y <- 1
+dprop$z <- 1
+dprop$x <- seq_len(nrow(dprop))
+dprop$lab <- "p"; dprop$sample <- 1; dprop$group <- dprop$cat
+dprop$xmin <- 0; dprop$xmax <- 1; dprop$ymin <- 0; dprop$ymax <- 1
+
 # ---- 每个 geom 的「最小合适映射」 -------------------------------------------
 # aes: 名称 = 美学, 值 = 列名；params: 常量参数；data: d / grid / poly；theme: 主题覆盖
 T <- list(
@@ -121,7 +147,41 @@ T <- list(
   # bracket 的默认 comparisons 依赖分组，需显式给 y.position 才能出图
   bracket        = list(aes = c(x = "cat", y = "y"), params = list(y.position = 40)),
   pwc            = list(aes = c(x = "cat", y = "y")),
-  exec           = list(aes = c(x = "x", y = "y", label = "lab"))
+  exec           = list(aes = c(x = "x", y = "y", label = "lab")),
+
+  # ---- 扩展包 geom（第二批）----
+  # ggridges：density_ridges 只需 x/y（自动算密度）；ridgeline 还需 height
+  density_ridges         = list(aes = c(x = "y", y = "cat")),
+  density_ridges2        = list(aes = c(x = "y", y = "cat")),
+  density_ridges_gradient = list(aes = c(x = "y", y = "cat", fill = "y")),
+  density_line           = list(aes = c(x = "y", y = "cat")),
+  ridgeline              = list(aes = c(x = "x", y = "y", height = "h"), data = "ridge"),
+  ridgeline_gradient     = list(aes = c(x = "x", y = "y", height = "h", fill = "h"), data = "ridge"),
+  vridgeline             = list(aes = c(y = "x", x = "cat"), data = "ridge2"),
+  # ggstats：长表 + 分组，自动统计比例
+  # prop_bar 需要「分类 y + fill 分组」，x 由 stat 计算；不能用完全空的 aes
+  prop_bar               = list(aes = c(y = "cat", fill = "cat2"), data = "prop"),
+  prop_text              = list(aes = c(y = "cat", fill = "cat2"), data = "prop"),
+  prop_connector         = list(aes = c(y = "cat", fill = "cat2"), data = "prop"),
+  likert                 = list(aes = c(y = "cat", fill = "cat2"), data = "prop", position = "likert"),
+  likert_text            = list(aes = c(y = "cat", fill = "cat2"), data = "prop", position = "likert"),
+  diverging              = list(aes = c(y = "cat", fill = "cat2"), data = "prop", position = "diverging"),
+  diverging_text         = list(aes = c(y = "cat", fill = "cat2"), data = "prop", position = "diverging"),
+  pyramid                = list(aes = c(y = "cat", fill = "cat2"), data = "prop", position = "diverging"),
+  pyramid_text           = list(aes = c(y = "cat", fill = "cat2"), data = "prop", position = "diverging"),
+  bar_connector          = list(aes = c(x = "cat", y = "y")),
+  connector              = list(aes = c(x = "cat", y = "y")),
+  # stripped_* 是「背景底纹」，需要配合其他图层才有意义，单独渲染几乎是空白
+  stripped_cols          = list(aes = c(x = "cat", y = "y"), data = "prop", side = TRUE),
+  stripped_rows          = list(aes = c(x = "cat", y = "y"), data = "prop", side = TRUE),
+  # ggh4x
+  pointpath              = list(aes = c(x = "x", y = "y")),
+  outline_point          = list(aes = c(x = "x", y = "y")),
+  text_aimed             = list(aes = c(x = "x", y = "y", label = "lab")),
+  box                    = list(aes = c(xmin = "xmin", xmax = "xmax", ymin = "ymin", ymax = "ymax"), data = "grid"),
+  tilemargin             = list(aes = c(x = "x", y = "y", fill = "z"), data = "grid"),
+  rectmargin             = list(aes = c(xmin = "xmin", xmax = "xmax", ymin = "ymin", ymax = "ymax", fill = "cat"), data = "grid"),
+  polygonraster          = list(aes = c(x = "x", y = "y", fill = "z"), data = "grid")
 )
 # ggside 的 36 个边际 geom：统一用「主图散点 + 边际层」示意，
 # 否则只有边际图层会因缺少主图而看不出效果。
@@ -156,11 +216,15 @@ SKIP <- c("map", "sf", "sf_label", "sf_text", "blank", "hex",
           "marquee_repel",
           # ggpubr::geom_bracket 必须在 comparisons 里给出具体的组名，
           # 合成数据无法通用示意，用占位图（实际使用时由用户指定比较组）
-          "bracket")
+          "bracket",
+          # bar_connector 需要特定的 stat 参数组合；vridgeline 需要 height 与方向对齐，
+          # 合成数据难以通用示意，用占位图
+          "bar_connector", "vridgeline")
 
 pick_data <- function(key) {
   switch(if (is.null(T[[key]]$data)) "d" else T[[key]]$data,
-         d = d, grid = dg, poly = dpoly, many = dmany)
+         d = d, grid = dg, poly = dpoly, many = dmany,
+         ridge = dridge, ridge2 = dridge2, prop = dprop)
 }
 
 build_spec <- function(key) {
@@ -168,7 +232,8 @@ build_spec <- function(key) {
   cfg <- T[[key]] %||% GG_SIDE_THUMBS[[key]] %||% list()
   aes_map <- cfg$aes %||% c(x = "x", y = "y")
   aes_list <- lapply(aes_map, function(col) list(map = as.character(col)))
-  layer <- list(geom = key, stat = "", position = list(type = "", params = list()),
+  layer <- list(geom = key, stat = "",
+                position = list(type = cfg$position %||% "", params = list()),
                 aes = aes_list, params = cfg$params %||% list(), aesParams = list())
   # 垫一层不可见的 geom_blank：为「参考线 / 函数曲线」这类不吃数据的 geom 建立坐标范围。
   # 必须沿用主图层的 x/y 列（例如柱状图的 x 是离散列），否则两层的标度类型会冲突。

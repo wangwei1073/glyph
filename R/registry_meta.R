@@ -90,7 +90,39 @@ GEOM_META <- list(
   gm("signif",       "显著性标注",    "区间与误差", "ggpubr：自动计算并标注组间显著性"),
   gm("bracket",      "显著性括号",    "区间与误差", "ggpubr：两组或多组括号标注"),
   gm("pwc",          "成对比较",      "区间与误差", "ggpubr：两两比较并标注 p 值"),
-  gm("exec",         "表达式标注",    "文本与标签", "ggpubr：执行 R 表达式后标注结果")
+  gm("exec",         "表达式标注",    "文本与标签", "ggpubr：执行 R 表达式后标注结果"),
+
+  # ---- 第二批 ----
+  # ggstats：比例与 Likert 类统计图（数据需长表：每行一个观测）
+  gm("prop_bar",         "比例条",        "条形与频数", "ggstats：按组归一化的百分比堆叠条"),
+  gm("prop_text",        "比例文字",      "文本与标签", "ggstats：比例条上的百分比标签"),
+  gm("prop_connector",   "比例连接线",    "特殊",     "ggstats：连接比例条的引导线"),
+  gm("likert",           "Likert 图",     "条形与频数", "ggstats：李克特量表双向堆叠条（需 position_likert）"),
+  gm("likert_text",      "Likert 文字",   "文本与标签", "ggstats：Likert 图上的百分比标签"),
+  gm("diverging",        "双向条形",      "条形与频数", "ggstats：以中点为基线的双向条"),
+  gm("diverging_text",   "双向文字",      "文本与标签", "ggstats：双向条上的标签"),
+  gm("pyramid",          "金字塔图",      "条形与频数", "ggstats：人口金字塔式背靠背条"),
+  gm("pyramid_text",     "金字塔文字",    "文本与标签", "ggstats：金字塔图上的标签"),
+  gm("bar_connector",    "条形连接线",    "特殊",     "ggstats：条形之间的连接线"),
+  gm("connector",        "连接线",        "特殊",     "ggstats：分段之间的连接线"),
+  gm("stripped_cols",    "分组底纹（列）", "瓦片与栅格", "ggstats：按分组交替底纹的列背景"),
+  gm("stripped_rows",    "分组底纹（行）", "瓦片与栅格", "ggstats：按分组交替底纹的行背景"),
+  # ggridges：山脊图系列
+  gm("ridgeline",             "山脊线",    "分布", "ggridges：单条山脊密度曲线"),
+  gm("ridgeline_gradient",    "山脊线（渐变）", "分布", "ggridges：按值渐变着色的山脊线"),
+  gm("density_ridges",        "山脊密度",  "分布", "ggridges：多组密度曲线叠加排列"),
+  gm("density_ridges2",       "山脊密度（闭合）", "分布", "ggridges：底边闭合的密度曲线"),
+  gm("density_ridges_gradient","山脊密度（渐变）", "分布", "ggridges：按 x 值渐变着色的密度曲线"),
+  gm("density_line",          "密度线",    "分布", "ggridges：仅画线不填充的密度"),
+  gm("vridgeline",            "纵向山脊线", "分布", "ggridges：沿 y 轴方向的密度曲线"),
+  # ggh4x：几何增强
+  gm("pointpath",     "点路径",      "点与线",   "ggh4x：按顺序连接的点，路径更清晰"),
+  gm("outline_point", "描边点",      "点与线",   "ggh4x：带描边的点（异色边）"),
+  gm("text_aimed",    "定向文字",    "文本与标签", "ggh4x：自动朝向的文字"),
+  gm("box",           "箱形框",      "区间与误差", "ggh4x：xmin/xmax/ymin/ymax 箱形"),
+  gm("tilemargin",    "瓦片边距",    "瓦片与栅格", "ggh4x：贴边的瓦片（边际图用）"),
+  gm("rectmargin",    "矩形边距",    "瓦片与栅格", "ggh4x：贴边的矩形"),
+  gm("polygonraster", "多边形栅格",  "瓦片与栅格", "ggh4x：以多边形方式绘制栅格")
 )
 GEOM_META <- setNames(GEOM_META, vapply(GEOM_META, function(x) x$name, character(1)))
 
@@ -162,6 +194,21 @@ GEOM_SHAPE <- c(
   beeswarm = "两变量 · 离散×连续", quasirandom = "两变量 · 离散×连续",
   richtext = "两变量 · 连续×连续", textbox = "两变量 · 连续×连续",
   signif = "区间与误差", bracket = "区间与误差", pwc = "区间与误差", exec = "文本与标签",
+  # 扩展包（第二批）
+  prop_bar = "两变量 · 离散×离散", prop_text = "两变量 · 离散×离散",
+  prop_connector = "两变量 · 离散×离散",
+  likert = "两变量 · 离散×离散", likert_text = "两变量 · 离散×离散",
+  diverging = "两变量 · 离散×连续", diverging_text = "两变量 · 离散×连续",
+  pyramid = "两变量 · 离散×连续", pyramid_text = "两变量 · 离散×连续",
+  bar_connector = "图形基元", connector = "图形基元",
+  stripped_cols = "特殊", stripped_rows = "特殊",
+  ridgeline = "一变量 · 连续", ridgeline_gradient = "一变量 · 连续",
+  density_ridges = "一变量 · 连续", density_ridges2 = "一变量 · 连续",
+  density_ridges_gradient = "一变量 · 连续", density_line = "一变量 · 连续",
+  vridgeline = "一变量 · 连续",
+  pointpath = "两变量 · 连续×连续", outline_point = "点与线",
+  text_aimed = "文本与标签", box = "图形基元",
+  tilemargin = "三变量", rectmargin = "图形基元", polygonraster = "三变量",
   # 特殊
   blank = "特殊", rangeframe = "特殊"
 )
@@ -316,7 +363,13 @@ POSITION_META <- list(
   gm("fill",         "百分比堆叠",       "位置调整", "堆叠并归一化到 1"),
   gm("jitter",       "抖动",             "位置调整", "随机抖动"),
   gm("jitterdodge",  "抖动并列",         "位置调整", "点图专用：抖动 + 并列"),
-  gm("nudge",        "微移",             "位置调整", "固定偏移")
+  gm("nudge",        "微移",             "位置调整", "固定偏移"),
+  # 扩展 position
+  gm("beeswarm",     "蜂群排列",         "位置调整", "ggbeeswarm：按算法错开重叠点"),
+  gm("quasirandom",  "准随机排列",       "位置调整", "ggbeeswarm：准随机错开"),
+  gm("rescale",      "重标定",           "位置调整", "ggside：边际图层的比例重标"),
+  gm("likert",       "Likert 居中",      "位置调整", "ggstats：以中点为基线双向堆叠"),
+  gm("diverging",    "双向发散",         "位置调整", "ggstats：按中位数发散排列")
 )
 
 POSITION_META <- setNames(POSITION_META, vapply(POSITION_META, function(x) x$name, character(1)))
