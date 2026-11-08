@@ -249,6 +249,8 @@ html.dark .col-type.date { background: #4f2611; color: #e89a6b; }
   vertical-align: 1px; font-weight: 400;
 }
 .eye-btn.off { color: var(--gg-text-3, #9aa5b1); }
+/* 多重标度开关：开启时高亮，提示该层会重开一套 fill 标度 */
+.reset-btn.on { color: var(--gg-brand, #2f6fbf); background: rgba(47, 111, 191, .12); }
 .layer-card .drag-no {
   width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
   background: var(--gg-brand); color: #fff; font-size: 11px;

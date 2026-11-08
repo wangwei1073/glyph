@@ -41,6 +41,12 @@ function change(i, geomName) {
   spec.changeGeom(i, geomName)
   changeVis.value[i] = false
 }
+// 该层是否已启用多重标度
+function hasReset(l) {
+  const r = l.resetScale
+  if (!r) return false
+  return Array.isArray(r) ? r.includes('fill') : r === 'fill'
+}
 </script>
 
 <template>
@@ -72,6 +78,14 @@ function change(i, geomName) {
           <el-button size="small" text class="eye-btn" :class="{ off: l.visible === false }"
             @click="spec.toggleLayerVisible(i)">
             <el-icon><component :is="l.visible === false ? 'Hide' : 'View'" /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <!-- 多重标度：让这一层重新开始一套 fill 标度（需要 ggnewscale）-->
+        <el-tooltip v-if="i > 0" placement="top"
+          :content="hasReset(l) ? '取消多重标度（本层沿用上层标度）' : '从本层重新开始 fill 标度（多重标度）'">
+          <el-button size="small" text class="reset-btn" :class="{ on: hasReset(l) }"
+            :disabled="!meta.ext.ggnewscale" @click="spec.toggleLayerResetScale(i, 'fill')">
+            <el-icon><Brush /></el-icon>
           </el-button>
         </el-tooltip>
         <el-button size="small" text :disabled="i === 0" @click="spec.moveLayer(i, -1)">

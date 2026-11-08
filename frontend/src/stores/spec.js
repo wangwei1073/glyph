@@ -210,6 +210,23 @@ export const useSpecStore = defineStore('spec', {
       layer.visible = layer.visible === false
       this.renderNow()
     },
+    // 多重标度（ggnewscale）：在该层之前插入 new_scale_*()，
+    // 让这一层及其后重新开始一套 fill/colour 标度
+    toggleLayerResetScale(i, kind = 'fill') {
+      const layer = this.spec.layers[i]
+      if (!layer) return
+      if (i === 0) return   // 第一层前面没有标度可重置
+      this.pushHistory()
+      const cur = Array.isArray(layer.resetScale)
+        ? layer.resetScale.slice()
+        : (layer.resetScale ? [layer.resetScale] : [])
+      const idx = cur.indexOf(kind)
+      if (idx >= 0) cur.splice(idx, 1)
+      else cur.push(kind)
+      if (cur.length) layer.resetScale = cur
+      else delete layer.resetScale
+      this.renderNow()
+    },
     removeLayer(i) {
       this.pushHistory()
       this.spec.layers.splice(i, 1)

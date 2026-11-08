@@ -42,6 +42,36 @@
   paste0(pkg, "::", fn)
 }
 
+# ---- 多重标度（ggnewscale）--------------------------------------------------
+# ggnewscale 的 new_scale_fill() 不是图层，而是「插在图层之间的标记」：
+#   ggplot() + geom_a(...) + new_scale_fill() + geom_b(...)
+# 本项目用图层的 resetScale 字段表达：该层之前插入对应的 new_scale_*()。
+# resetScale 取值：字符串或字符串数组，如 "fill" / c("fill","colour")。
+
+.reset_scale_fns <- list(
+  fill = "new_scale_fill", colour = "new_scale_colour", color = "new_scale_color",
+  size = "new_scale", alpha = "new_scale", shape = "new_scale",
+  linetype = "new_scale", linewidth = "new_scale"
+)
+
+# 返回 new_scale_*() 调用（可能多行），无可插入内容时返回 NULL
+.reset_scale_line <- function(rs) {
+  if (is.null(rs)) return(NULL)
+  keys <- as.character(unlist(rs))
+  keys <- keys[nzchar(keys)]
+  if (!length(keys)) return(NULL)
+  if (!.ggspec_has_pkg("ggnewscale")) {
+    return("NULL  # 多重标度需要 ggnewscale 包，当前未安装")
+  }
+  lines <- character(0)
+  for (k in keys) {
+    fn <- .reset_scale_fns[[k]]
+    if (is.null(fn)) fn <- "new_scale"
+    lines <- c(lines, sprintf("ggnewscale::%s()", fn))
+  }
+  if (length(lines)) lines else NULL
+}
+
 # 图层调用
 .layer_call <- function(layer, meta) {
   geom_name <- layer$geom %||% "point"
@@ -490,6 +520,10 @@
     if (need_bracket && .ggspec_has_pkg("ggsignif")) used <- c(used, "ggsignif")
     if (need_text && .ggspec_has_pkg("ggpubr")) used <- c(used, "ggpubr")
   }
+  # 多重标度依赖 ggnewscale
+  has_reset <- any(vapply(spec$layers %||% list(),
+                          function(l) length(l$resetScale %||% character(0)) > 0, logical(1)))
+  if (has_reset && .ggspec_has_pkg("ggnewscale")) used <- c(used, "ggnewscale")
   vapply(setdiff(unique(used), "ggplot2"), function(p) paste0("library(", p, ")"), character(1)) |> unname()
 }
 
@@ -538,6 +572,14 @@ spec_to_code <- function(spec, meta, state, var_name = "p", df_name = "df",
     # 图层显隐：visible = FALSE 的层不参与出图（但仍保留在 spec 里，方便随时恢复）。
     # 注意不能简单跳过，否则「ggplot() 提升的 aes」会引用到不存在的图层数据。
     if (identical(l$visible, FALSE)) next
+    # 多重标度（ggnewscale）：该层之前插入 new_scale_*()，让后续图层重新开始一套标度。
+    # 这是 ggnewscale 的特殊机制——它不是图层，而是「插在图层之间的标记」。
+    rs <- .reset_scale_line(l$resetScale)
+    if (!is.null(rs)) {
+      layer_lines <- c(layer_lines, rs)
+      warns <- c(warns, sprintf("图层 %d 使用了多重标度（%s），需要 ggnewscale 包",
+                                i, paste(l$resetScale, collapse = "+")))
+    }
     ll <- l
     # 已提升到 ggplot() 的 aes 从图层中去掉
     if (!is.null(g_aes)) {
