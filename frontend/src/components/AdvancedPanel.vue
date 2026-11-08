@@ -4,7 +4,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
-import { rawRender } from '../api'
+import { rawRender, toggleExtension } from '../api'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
@@ -94,15 +94,37 @@ async function runRaw() {
   }
 }
 
-// 扩展清单：key 对应 backend /api/meta 的 extensions 标记，where 说明入口面板
-const extList = [
-  { key: 'ggthemes', label: 'ggthemes 主题/标度', where: '标度 · 主题' },
-  { key: 'ggsci', label: 'ggsci 学术配色', where: '标度' },
-  { key: 'ggprism', label: 'ggprism Prism 配色/主题', where: '标度 · 主题 · 标签 · 注释' },
-  { key: 'ggrepel', label: 'ggrepel 防重叠标签', where: '图层' },
-  { key: 'patchwork', label: 'patchwork 拼图', where: '拼图（先「存入图库」）' },
-  { key: 'plotly', label: 'plotly 交互预览', where: '画布「交互预览」' }
-]
+// 扩展清单：来自后端 /api/meta 的 extensionCatalog（含安装/启用状态与说明）
+// 开关只对「已安装」的扩展可用；关闭后后端会重建注册表，其组件从各面板消失
+const extToggling = ref('')
+
+async function toggleExt(ext, on) {
+  if (!ext.installed) return
+  extToggling.value = ext.id
+  try {
+    const res = await toggleExtension(ext.id, on)
+    // 后端已返回重建后的 meta，直接套用避免二次请求
+    if (res.meta) meta.applyMeta(res.meta)
+    ElMessage.success(`${ext.label} 已${on ? '启用' : '关闭'}`)
+    // 组件来源变了，需要重渲染以反映标度/主题等变化
+    spec.renderNow()
+  } catch (e) {
+    ElMessage.error('切换失败: ' + e.message)
+  } finally {
+    extToggling.value = ''
+  }
+}
+
+// 「入口」说明：按扩展提供的组件类型推导
+function extWhere(e) {
+  const map = {
+    geom: '图层', scale: '标度', theme: '主题', guide: '标签 · 图例', annotation: '注释'
+  }
+  const parts = (e.kind || []).map(k => map[k]).filter(Boolean)
+  if (e.id === 'patchwork') return '拼图（先「存入图库」）'
+  if (e.id === 'plotly') return '画布「交互预览」'
+  return parts.length ? [...new Set(parts)].join(' · ') : '—'
+}
 </script>
 
 <template>
@@ -121,18 +143,21 @@ const extList = [
       当前数据的加工结果绑定在变量 <code class="gg-mono">df</code> 上；修改代码后点运行即可覆盖预览。
     </div>
 
-    <div class="gg-subhead gg-section-gap">已集成扩展</div>
+    <div class="gg-subhead gg-section-gap">扩展管理</div>
     <div class="adv-pad">
-      <div v-for="e in extList" :key="e.key" class="ext-row">
-        <el-tag size="small" :type="meta.ext[e.key] ? 'success' : 'info'">
-          {{ meta.ext[e.key] ? '已启用' : '未安装' }}
-        </el-tag>
-        <span class="ext-name">{{ e.label }}</span>
-        <span class="ext-where">{{ e.where }}</span>
+      <div v-for="e in (meta.extensionCatalog || [])" :key="e.id" class="ext-row">
+        <el-switch :model-value="e.enabled" size="small"
+          :disabled="!e.installed || extToggling === e.id"
+          :loading="extToggling === e.id"
+          @update:model-value="(v) => toggleExt(e, v)" />
+        <span class="ext-name" :class="{ off: !e.enabled }">{{ e.label }}</span>
+        <el-tag v-if="!e.installed" size="small" type="info" :disable-transitions="true">未安装</el-tag>
+        <span v-else class="ext-where">{{ extWhere(e) }}</span>
       </div>
       <div class="gg-hint" style="padding-top: 6px">
-        可用性取决于本机是否安装对应包；安装后直接在「入口」所指面板选择即可，
-        生成的代码会自动带上 <code class="gg-mono">library(pkg)</code>。
+        关闭扩展只会把它提供的组件从面板中移除（并重新生成注册表），不会卸载 R 包；
+        生成的代码仍会自动带上 <code class="gg-mono">library(pkg)</code> 与
+        <code class="gg-mono">pkg::</code> 前缀。
       </div>
     </div>
 
@@ -159,8 +184,9 @@ const extList = [
 }
 .cm-editor-box :deep(.cm-editor) { max-height: 340px; }
 .cm-editor-box :deep(.cm-scroller) { overflow: auto; }
-.ext-row { display: flex; align-items: center; padding: 4px 0; font-size: 13px; }
-.ext-name { margin-left: 8px; }
+.ext-row { display: flex; align-items: center; gap: 4px; padding: 4px 0; font-size: 13px; }
+.ext-name { margin-left: 4px; }
+.ext-name.off { color: var(--el-text-color-secondary); }
 .ext-where {
   margin-left: auto; padding-left: 10px; font-size: 11px; text-align: right;
   color: var(--gg-text-3); white-space: nowrap;

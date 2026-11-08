@@ -65,6 +65,8 @@ STATE <- list(
 dir.create(STATE$plot_dir, showWarnings = FALSE, recursive = TRUE)
 Pins$bind(STATE$pin_file)
 EditStore$bind(file.path(root, "edits.json"))
+# 扩展开关状态（只记录被关闭的扩展；文件不存在则全部启用）
+ext_state_bind(file.path(root, "extensions.json"))
 cat("构建元数据注册表 ...\n")
 STATE$meta <- meta_build_lookup(ggspec_build_meta())
 cat(sprintf("注册表就绪: %d geoms / %d stats / %d scales / %d coords / %d 主题元素  (%.1fs)\n",

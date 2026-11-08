@@ -409,7 +409,7 @@ ggspec_build_meta <- function() {
   # 扩展 geom
   # 第一批接入：ggrepel / ggthemes（原有）+ ggpubr / ggbeeswarm / ggtext / ggside（新增）
   # 这些包的 geom_* 都在各自命名空间，代码生成会自动加 pkg:: 前缀（见 .qualified_fn）
-  for (pkg in c("ggrepel", "ggthemes", "ggpubr", "ggbeeswarm", "ggtext", "ggside")) {
+  for (pkg in ext_active_for("geom")) {
     for (g in .ggspec_scan_pkg_geoms(pkg, NULL)) {
       f <- tryCatch(get(g$fn, envir = asNamespace(pkg)), error = function(e) NULL)
       if (is.null(f)) next
@@ -509,8 +509,8 @@ ggspec_build_meta <- function() {
     )
   }
 
-  # 扩展 guide（ggprism: 次刻度 / 偏移轴 / 括号）
-  for (pkg in c("ggprism")) {
+  # 扩展 guide（ggprism: 次刻度 / 偏移轴 / 括号）—— 受扩展开关控制
+  for (pkg in ext_active_for("guide")) {
     for (g in .ggspec_scan_pkg_guides(pkg)) guides[[length(guides) + 1]] <- g
   }
 
@@ -533,7 +533,7 @@ ggspec_build_meta <- function() {
       params = params
     )
   }
-  for (pkg in c("ggsci", "ggthemes", "ggprism")) {
+  for (pkg in ext_active_for("scale")) {
     for (s in .ggspec_scan_pkg_scales(pkg)) scales[[length(scales) + 1]] <- s
   }
 
@@ -562,9 +562,12 @@ ggspec_build_meta <- function() {
     }
   }
 
-  # ggprism 主题（theme_prism）
-  for (t in .ggspec_scan_pkg_themes("ggprism", GGPRISM_THEME_LABELS)) {
-    themes[[length(themes) + 1]] <- t
+  # 扩展主题（受扩展开关控制）
+  # 目前只有 ggprism 需要专用的中文标签表；其他扩展的主题由上面的通用扫描处理
+  if ("ggprism" %in% ext_active_for("theme")) {
+    for (t in .ggspec_scan_pkg_themes("ggprism", GGPRISM_THEME_LABELS)) {
+      themes[[length(themes) + 1]] <- t
+    }
   }
 
   ## 注释函数
@@ -583,8 +586,8 @@ ggspec_build_meta <- function() {
          })()
     )
   })
-  # 扩展注释函数（ggprism: annotation_ticks）
-  for (pkg in c("ggprism")) {
+  # 扩展注释函数（ggprism: annotation_ticks）—— 受扩展开关控制
+  for (pkg in ext_active_for("annotation")) {
     for (a in .ggspec_scan_pkg_annotations(pkg)) annotations[[length(annotations) + 1]] <- a
   }
 
@@ -611,19 +614,17 @@ ggspec_build_meta <- function() {
     aesMeta = AES_META,
     annotations = annotations,
     annotateGeoms = list(),
-    extensions = list(
-      ggsci = requireNamespace("ggsci", quietly = TRUE),
-      ggthemes = requireNamespace("ggthemes", quietly = TRUE),
-      ggrepel = requireNamespace("ggrepel", quietly = TRUE),
-      ggprism = requireNamespace("ggprism", quietly = TRUE),
-      # 第一批新接入
-      ggpubr = requireNamespace("ggpubr", quietly = TRUE),
-      ggbeeswarm = requireNamespace("ggbeeswarm", quietly = TRUE),
-      ggtext = requireNamespace("ggtext", quietly = TRUE),
-      ggside = requireNamespace("ggside", quietly = TRUE),
-      patchwork = requireNamespace("patchwork", quietly = TRUE),
-      plotly = requireNamespace("plotly", quietly = TRUE)
-    )
+    # 扩展状态：installed=是否装了，enabled=是否启用（装了且未被关闭）
+    # 前端据此决定是否展示该扩展的组件，以及「扩展管理」面板的开关状态
+    extensions = local({
+      out <- list()
+      for (e in GGSPEC_EXTENSIONS) {
+        inst <- .ext_installed(e$pkg)
+        out[[e$id]] <- inst && ext_is_enabled(e$id)
+      }
+      out
+    }),
+    extensionCatalog = ext_catalog()
   )
 }
 

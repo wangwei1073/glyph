@@ -40,15 +40,30 @@ export const useMetaStore = defineStore('meta', {
     aesMeta: [],
     aesByName: {},
     annotations: [],
-    ext: {}
+    ext: {},
+    extensionCatalog: []
   }),
   actions: {
     async load() {
       if (this.loaded) return
+      await this.reload()
+    },
+    // 强制重载：切换扩展开关后注册表会变化，需要重新拉取并重建分组
+    async reload() {
       try {
         const { meta } = await getMeta()
+        this.applyMeta(meta)
+        this.loaded = true
+      } catch (e) {
+        this.error = e.message
+        throw e
+      }
+    },
+    applyMeta(meta) {
+      {
         Object.assign(this, meta)
         this.ext = meta.extensions || {}
+        this.extensionCatalog = meta.extensionCatalog || []
         this.version = meta.ggplot2Version
 
         // geom 分组
@@ -113,10 +128,6 @@ export const useMetaStore = defineStore('meta', {
         ).map(g => ({ key: g, label: groupLabels[g] || g, elements: tg[g].sort((a, b) => a.name.localeCompare(b.name)) }))
         this.themePropSchema = meta.themePropSchema || {}
         this.themeUnitOptions = meta.themeUnitOptions || []
-        this.loaded = true
-      } catch (e) {
-        this.error = e.message
-        throw e
       }
     },
     // 某图层可用的 aes 列表（required + optional）

@@ -118,6 +118,22 @@ ggspec_api_app <- function(state) {
     path <- req$PATH_INFO
     method <- req$REQUEST_METHOD
 
+    ## ---- 扩展管理 ----
+    if (path == "/api/extensions" && method == "GET") {
+      return(json_response(list(ok = TRUE, extensions = ext_catalog())))
+    }
+    # 启停扩展：会重建元数据注册表（扫描耗时约 0.5-1s）
+    if (path == "/api/extensions/toggle" && method == "POST") {
+      id <- as.character(body$id %||% "")
+      on <- isTRUE(body$enabled)
+      chk <- tryCatch({ ext_set_enabled(id, on); TRUE }, error = function(e) e)
+      if (inherits(chk, "error")) return(json_error(conditionMessage(chk), 400))
+      # 开关改变了扫描范围 → 重建 meta
+      state$meta <- tryCatch(meta_build_lookup(ggspec_build_meta()), error = function(e) state$meta)
+      return(json_response(list(ok = TRUE, id = id, enabled = ext_is_enabled(id),
+                                meta = state$meta, extensions = ext_catalog())))
+    }
+
     ## ---- 元数据 ----
     if (path == "/api/meta" && method == "GET") {
       return(json_response(list(ok = TRUE, meta = state$meta)))

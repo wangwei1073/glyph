@@ -25,3 +25,6 @@ userdata/
 table1.docx
 table1.xlsx
 stats-summary.R
+
+# 扩展开关状态（运行时）
+extensions.json
