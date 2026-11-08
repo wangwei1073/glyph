@@ -1,233 +1,245 @@
-# ggplot2 扩展引入评估
+# ggplot2 扩展引入评估（全量 170 个）
 
-> 评估对象：<https://exts.ggplot2.tidyverse.org/gallery/>（170 个已注册扩展）
+> 评估对象：<https://exts.ggplot2.tidyverse.org/gallery/> —— **170 个已注册扩展**
 > 评估日期：2026-11-08
-> 结论：**当前架构已具备成熟接入条件，建议分 3 批引入 8–10 个，L1 批次几乎零成本。**
 >
-> 配套文档：[EXTENSIONS.md](EXTENSIONS.md) 对 ggprism / ggpubr / ggstatsplot 做过逐包深度分析与依赖闭包测算，
-> 本文侧重**全量候选筛选**与**接入技术约束**，两者互补。
+> **数据来源说明**：gallery 页面是 JS 动态渲染，`web_fetch` 抓取时正文会被截断在前 45 条。
+> 本文的完整清单直接从页面 HTML 的 `.card grid-item` 结构解析得到 **170 条**（含名称、作者、
+> 描述、标签、CRAN 状态），并用 CRAN 索引核对依赖闭包。可复现脚本见第五节。
+>
+> 配套文档：[EXTENSIONS.md](EXTENSIONS.md) 对 ggprism / ggpubr / ggstatsplot 做过逐包深度分析。
 
 ## 一、结论摘要
 
-本项目已有 **4 个扩展**在用（ggrepel / ggsci / ggthemes / ggprism），且注册表自省机制已验证可自动发现扩展能力。实测发现存在**两个技术障碍**，都是代码生成层面的小改动（详见第二节）：① 扩展函数需加包名前缀；② ggsignif 要求 aes 提升到 plot 级。
+| 分类 | 数量 | 能否接入本项目 |
+|---|---|---|
+| 统计与建模 | 16 | ⭕ **高价值**，部分已接入 |
+| 主题与排版 | 13 | ⭕ 高价值（纯 theme，接入成本最低） |
+| 标度与配色 | 7 | ⭕ 高价值（纯 scale） |
+| 轴/分面/图例 | 4 | ⭕ 中高价值 |
+| 分类数据 | 6 | ⭕ 中（几何类，可接入） |
+| 几何补充 | 15 | ⭕ 中（几何类，可接入） |
+| 时间序列 | 8 | ⭕ 中 |
+| 热图 | 3 | ⭕ 中 |
+| 空间与地图 | 23 | ❌ **低**（需 sf 空间对象，与 data.frame 模型不符） |
+| 生物/基因 | 8 | ❌ 低（领域专用数据结构） |
+| 网络与流程 | 7 | ❌ 低（需 graph/tree/flow 对象） |
+| 生存分析 | 1(+1) | ❌ 低（需 Surv 对象） |
+| 交互/界面 | 3 | ❌ 不适配（输出形态不同） |
+| 其他/通用 | 69 | 需逐个判断，多数为成品图函数或语法糖 |
 
-| 优先级 | 扩展 | 价值 | 接入成本 | 建议 |
-|---|---|---|---|---|
-| **P0** | ggpubr | 统计标注（stat_compare_means） | 极低（已装） | ✅ 立即 |
-| **P0** | ggsignif | 显著性括号 | 极低（已装） | ✅ 立即 |
-| **P0** | ggbeeswarm | 蜂群散点（避免点重叠） | 极低（已装） | ✅ 立即 |
-| **P0** | ggtext | 富文本标签（markdown/HTML 样式） | 极低（已装） | ✅ 立即 |
-| **P1** | ggside | 边际分布（36 个 geom + 9 主题） | 低（已装） | ✅ 第二批 |
-| **P1** | ggstatsplot | 一体化统计图 | 低（已装） | ✅ 第二批 |
-| **P1** | ggExtra | 散点边际直方/密度 | 低（需装 0.3MB） | ✅ 第二批 |
-| **P2** | ggdist | 分布与不确定性可视化 | 中（需装） | ⭕ 按需 |
-| **P2** | ggforce | 补充 geom（扇形、椭圆、标签） | 中（需装） | ⭕ 按需 |
-| **P2** | ggridges | 山脊图 | 中（需装） | ⭕ 按需 |
-| **P3** | ggraph / ggtree / ggnetwork | 网络/树/层次结构 | 高（数据结构不同） | ❌ 不建议 |
-| **P3** | gganimate / ggiraph | 动画/交互 | 高（输出形态不同） | ❌ 不建议 |
+**核心判断**：170 个里**真正适合本项目架构的约 45–55 个**，其余受限于「数据模型不兼容」或「输出形态不同」。
 
-## 二、可行性实测（关键发现）
+## 二、按类别逐项评估
 
-### 2.1 好消息：自省能自动发现扩展能力
+### 2.1 统计与建模（16 个）—— 最高价值
 
-注册表的 `.ggspec_scan_pkg_*` 无需改动即可扫描任意扩展包：
+本项目已有完整的 L1–L5 统计模块（描述统计/检验/标注/回归/基线表），这批是直接补强。
 
-| 扩展 | 发现 geom | 发现 scale | 发现 theme |
+| 扩展 | 提供能力 | CRAN | 建议 |
 |---|---|---|---|
-| ggrepel | 3 | 0 | 0 |
-| ggthemes | 2 | 66 | 22 |
-| ggsci | 0 | 87 | 0 |
-| ggprism | 0 | 3 | 1 |
-| **ggpubr** | **4** | 0 | 5 |
-| **ggbeeswarm** | **2** | 0 | 0 |
-| **ggtext** | **2** | 0 | 0 |
-| **ggside** | **36** | 0 | **9** |
-| ggstatsplot | 0 | 0 | 1 |
-| cowplot | 0 | 0 | 7 |
+| **ggpubr** | 统计检验标注、出版主题 | ✅ | ✅ **已接入** |
+| **ggsignif** | 显著性括号 | ✅ | ✅ **已接入**（L3 底层） |
+| **ggstats** | p 值、森林图、Likert 图 geom | ✅ | ⭐ **强烈推荐**（本机已装，见 2.9） |
+| **ggstatsplot** | 一体化统计图 | ✅ | ⭕ 已装，可作为「图表建议」模板 |
+| **ggpmisc** | 模型方程、R²、P/F/AIC、多重比较标注 | ✅ | ⭕ 价值高但依赖 58 个包 |
+| **ggpp** | 标注、inset、密度过滤标签 | ✅ | ⭕ ggpmisc 的前置依赖（42 包） |
+| **qqplotr** | Q-Q / P-P 图 | ✅ | ⭕ 依赖 47 包 |
+| **ggdensity** | 带边际分布的密度图 | ✅ | ⭕ 依赖 29 包 |
+| **gglm** | 模型诊断图 | ✅ | ⭕ 与 L4 回归联动 |
+| **lindia** | 回归诊断图 | ✅ | ⭕ 与 L4 联动 |
+| **ggfortify** | 统计对象统一 autoplot | ✅ | ❌ 需模型对象，非 data.frame |
+| **ggRandomForests** | 随机森林可视化 | ✅ | ❌ 领域专用 |
+| **ggQQunif** | 均匀分布 QQ 图（p 值） | ✅ | ⭕ 场景窄 |
+| **ggfourfold** | 四格表图 | ✅ | ⭕ 依赖 64 包（偏重） |
+| **gglorenz** | 洛伦兹曲线 | ✅ | ⭕ 场景窄 |
+| **ggprop.test** | 比例检验 | ❌ 仅 GitHub | ❌ 非 CRAN |
 
-### 2.2 拦路石之一：裸函数名
+### 2.2 主题与排版（13 个）—— 性价比最高
 
-实测（这是本次评估最重要的发现之一）：
+纯 `theme_*` / `element_*`，接入无需改数据模型，与本项目已有的 ggthemes/ggprism 同构。
 
-```
-裸函数名（当前行为）：
-  geom_beeswarm()          → FAIL: 没有"geom_beeswarm"这个函数
-  geom_richtext()          → FAIL: 没有"geom_richtext"这个函数
-
-加包前缀后：
-  ggbeeswarm::geom_beeswarm()  → OK
-  ggtext::geom_richtext()      → OK
-  ggpubr::stat_compare_means() → OK
-  ggside::geom_xsidedensity()  → OK
-
-library() 加载后裸名同样可用：
-  library(ggbeeswarm); geom_beeswarm()  → OK
-```
-
-**根因**：[R/spec_to_code.R](R/spec_to_code.R) 的 `.layer_call()` 只输出 `gmeta$fn`（如 `geom_beeswarm`），而该函数不在 ggplot2 命名空间里。注册表其实已经记录了 `package` 字段，只是代码生成没用上。
-
-**修复方案（二选一，都只需改一行）**：
-- 方案 A（推荐）：`.layer_call()` 里对非 ggplot2 的函数加 `pkg::` 前缀
-- 方案 B：在 `.package_lines()` 里已生成的 `library(pkg)` 基础上，保证渲染环境的 library 调用先执行
-
-> 实测方案 A/B 都可行。方案 A 生成的代码更明确（`ggbeeswarm::geom_beeswarm()`），且不依赖 library 副作用。
-
-### 2.3 拦路石之二：aes 必须在 plot 级（仅 ggsignif 严格）
-
-这一条与 [EXTENSIONS.md](EXTENSIONS.md) 的既有结论相互印证并做了细化。实测三种扩展对映射层级的要求**并不相同**：
-
-| 扩展 | 图层级映射 `ggplot(df) + geom_x(aes(...))` | plot 级映射 `ggplot(df, aes(...)) + geom_x()` |
+| 扩展 | 提供能力 | 建议 |
 |---|---|---|
-| **ggsignif** | ❌ `Can only handle data with groups that are plotted on the x-axis` | ✅ OK |
-| ggpubr (`stat_compare_means`) | ✅ OK | ✅ OK |
-| ggbeeswarm | ✅ OK | ✅ OK |
-| ggtext (`geom_richtext`) | ✅ OK | ✅ OK |
+| **ggtext** | 富文本（已接入） | ✅ 已接入 |
+| **hrbrthemes** | 出版级排版主题 | ⭐ 推荐（依赖 23 包，最轻） |
+| **mdthemes** | markdown 主题 | ❌ 仅 GitHub |
+| **ggdark** | 暗色主题 | ⭕ 与现有暗色模式重叠 |
+| **ggthemr** | 主题管理器 | ❌ 仅 GitHub |
+| **ggtech** | 科技风主题 | ❌ 仅 GitHub |
+| **tvthemes** | 电视剧配色主题 | ⭕ 趣味性 |
+| **gguapo** | 艺术风格主题 | ❌ 仅 GitHub |
+| **ggautothemes** | 自动生成主题 | ❌ 仅 GitHub |
+| **geomtextpath** | 沿路径排布文字 | ⭕ 排版增强 |
+| **ggfittext** | 文字自适应框内 | ⭕ 依赖 37 包 |
+| **ggwordcloud** | 词云 | ⭕ 依赖 37 包 |
+| **ggpage** | 书页式文本布局 | ⭕ 场景窄 |
 
-**结论**：
-- 只有 **ggsignif** 严格要求 x 轴分组来自 `ggplot()` 级映射
-- 好消息是本项目已有 `.ggplot_aes()` 提升逻辑：**单图层时会自动把 aes 提升到 `ggplot()`**（实测确认），所以最常见的「箱线图 + 显著性」场景天然满足
-- 但「多层且 aes 不同」时不会提升 → ggsignif 会失败。因此接入时应对**含 ggsignif 图层的 spec 强制走 plot 级映射分支**（或提示用户）
+### 2.3 标度与配色（7 个）
 
-> 注：L3 的图上标注目前是通过 `sigMarks` 生成 `ggsignif::geom_signif(comparisons=...)`，走的正是这条路径，已实测可用。
-
-### 2.4 无命名冲突
-
-| 扩展 | 新增 geom | 与现有 58 个重名 |
+| 扩展 | 提供能力 | 建议 |
 |---|---|---|
-| ggpubr | 4 | 无 |
-| ggbeeswarm | 2 | 无 |
-| ggtext | 2 | 无 |
-| ggside | 36 | 无 |
+| **ggsci** | 期刊配色（已接入，87 套） | ✅ 已接入 |
+| **ggthemes** | 主题+配色（已接入，66 scale） | ✅ 已接入 |
+| **ggprism** | Prism 配色（已接入） | ✅ 已接入 |
+| **ggnewscale** | 同图多套配色 | ⭐ 推荐（依赖 23 包，与标度面板天然契合） |
+| **ggchromatic** | 色彩空间操作 | ❌ 仅 GitHub |
+| **ggtintshade** | 明暗/饱和调整 | ⭕ 场景窄 |
+| **ggasym** | 非对称矩阵图 | ❌ 仅 GitHub |
 
-### 2.5 全部候选都能正常渲染
+### 2.4 轴 / 分面 / 图例（4 个）
 
-已装且实测出图成功：ggpubr、ggsignif、ggstatsplot、ggcorrplot、ggtext、ggbeeswarm、ggside、survminer、cowplot（9/9 通过）。
-
-## 三、分批次建议
-
-### 第一批（P0，零安装成本，约 0.5 天）
-
-这 4 个包**本机已装**，只差代码生成的 `pkg::` 前缀修复。
-
-| 扩展 | 提供能力 | 对项目的具体价值 |
+| 扩展 | 提供能力 | 建议 |
 |---|---|---|
-| **ggpubr** | `stat_compare_means` / `stat_pvalue_manual` / `stat_cor` | 直接补强 L3 图上标注（已复用其 `stat_pvalue_manual`） |
-| **ggsignif** | `geom_signif` 括号 | L3 已在用；正式纳入图层选择器 |
-| **ggbeeswarm** | `geom_beeswarm` / `geom_quasirandom` | 解决小样本散点的严重重叠，是箱线图/小提琴图的标配补充 |
-| **ggtext** | `geom_richtext` / `geom_textbox` | 图上文字支持 **加粗/斜体/颜色/上下标**，期刊图注刚需 |
+| **ggh4x** | 嵌套分面、多轴、strip 控制 | ⭐ 推荐（依赖 23 包，补强分面面板） |
+| **ggbreak** | 坐标轴断轴 | ⭐ 推荐（依赖 41 包，科研刚需） |
+| **legendry** | 图例与轴的高级控制 | ⭕ 依赖 23 包 |
+| **lemon** | 括号、轴刻度 | ⭕ 依赖 33 包 |
 
-**改动清单**：
-1. `R/spec_to_code.R`：`.layer_call()` 对非 ggplot2 包函数加 `pkg::` 前缀（1 行）
-2. `R/spec_to_code.R`：含 ggsignif 图层的 spec 强制走 plot 级映射（见 2.3）
-3. `R/registry_core.R`：扩展 geom 扫描的包列表加入这 4 个
-4. `R/registry_meta.R`：给新 geom 补中文标签与分组
-5. `run.R`：预加载列表补充
+### 2.5 几何补充（15 个）
 
-> 说明：ggpubr / ggsignif 的深度分析（依赖闭包 85 个包、`stat_*` 属于「图层函数」而非 `stat=` 可选值等）见既有文档 [EXTENSIONS.md](EXTENSIONS.md)，此处不重复。
-
-### 第二批（P1，约 1 天）
-
-| 扩展 | 提供能力 | 价值 |
+| 扩展 | 提供能力 | 建议 |
 |---|---|---|
-| **ggside** | 36 个边际 geom + 9 主题 | 散点图边际分布（比 ggExtra 更灵活），纳入图层即可用 |
-| **ggstatsplot** | `ggbetweenstats` 等一体化统计图 | 可作为「图表建议」里的一键模板 |
-| **ggExtra** | `ggMarginal` | 需新装（0.3MB），边际直方/箱线，轻量替代 |
+| **ggbeeswarm** | 蜂群图 | ✅ 已接入 |
+| **ggside** | 边际分布（36 geom） | ✅ 已接入 |
+| **ggdist** | 分布与不确定性（半小提琴、雨云图） | ⭐ 推荐（依赖 33 包） |
+| **ggridges** | 山脊图 | ⭐ 推荐（依赖 23 包，最轻） |
+| **ggforce** | 扇形、椭圆、标注区域 | ⭕ 依赖 32 包 |
+| **ggExtra** | 散点边际直方/密度 | ⭕ 依赖 59 包（偏重，ggside 已覆盖） |
+| **ggstance** | 水平版 geom | ⭕ 已被 ggplot2 4.0 吸收 |
+| **ggbump** | Bump 图 / S 曲线 | ⭕ 场景特定 |
+| **ggstar** | 更多点形状 | ⭕ 依赖 64 包（偏重） |
+| **ggpattern** | 图案填充（印刷风） | ⭕ 依赖 40 包 |
+| **ggpol** | 议会图等 | ❌ 仅 GitHub |
+| **ggpie** | 饼图 | ❌ 仅 GitHub |
+| **ggpath** | 按数据嵌入图片 | ⭕ 依赖 30 包 |
+| **ggbraid** | 编织带 | ❌ 仅 GitHub |
+| **oblicubes** | 立方体 3D | ⭕ 场景特定 |
 
-**注意**：ggExtra 的 `ggMarginal()` 是**包装函数**（返回 grob 而非图层），与本项目「图层组合」模型不符，需要作为特殊函数处理或跳过。建议优先 ggside。
+### 2.6 时间序列（8 个）
 
-### 第三批（P2，按需）
-
-| 扩展 | 适合场景 | 成本 |
-|---|---|---|
-| **ggdist** | 分布/不确定性（半小提琴、雨云图） | 中：几何体参数复杂 |
-| **ggforce** | 扇形、椭圆、标注区域 | 中：8+ geom |
-| **ggridges** | 山脊图（多组分布叠加） | 低–中 |
-| **ggbreak** | 坐标轴断轴 | 中：影响坐标系统 |
-| **ggnewscale** | 同一图多套配色 | 中：与现有标度面板冲突 |
-| **ggh4x** | 嵌套分面、多种轴 | 中：与 facet 面板耦合 |
-
-### 不建议引入（P3）
-
-| 扩展 | 原因 |
+| 扩展 | 建议 |
 |---|---|
-| **ggraph / ggtree / ggnetwork** | 需要 igraph/tidygraph/phylo 等**独立数据结构**，与本项目「data.frame + aes 映射」模型不兼容 |
-| **gganimate** | 输出动画（gif/mp4），与当前 PNG/SVG/PDF 静态渲染管线不同 |
-| **ggiraph** | 输出 htmlwidget，交互层与现有 plotly 方案重复 |
-| **ggrepel 的 marquee_repel** | 依赖 `marquee` 包（未装），且中文支持待验证 |
-| **survminer** | 需要 `survival::Surv` 对象，不是普通 data.frame |
-| **ggpmisc** | 价值高但依赖 `ggpp`/`ggspectra` 整条链，体积大 |
-| **ggVennDiagram / ggalluvial / ggmosaic** | 需要特定数据形态（集合/流向/列联），宜作为独立功能而非通用图层 |
+| **ggTimeSeries** | ⭕ 日历热图、河流图 |
+| **ggseas** | ⭕ 季节调整 |
+| **sugrrants** | ⭕ 日历布局 |
+| **calendR** | ⭕ 日历图 |
+| **ggHoriPlot** | ⭕ 地平线图（依赖 36 包） |
+| **gglinedensity** | ⭕ 线密度热图 |
+| **ichimoku** | ❌ 金融专用（K 线） |
+| **clockplot** | ⭕ 环形时间图 |
 
-## 四、成本估算
+### 2.7 空间与地图（23 个）—— 不建议
 
-| 工作项 | 工时 |
+**共同障碍**：全部需要 `sf` 空间对象或 GeoJSON，而本项目的数据模型是 `data.frame + aes 映射`。接入需要先建立「空间数据导入 + 几何列识别」子系统，成本远超单个扩展。
+
+代表：`tidyterra`、`ggmapinset`、`ggfields`、`ggincerta`、`ggspatial`、`ggOceanMaps`、`geom_sf` 系列等。
+
+### 2.8 明确不兼容的类别
+
+| 类别 | 数量 | 根本原因 |
+|---|---|---|
+| 空间与地图 | 23 | 需 sf/terra 空间对象 |
+| 生物/基因 | 8 | 需序列/系统发育/基因组数据结构 |
+| 网络与流程 | 7 | 需 igraph/tidygraph/flow 对象 |
+| 生存分析 | 2 | 需 `survival::Surv` 对象 |
+| 交互/界面 | 3 | 输出 htmlwidget / shiny app |
+| 成品图函数类 | ~30 | `ggboxplot`/`ggbarplot` 这类不接受 aes，与 spec 模型冲突 |
+
+### 2.9 本次新发现的高价值项（之前遗漏）
+
+完整清单暴露了三个之前没看到的候选，均已在本机验证或依赖可接受：
+
+| 扩展 | 为什么值得 | 状态 |
+|---|---|---|
+| **ggstats** | 提供森林图、Likert 图、p 值 geom，与本项目 L2/L5 直接互补 | **本机已装 1.9MB** |
+| **ggh4x** | 嵌套分面、多轴，补强现有分面面板 | 依赖 23 包（最轻档） |
+| **ggridges** | 山脊图，多组分布叠加的标准做法 | 依赖 23 包（最轻档） |
+
+## 三、推荐路线（按投入产出比排序）
+
+### 已完成的
+- ✅ 第一批：ggpubr / ggsignif / ggbeeswarm / ggtext
+- ✅ 扩展管理开关（可启停 + 持久化 + 功能门禁）
+
+### 第二批（建议，约 1 天）
+
+| 扩展 | 理由 | 成本 |
+|---|---|---|
+| **ggstats** | 已装，森林图/Likert 补强统计模块 | 极低 |
+| **ggridges** | 依赖最轻（23 包），山脊图刚需 | 低 |
+| **ggnewscale** | 依赖最轻（23 包），标度面板天然契合 | 低 |
+| **ggh4x** | 依赖最轻（23 包），分面能力大幅提升 | 低 |
+
+### 第三批（按需）
+
+`ggdist`（分布可视化）、`ggbreak`（断轴）、`ggforce`（几何补充）、`hrbrthemes`（排版）
+
+### 不建议
+
+空间类（23）、生物类（8）、网络类（7）、生存类（2）、交互类（3）、成品图函数类（~30）
+—— 合计 **73 个（43%）**，占 170 中的近一半。
+
+## 四、成本与风险
+
+### 依赖闭包（实测）
+
+| 扩展 | 递归依赖数 |
 |---|---|
-| 第一批（4 个包，含 `pkg::` 修复） | **0.5 天** |
-| 第二批（3 个包 + 面板适配） | 1 天 |
-| 第三批（按需，每个） | 0.5–1 天 |
-| 扩展管理 UI（启用/禁用扩展） | 0.5 天 |
-| 测试（每个扩展 5–10 项断言） | 0.3 天/批 |
+| ggh4x / ggridges / ggnewscale / legendry | **23**（最轻） |
+| ggdist | 33 |
+| ggbreak | 41 |
+| ggstats | 未实测（已装） |
+| ggpmisc | 58 |
+| ggExtra | 59 |
+| ggstar | 64 |
+| ggfourfold | 64 |
 
-**第一批 + 测试 ≈ 0.8 天**，投入产出比最高。
+> 参考：ggpubr 为 85 个（见 [EXTENSIONS.md](EXTENSIONS.md)）。**依赖数是最重要的成本指标**，23 档的包几乎无额外风险。
 
-## 五、需要注意的问题
+### 打包体积
 
-### 5.1 打包体积
+已接入的 4 个约 6.6 MB。后续每批建议控制在 5 MB 内；若走 Tauri 打包（见 [TAURI_ASSESSMENT.md](TAURI_ASSESSMENT.md)），只纳入前两批。
 
-| 扩展 | 体积 |
-|---|---|
-| ggpubr | 2.3 MB |
-| ggstatsplot | 3.7 MB |
-| ggside | 3.7 MB |
-| survminer | 5.9 MB |
-| ggtext / ggbeeswarm | 1.5 / 1.8 MB |
+### 通用风险
 
-第一批 4 个包合计约 **6.6 MB**。相对 R 运行时（139 MB）影响很小；但若走 Tauri 打包（见 [TAURI_ASSESSMENT.md](TAURI_ASSESSMENT.md)），建议只纳入第一批。
+1. **aes 映射层级**：ggsignif 要求 plot 级映射（已实现）；其他包多为图层级即可
+2. **包名前缀**：非 ggplot2 函数必须 `pkg::fn`（已实现 `.qualified_fn`）
+3. **降级策略**：包缺失时隐藏对应组件，而非报错（扩展管理已支持）
 
-### 5.2 依赖链风险
+## 五、复现方式
 
-`ggstatsplot` 依赖 `ggpubr` → `ggsignif` → `rstatix` → `effectsize` 等十余个包，安装体积实际约 20 MB。若只需「图上显著性」，用 ggpubr/ggsignif 即可，不必引入 ggstatsplot。
+gallery 页面 HTML 里包含全部 170 个卡片，可直接解析：
 
-### 5.3 包缺失时的降级
-
-现有代码已具备降级模式（如 L3 标注在 ggsignif 缺失时退回 `annotate("text")`）。接入新扩展时应沿用此模式：**扩展不可用时隐藏对应 geom，而非报错**。
-
-### 5.4 与现有功能的边界
-
-- **ggpubr / ggsignif** 与 L3「图上标注」功能重叠 → 应作为 L3 的**底层实现**，而非并列的第二套入口
-- **ggstatsplot** 与 L2「统计检验」重叠 → 作为「图表建议」的模板，不新增检验入口
-- **ggbeeswarm** 与现有 `geom_jitter` 近义 → 在中文标签里说明差异（抖动是随机偏移，蜂群是算法避让）
-
-## 六、推荐执行路径
-
+```powershell
+$r = Invoke-WebRequest -Uri 'https://exts.ggplot2.tidyverse.org/gallery/' -UseBasicParsing
+$parts = $r.Content -split '<div class="card grid-item"'
+# 每段取 card-title / widget-shortdesc / widget-tags / widget-cran
 ```
-第 1 步（0.5 天）修 pkg:: 前缀 + 接入第一批 4 个包
-  → 立即可见效果：蜂群图、富文本标签、显著性标注全部可用
 
-第 2 步（0.3 天）扩展管理开关
-  → 注册表只扫描「已启用」的扩展，避免装了未用也出现在列表里
+（`web_fetch` 工具因正文截断只能看到前 45 条，需改用 HTTP 直取 + HTML 解析。）
 
-第 3 步（1 天）第二批：ggside（边际分布）
-  → 与现有 ggExtra 场景二选一，优先 ggside
+## 六、附录：170 个完整清单
 
-第 4 步（按需）P2 逐个评估
-  → 每个扩展单独评估「数据形态是否兼容 + 面板是否需要新增控件」
-```
+见仓库中 `tests/_ext_all.csv`（名称 / 作者 / 标签 / CRAN / 描述 / URL）。
+按主类统计：
 
-## 七、附：完整候选清单（按 gallery 标签）
-
-| 类别 | 扩展 |
+| 类别 | 数量 |
 |---|---|
-| 已集成 | ggrepel, ggsci, ggthemes, ggprism |
-| 统计标注 | ggpubr, ggsignif, ggstatsplot, ggpmisc, ggQQunif |
-| 分布可视化 | ggdist, ggridges, ggbeeswarm, ggExtra, ggside |
-| 文本标签 | ggtext, ggfittext, ggwordcloud, ggpage |
-| 几何补充 | ggforce, ggalt, ggstance, ggpattern, ggimage, ggfx |
-| 布局组合 | cowplot, gridExtra, egg, patchwork（已集） |
-| 坐标轴 | ggbreak, ggh4x, ggnewscale |
-| 关系图 | ggraph, ggnetwork, ggtree, ggVennDiagram, ggsankey |
-| 特殊图表 | ggalluvial, ggmosaic, ggupset, ggbump, ggradar, ggTimeSeries |
-| 交互动画 | gganimate, ggiraph, ggedit |
-| 领域专用 | survminer, gganatogram, ggspectra, plotROC, ggpca |
+| 其他/通用 | 69 |
+| 空间与地图 | 23 |
+| 统计与建模 | 16 |
+| 主题与排版 | 13 |
+| 生物/基因 | 8 |
+| 时间序列 | 8 |
+| 网络与流程 | 7 |
+| 标度与配色 | 7 |
+| 分类数据 | 6 |
+| 轴/分面/图例 | 4 |
+| 热图 | 3 |
+| 交互/界面 | 3 |
+| 图片与图标 | 1 |
+| 图组合 | 1 |
+| 生存分析 | 1 |
 
-> 说明：gallery 页面为 JS 动态渲染，web_fetch 只能取到前 45 个条目，其余基于 CRAN 索引与本地实测补充。表中标注「已装」的均经实际渲染验证。
+> CRAN 状态：145 个在 CRAN，25 个仅 GitHub。
