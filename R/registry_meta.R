@@ -122,7 +122,50 @@ GEOM_META <- list(
   gm("box",           "箱形框",      "区间与误差", "ggh4x：xmin/xmax/ymin/ymax 箱形"),
   gm("tilemargin",    "瓦片边距",    "瓦片与栅格", "ggh4x：贴边的瓦片（边际图用）"),
   gm("rectmargin",    "矩形边距",    "瓦片与栅格", "ggh4x：贴边的矩形"),
-  gm("polygonraster", "多边形栅格",  "瓦片与栅格", "ggh4x：以多边形方式绘制栅格")
+  gm("polygonraster", "多边形栅格",  "瓦片与栅格", "ggh4x：以多边形方式绘制栅格"),
+
+  # ---- 第三批 ----
+  # ggdist：分布与不确定性（x 为分布值，或配合 y 形成半小提琴/雨云图）
+  gm("slab",          "分布区间（半小提琴）", "分布", "ggdist：半小提琴式的分布形态"),
+  gm("slabinterval",  "分布区间（复合）", "分布", "ggdist：分布形态 + 区间 + 点估计"),
+  gm("interval",      "区间",        "区间与误差", "ggdist：点估计与不确定区间"),
+  gm("pointinterval", "点区间",      "区间与误差", "ggdist：点 + 区间"),
+  gm("dots",          "点阵（蜂群）", "分布", "ggdist：每个观测一个点，自动避开"),
+  gm("dotsinterval",  "点阵区间",    "分布", "ggdist：点阵 + 区间"),
+  gm("swarm",         "自适应点阵",  "分布", "ggdist：按可用空间自适应的点阵"),
+  gm("blur_dots",     "模糊点阵",    "分布", "ggdist：重叠时自动模糊的点阵"),
+  gm("spike",         "尖峰",        "分布", "ggdist：以尖峰表示概率质量"),
+  gm("weave",         "编织线",      "点与线", "ggdist：观测之间的编织连线"),
+  gm("lineribbon",    "线 + 缎带",   "区间与误差", "ggdist：多条区间叠加的线缎带"),
+  # ggforce：几何扩展（多为专用坐标参数，非标准 x/y）
+  gm("circle",        "圆形",        "特殊",   "ggforce：以 x0/y0/r 定义圆"),
+  gm("ellipse",       "椭圆",        "特殊",   "ggforce：以 x0/y0/a/b/angle 定义椭圆"),
+  gm("arc",           "弧线",        "特殊",   "ggforce：圆弧"),
+  gm("arc_bar",       "弧形条",      "特殊",   "ggforce：极坐标下的弧形条（饼图/玫瑰图）"),
+  gm("sina",          "Sina 散点",   "点与线", "ggforce：带抖动幅度的散点（保持分布形状）"),
+  gm("link",          "连接线",      "点与线", "ggforce：两点之间的连线（可带弧度）"),
+  gm("bezier",        "贝塞尔曲线",  "点与线", "ggforce：二次/三次贝塞尔曲线"),
+  gm("bspline",       "B 样条",      "点与线", "ggforce：平滑样条曲线"),
+  gm("spiro",         "螺线",        "特殊",   "ggforce：内摆线/外摆线"),
+  gm("shape",         "自定义图形",  "特殊",   "ggforce：支持任意图形（星形、心形等）"),
+  gm("voronoi_tile",  "泰森多边形",  "多边形与地图", "ggforce：Voronoi 镶嵌"),
+  gm("voronoi_segment","泰森边",     "多边形与地图", "ggforce：Voronoi 边界线"),
+  gm("delaunay_tile", "Delaunay 三角", "多边形与地图", "ggforce：Delaunay 三角剖分"),
+  gm("delaunay_segment","Delaunay 边", "多边形与地图", "ggforce：三角剖分边界"),
+  gm("mark_hull",     "轮廓标注",    "文本与标签", "ggforce：圈出数据轮廓并标注"),
+  gm("mark_circle",   "圆形标注",    "文本与标签", "ggforce：圆圈标注区域"),
+  gm("mark_ellipse",  "椭圆标注",    "文本与标签", "ggforce：椭圆标注区域"),
+  gm("mark_rect",     "矩形标注",    "文本与标签", "ggforce：矩形标注区域"),
+  gm("mark_regon",    "区域标注",    "文本与标签", "ggforce：任意形状区域标注"),
+  gm("regon",         "区域",        "多边形与地图", "ggforce：由数据点围成的区域"),
+  gm("parallel_sets", "平行集",      "特殊",   "ggforce：多分类变量的平行集图"),
+  gm("parallel_sets_axes","平行集轴", "特殊",  "ggforce：平行集的坐标轴"),
+  gm("parallel_sets_labels","平行集标签","文本与标签", "ggforce：平行集的类别标签"),
+  gm("diagonal",      "对角网格",    "特殊",   "ggforce：对角线方向的分格"),
+  gm("diagonal_wide", "对角网格（宽）", "特殊", "ggforce：宽对角线分格"),
+  gm("autopoint",     "自动点",      "点与线", "ggforce：为 facet_matrix 自动定位"),
+  gm("autodensity",   "自动密度",    "分布",   "ggforce：为 facet_matrix 自动定位的密度"),
+  gm("autohistogram", "自动直方",    "分布",   "ggforce：为 facet_matrix 自动定位的直方图")
 )
 GEOM_META <- setNames(GEOM_META, vapply(GEOM_META, function(x) x$name, character(1)))
 
@@ -209,6 +252,22 @@ GEOM_SHAPE <- c(
   pointpath = "两变量 · 连续×连续", outline_point = "点与线",
   text_aimed = "文本与标签", box = "图形基元",
   tilemargin = "三变量", rectmargin = "图形基元", polygonraster = "三变量",
+  # 扩展包（第三批）
+  slab = "一变量 · 连续", slabinterval = "一变量 · 连续", interval = "区间与误差",
+  pointinterval = "区间与误差", dots = "两变量 · 离散×连续",
+  dotsinterval = "两变量 · 离散×连续", swarm = "两变量 · 离散×连续",
+  blur_dots = "两变量 · 离散×连续", spike = "一变量 · 连续", weave = "图形基元",
+  lineribbon = "区间与误差",
+  circle = "特殊", ellipse = "特殊", arc = "特殊", arc_bar = "特殊",
+  sina = "两变量 · 离散×连续", link = "点与线", bezier = "图形基元",
+  bspline = "图形基元", spiro = "特殊", shape = "特殊",
+  voronoi_tile = "多边形与地图", voronoi_segment = "多边形与地图",
+  delaunay_tile = "多边形与地图", delaunay_segment = "多边形与地图",
+  mark_hull = "文本与标签", mark_circle = "文本与标签", mark_ellipse = "文本与标签",
+  mark_rect = "文本与标签", mark_regon = "文本与标签", regon = "多边形与地图",
+  parallel_sets = "特殊", parallel_sets_axes = "特殊", parallel_sets_labels = "文本与标签",
+  diagonal = "特殊", diagonal_wide = "特殊",
+  autopoint = "点与线", autodensity = "一变量 · 连续", autohistogram = "一变量 · 连续",
   # 特殊
   blank = "特殊", rangeframe = "特殊"
 )

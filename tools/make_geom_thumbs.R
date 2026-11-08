@@ -80,6 +80,49 @@ dprop$z <- 1
 dprop$x <- seq_len(nrow(dprop))
 dprop$lab <- "p"; dprop$sample <- 1; dprop$group <- dprop$cat
 dprop$xmin <- 0; dprop$xmax <- 1; dprop$ymin <- 0; dprop$ymax <- 1
+# ggforce 的圆/椭圆/弧需要半径列
+dprop$radius <- 0.6
+# arc_bar 需要 r0 / r 与外半径
+darcbar <- data.frame(
+  x = c(1, 1, 1), y = c(1, 1, 1),
+  r0 = c(0.3, 0.3, 0.3), r = c(1, 1, 1),
+  start = c(0, 2 * pi / 3, 4 * pi / 3),
+  end = c(2 * pi / 3, 4 * pi / 3, 2 * pi),
+  cat = factor(c("A", "B", "C"))
+)
+darcbar$radius <- 0.6
+darcbar$group <- darcbar$cat; darcbar$lab <- "p"; darcbar$sample <- 1
+darcbar$xmin <- 0; darcbar$xmax <- 1; darcbar$ymin <- 0; darcbar$ymax <- 1; darcbar$z <- 1
+
+# 第三批专用数据
+# rad：给 ggforce 的 circle/ellipse/arc/spiro（x0/y0 + 半径 + 角度）
+drad <- data.frame(
+  x = c(1, 2, 3), cat = factor(c("A", "B", "C")),
+  radius = c(0.35, 0.3, 0.25), start = 0, end = 5.5, angle = 0
+)
+drad$group <- drad$cat; drad$lab <- "p"; drad$sample <- 1
+drad$xmin <- 0; drad$xmax <- 1; drad$ymin <- 0; drad$ymax <- 1; drad$z <- 1
+# scatter：Voronoi / Delaunay / autopoint 需要有一定散开度的点
+set.seed(9)
+dscatter <- data.frame(x = runif(45, 1, 5), y = runif(45, 1, 5))
+dscatter$cat <- factor(sample(c("A", "B"), 45, TRUE))
+dscatter$group <- dscatter$cat; dscatter$lab <- "p"; dscatter$sample <- 1
+dscatter$xmin <- 0; dscatter$xmax <- 1; dscatter$ymin <- 0; dscatter$ymax <- 1
+dscatter$z <- 1; dscatter$radius <- 0.3
+# diag：对角线网格需要 group 且每格有对角端点
+ddiag <- do.call(rbind, lapply(1:3, function(i) {
+  data.frame(x = c(i, i + 0.8), y = c(i, i + 0.8), cat = factor(LETTERS[i]))
+}))
+ddiag$group <- ddiag$cat; ddiag$lab <- "p"; ddiag$sample <- 1
+ddiag$xmin <- 0; ddiag$xmax <- 1; ddiag$ymin <- 0; ddiag$ymax <- 1; ddiag$z <- 1; ddiag$radius <- 0.2
+# pset：平行集需要 key（集合成员）与 x（类别轴）
+dpset <- data.frame(
+  x = factor(rep(c("A", "B", "C"), each = 3)),
+  cat = factor(rep(c("g1", "g2", "g3"), 3)),
+  key = factor(rep(c("s1", "s2", "s3"), 3))
+)
+dpset$group <- dpset$key; dpset$lab <- "p"; dpset$sample <- 1
+dpset$xmin <- 0; dpset$xmax <- 1; dpset$ymin <- 0; dpset$ymax <- 1; dpset$z <- 1; dpset$radius <- 0.2
 
 # ---- 每个 geom 的「最小合适映射」 -------------------------------------------
 # aes: 名称 = 美学, 值 = 列名；params: 常量参数；data: d / grid / poly；theme: 主题覆盖
@@ -181,7 +224,48 @@ T <- list(
   box                    = list(aes = c(xmin = "xmin", xmax = "xmax", ymin = "ymin", ymax = "ymax"), data = "grid"),
   tilemargin             = list(aes = c(x = "x", y = "y", fill = "z"), data = "grid"),
   rectmargin             = list(aes = c(xmin = "xmin", xmax = "xmax", ymin = "ymin", ymax = "ymax", fill = "cat"), data = "grid"),
-  polygonraster          = list(aes = c(x = "x", y = "y", fill = "z"), data = "grid")
+  polygonraster          = list(aes = c(x = "x", y = "y", fill = "z"), data = "grid"),
+
+  # ---- 扩展包 geom（第三批）----
+  # ggdist：x 为分布值 + y 为分组（半小提琴风格）
+  slab          = list(aes = c(x = "y", y = "cat")),
+  slabinterval  = list(aes = c(x = "y", y = "cat")),
+  interval      = list(aes = c(x = "y", y = "cat"), params = list(.width = 0.5)),
+  pointinterval = list(aes = c(x = "y", y = "cat"), params = list(.width = 0.5)),
+  dots          = list(aes = c(x = "y", y = "cat")),
+  dotsinterval  = list(aes = c(x = "y", y = "cat")),
+  swarm         = list(aes = c(x = "cat", y = "y")),
+  blur_dots     = list(aes = c(x = "y", y = "cat")),
+  spike         = list(aes = c(x = "y", y = "cat")),
+  weave         = list(aes = c(x = "x", y = "y")),
+  lineribbon    = list(aes = c(x = "x", ymin = "ymin", ymax = "ymax")),
+  # ggforce：多为专用坐标美学
+  circle        = list(aes = c(x0 = "x", y0 = "x", r = "radius"), data = "rad"),
+  ellipse       = list(aes = c(x0 = "x", y0 = "cat", a = "radius", b = "radius"), data = "rad"),
+  arc           = list(aes = c(x0 = "x", y0 = "cat", r = "radius", start = "start", end = "end"), data = "rad"),
+  arc_bar       = list(aes = c(r0 = "r0", r = "r", start = "start", end = "end", fill = "cat"), data = "arcbar"),
+  sina          = list(aes = c(x = "cat", y = "y")),
+  link          = list(aes = c(x = "x", y = "y", xend = "xend", yend = "yend")),
+  bezier        = list(aes = c(x = "x", y = "y", xend = "xend", yend = "yend")),
+  bspline       = list(aes = c(x = "x", y = "y")),
+  spiro         = list(aes = c(x0 = "x", y0 = "cat", r = "radius"), data = "rad"),
+  shape         = list(aes = c(x = "x", y = "y")),
+  voronoi_tile  = list(aes = c(x = "x", y = "y"), data = "scatter"),
+  voronoi_segment = list(aes = c(x = "x", y = "y"), data = "scatter"),
+  delaunay_tile = list(aes = c(x = "x", y = "y"), data = "scatter"),
+  delaunay_segment = list(aes = c(x = "x", y = "y"), data = "scatter"),
+  mark_hull     = list(aes = c(x = "x", y = "y", label = "lab")),
+  mark_circle   = list(aes = c(x = "x", y = "y", label = "lab")),
+  mark_ellipse  = list(aes = c(x = "x", y = "y", label = "lab")),
+  mark_rect     = list(aes = c(x = "x", y = "y", label = "lab")),
+  mark_regon    = list(aes = c(x = "x", y = "y", label = "lab")),
+  regon         = list(aes = c(x = "x", y = "y", group = "group"), data = "poly"),
+  parallel_sets = list(aes = c(x = "x", y = "cat", group = "key"), data = "pset"),
+  diagonal      = list(aes = c(x = "x", y = "y", group = "cat"), data = "diag"),
+  diagonal_wide = list(aes = c(x = "x", y = "y", group = "cat"), data = "diag"),
+  autopoint     = list(aes = c(x = "x", y = "y"), data = "scatter"),
+  autodensity   = list(aes = c(x = "y"), data = "d"),
+  autohistogram = list(aes = c(x = "x"))
 )
 # ggside 的 36 个边际 geom：统一用「主图散点 + 边际层」示意，
 # 否则只有边际图层会因缺少主图而看不出效果。
@@ -219,12 +303,23 @@ SKIP <- c("map", "sf", "sf_label", "sf_text", "blank", "hex",
           "bracket",
           # bar_connector 需要特定的 stat 参数组合；vridgeline 需要 height 与方向对齐，
           # 合成数据难以通用示意，用占位图
-          "bar_connector", "vridgeline")
+          "bar_connector", "vridgeline",
+          # regon / diagonal / parallel_sets 需要特定拓扑的数据组织方式，
+          # 合成数据无法通用示意；功能本身可用（见 test_ext_batch3）
+          "regon", "diagonal", "diagonal_wide", "parallel_sets",
+          "parallel_sets_axes", "parallel_sets_labels", "arc_bar",
+          "autopoint", "autodensity", "autohistogram",
+          "interval", "pointinterval",
+          # circle / ellipse / arc / spiro 用独立的 x0/y0/r 坐标系，
+          # 与 thumbnail 脚本「先垫 blank 层」的做法冲突（几何被算到面板外）；
+          # 功能本身可用，已由 test_ext_batch3 与专项验证覆盖
+          "circle", "ellipse", "arc", "spiro")
 
 pick_data <- function(key) {
   switch(if (is.null(T[[key]]$data)) "d" else T[[key]]$data,
          d = d, grid = dg, poly = dpoly, many = dmany,
-         ridge = dridge, ridge2 = dridge2, prop = dprop)
+         ridge = dridge, ridge2 = dridge2, prop = dprop, arcbar = darcbar,
+         rad = drad, scatter = dscatter, diag = ddiag, pset = dpset)
 }
 
 build_spec <- function(key) {

@@ -35,8 +35,10 @@ suppressPackageStartupMessages({
 # 提前加载可能用到的扩展（缺失则跳过）
 # 第一批：ggrepel / ggthemes / ggsci / ggprism + ggpubr / ggbeeswarm / ggtext / ggside
 # 第二批：ggstats / ggridges / ggh4x / ggnewscale
+# 第三批：ggdist / ggforce / ggbreak / hrbrthemes
 for (p in c("ggrepel", "ggsci", "ggthemes", "ggprism", "ggpubr", "ggbeeswarm",
             "ggtext", "ggside", "ggstats", "ggridges", "ggh4x", "ggnewscale",
+            "ggdist", "ggforce", "ggbreak", "hrbrthemes",
             "patchwork", "plotly", "ragg",
             "readr", "readxl", "scales")) {
   if (requireNamespace(p, quietly = TRUE)) suppressPackageStartupMessages(do.call(library, list(p)))

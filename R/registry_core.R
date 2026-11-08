@@ -571,17 +571,33 @@ ggspec_build_meta <- function() {
          label = (THEME_LABELS[[name]] %||% name),
          args = .ggspec_theme_args(paste0("theme_", name)))
   })
-  # ggthemes 主题
-  if (requireNamespace("ggthemes", quietly = TRUE)) {
-    for (fn in sort(grep("^theme_", getNamespaceExports("ggthemes"), value = TRUE))) {
-      if (fn %in% c("theme_get", "theme_update", "theme_replace", "theme_solid_calc")) next
-      if (!is.function(get(fn, envir = asNamespace("ggthemes")))) next
+  # 扩展主题：遍历所有「已安装且已启用的 theme 类扩展」
+  # ggthemes 有专门的中文标签表；其余包用通用扫描（去掉 theme_ 前缀作为 name）。
+  for (pkg in ext_active_for("theme")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) next
+    tns <- tryCatch(asNamespace(pkg), error = function(e) NULL)
+    if (is.null(tns)) next
+    fns <- tryCatch(grep("^theme_", getNamespaceExports(pkg), value = TRUE),
+                    error = function(e) character(0))
+    fns <- setdiff(fns, c("theme_get", "theme_update", "theme_replace",
+                          "theme_solid_calc", "theme_set"))
+    for (fn in sort(fns)) {
+      if (!is.function(tryCatch(get(fn, envir = tns), error = function(e) NULL))) next
       key <- sub("^theme_", "", fn)
+      # 避免与已有条目重名（含 ggplot2 内置主题）
+      if (any(vapply(themes, function(t) identical(t$name, key), logical(1)))) next
+      lbl <- if (identical(pkg, "ggthemes")) {
+        paste0((GGTHEMES_THEME_LABELS[[key]] %||% key), " (ggthemes)")
+      } else if (identical(pkg, "ggprism")) {
+        GGPRISM_THEME_LABELS[[key]] %||% paste0(key, " (ggprism)")
+      } else {
+        paste0(key, " (", pkg, ")")
+      }
       themes[[length(themes) + 1]] <- list(
-        name = key, fn = fn, package = "ggthemes",
-        label = paste0((GGTHEMES_THEME_LABELS[[key]] %||% key), " (ggthemes)"),
+        name = key, fn = paste0(pkg, "::", fn), package = pkg, label = lbl,
         args = (function() {
-          fm <- formals(get(fn, envir = asNamespace("ggthemes")))
+          fm <- tryCatch(formals(get(fn, envir = tns)), error = function(e) NULL)
+          if (is.null(fm)) return(list())
           lapply(setdiff(names(fm), "..."), function(nm) {
             PARAM_WIDGETS[[nm]] %||% pv(nm, "text")
           })
@@ -591,12 +607,7 @@ ggspec_build_meta <- function() {
   }
 
   # 扩展主题（受扩展开关控制）
-  # 目前只有 ggprism 需要专用的中文标签表；其他扩展的主题由上面的通用扫描处理
-  if ("ggprism" %in% ext_active_for("theme")) {
-    for (t in .ggspec_scan_pkg_themes("ggprism", GGPRISM_THEME_LABELS)) {
-      themes[[length(themes) + 1]] <- t
-    }
-  }
+  # 注：ggprism 主题已由上面的通用扩展主题扫描处理（含中文标签），此处不再单独追加
 
   ## 注释函数
   ann_fns <- grep("^annotation_", ls(ns), value = TRUE)
