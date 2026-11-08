@@ -1,13 +1,24 @@
 <script setup>
 // 拼图面板：图库（pins）+ 组合序列 + plot_layout / plot_annotation
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePinStore } from '../stores/pins'
 import { useSpecStore } from '../stores/spec'
+import { useMetaStore } from '../stores/meta'
 
 const pins = usePinStore()
 const spec = useSpecStore()
+const meta = useMetaStore()
 const saving = ref(false)
+
+// 拼图组合依赖 patchwork；关闭后禁用组合相关操作（图库存取本身不受影响）
+const patchworkOn = computed(() => !!(meta.ext && meta.ext.patchwork))
+
+function ensurePatchwork() {
+  if (patchworkOn.value) return true
+  ElMessage.warning('patchwork 扩展已在「高级 → 扩展管理」中关闭，无法拼图')
+  return false
+}
 
 const cb = () => {
   const c = spec.spec.combine
@@ -34,6 +45,7 @@ async function saveCurrent() {
 }
 
 function addSlot() {
+  if (!ensurePatchwork()) return
   spec.pushHistory()
   const c = cb()
   c.slots.push({ pin: pins.items[0]?.id || '', op: '+' })
@@ -106,10 +118,14 @@ onMounted(() => { pins.load() })
     </div>
 
     <div class="gg-subhead" style="margin-top:14px">组合序列</div>
+    <el-alert v-if="!patchworkOn" type="warning" :closable="false" show-icon
+      style="margin:0 12px 6px" title="patchwork 扩展已关闭">
+      拼图组合不可用。可在「高级 → 扩展管理」中重新启用；图库的存取不受影响。
+    </el-alert>
     <div class="p-row">
       <label>渲染组合图</label>
-      <el-switch :model-value="spec.composeActive" size="small"
-        @update:model-value="(v) => { const c = cb(); c.active = v; }" />
+      <el-switch :model-value="spec.composeActive" size="small" :disabled="!patchworkOn"
+        @update:model-value="(v) => { if (!ensurePatchwork()) return; const c = cb(); c.active = v; }" />
     </div>
 
     <div v-for="(sl, i) in cb().slots" :key="i" class="slot-row">
@@ -135,7 +151,7 @@ onMounted(() => { pins.load() })
       </el-button>
     </div>
     <div style="padding: 2px 12px 8px">
-      <el-button size="small" text :disabled="!pins.items.length" @click="addSlot">
+      <el-button size="small" text :disabled="!pins.items.length || !patchworkOn" @click="addSlot">
         <el-icon><Plus /></el-icon>添加槽位
       </el-button>
     </div>

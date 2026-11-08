@@ -618,6 +618,11 @@ spec_to_code <- function(spec, meta, state, var_name = "p", df_name = "df",
 ggspec_compose_code <- function(combine, meta, state) {
   slots <- combine$slots %||% list()
   if (!length(slots)) stop("拼图未选择图库槽位")
+  # 拼图依赖 patchwork；若用户在「扩展管理」里关掉了它，明确提示而不是产出跑不了的代码
+  if (!ext_is_enabled("patchwork")) {
+    stop("patchwork 扩展已在「高级 → 扩展管理」中关闭，无法生成拼图")
+  }
+  if (!requireNamespace("patchwork", quietly = TRUE)) stop("patchwork 未安装，无法拼图")
   warns <- character(0)
   pkgs <- c("ggplot2", "patchwork")
   chunks_display <- character(0)

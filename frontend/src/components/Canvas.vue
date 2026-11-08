@@ -25,6 +25,8 @@ const plotlyLoading = ref(false)
 const plotlyEl = ref(null)
 
 const imgSrc = computed(() => spec.imgSrc)
+// 扩展是否启用（关闭后隐藏/禁用对应入口，避免点了才报错）
+const plotlyOn = computed(() => !!(meta.ext && meta.ext.plotly))
 const statusParts = computed(() => {
   const parts = [`ggplot2 ${meta.ggplot2Version}`]
   if (spec.composeActive) parts.push(`拼图 ${spec.spec.combine.slots.length} 图`)
@@ -299,6 +301,10 @@ function addFirstLayer() {
 }
 
 async function showPlotly() {
+  if (!plotlyOn.value) {
+    ElMessage.warning('plotly 扩展已在「高级 → 扩展管理」中关闭')
+    return
+  }
   plotlyVisible.value = true
   plotlyLoading.value = true
   try {
@@ -441,9 +447,13 @@ async function drawPlotly() {
         <el-icon><StarFilled /></el-icon><span class="btn-label">存入图库</span>
       </el-button>
     </el-tooltip>
-    <el-button class="wide-only" size="small" :disabled="!spec.hasPlot" @click="showPlotly">
-      <el-icon class="el-icon--left"><DataLine /></el-icon><span class="btn-label">交互预览</span>
-    </el-button>
+    <el-tooltip :content="plotlyOn ? '生成可缩放、可悬停的交互图' : 'plotly 扩展已在「高级 → 扩展管理」中关闭'">
+      <span class="wide-only">
+        <el-button size="small" :disabled="!spec.hasPlot || !plotlyOn" @click="showPlotly">
+          <el-icon class="el-icon--left"><DataLine /></el-icon><span class="btn-label">交互预览</span>
+        </el-button>
+      </span>
+    </el-tooltip>
     <el-dropdown class="wide-only" split-button size="small" type="primary" title="导出 PNG"
       @click="doExport('png')" @command="doExport">
       <el-icon><Download /></el-icon><span class="btn-label">导出 PNG</span>
@@ -466,7 +476,7 @@ async function drawPlotly() {
           <el-dropdown-item command="pin" :disabled="!spec.spec.layers.length || spec.composeActive">
             存入图库
           </el-dropdown-item>
-          <el-dropdown-item command="plotly" :disabled="!spec.hasPlot">交互预览</el-dropdown-item>
+          <el-dropdown-item command="plotly" :disabled="!spec.hasPlot || !plotlyOn">交互预览</el-dropdown-item>
           <el-dropdown-item command="png" divided :disabled="!spec.hasPlot">导出 PNG</el-dropdown-item>
           <el-dropdown-item command="svg" :disabled="!spec.hasPlot">导出 SVG</el-dropdown-item>
           <el-dropdown-item command="pdf" :disabled="!spec.hasPlot">导出 PDF</el-dropdown-item>

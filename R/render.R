@@ -457,6 +457,7 @@ ggspec_resolve_data <- function(spec, state) {
 # spec -> plotly 交互 JSON
 ggspec_to_plotly <- function(spec, meta, state, width, height) {
   if (!requireNamespace("plotly", quietly = TRUE)) stop("plotly 未安装")
+  if (!ext_is_enabled("plotly")) stop("plotly 扩展已在「高级 → 扩展管理」中关闭")
   data_df <- ggspec_resolve_data(spec, state)
   gen <- spec_to_code(spec, meta, state)
   env <- .ggspec_eval_env(data_df)
