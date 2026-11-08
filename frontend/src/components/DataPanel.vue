@@ -5,13 +5,18 @@ import { ElMessage } from 'element-plus'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
+import { useMetaStore } from '../stores/meta'
 import { setExprEl } from '../exprInsert'
 import DataPreviewDialog from './DataPreviewDialog.vue'
 import ColumnActions from './ColumnActions.vue'
+import ActionBar from './ActionBar.vue'
+
+const emit = defineEmits(['project'])   // 工具区的项目操作交给 App 处理
 
 const data = useDataStore()
 const spec = useSpecStore()
 const ui = useUiStore()
+const meta = useMetaStore()
 
 const pasteVisible = ref(false)
 const pasteText = ref('')
@@ -151,14 +156,15 @@ function openPreview(colName = '') {
     @dragover.prevent="dragging = true"
     @dragleave="dragging = false"
     @drop.prevent="onFile">
-    <div class="gg-panel-title">
-      <el-icon><Coin /></el-icon>数据
+    <div class="dp-brand" :title="`ggplot2 ${meta.ggplot2Version}`">
+      <b>ggplotGUI</b>
+      <span class="dp-brand-sep" />
+      <el-icon :size="13"><Coin /></el-icon><span class="dp-brand-sec">数据</span>
       <span style="flex:1" />
       <el-button text size="small" class="collapse-btn" title="收起数据面板" @click="ui.toggleLeft()">
         <el-icon><ArrowLeft /></el-icon>
       </el-button>
     </div>
-
     <!-- 数据源 -->
     <div class="dp-srcrow">
       <el-dropdown trigger="click" @command="(c) => c === 'up' ? fileInput.click() : (pasteVisible = true)">
@@ -251,6 +257,9 @@ function openPreview(colName = '') {
     <input ref="fileInput" type="file" hidden accept=".csv,.tsv,.txt,.xlsx,.xls,.rds,.json,.rdata,.rda"
       @change="onFile" />
 
+    <!-- 底部工具区（原顶栏）：渲染 / 保存状态 / 项目 / 暗色 -->
+    <ActionBar @project="(c) => emit('project', c)" />
+
     <!-- 加工对话框 -->
     <el-dialog v-model="prepVisible" title="数据加工" width="640" append-to-body>
       <div class="gg-subhead" style="padding-top:0">行筛选（R 逻辑表达式；可点击下方列名插入）</div>
@@ -314,6 +323,21 @@ function openPreview(colName = '') {
 </template>
 
 <style scoped>
+/* 品牌条：原顶栏 logo 迁入左栏顶部（顶栏已移除）
+   高度与画布工具栏（--gg-strip-h）对齐，两栏顶部齐平 */
+.dp-brand {
+  display: flex; align-items: center; gap: 7px; flex-shrink: 0;
+  height: var(--gg-strip-h); padding: 0 10px;
+  background: #14293a; color: #e8eef4;
+  border-bottom: 1px solid rgba(0, 0, 0, .25);
+}
+.dp-brand b { font-size: 14px; letter-spacing: .2px; font-weight: 650; }
+.dp-brand-sep { width: 1px; height: 14px; background: rgba(255, 255, 255, .18); margin: 0 3px; }
+.dp-brand-sec { font-size: 12.5px; color: #c3d2de; }
+.dp-brand .collapse-btn { color: #a9b8c6; height: 22px; }
+.dp-brand .collapse-btn:hover { color: #fff; }
+html.dark .dp-brand { background: #0f2029; }
+
 .dp-panel {
   display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
   position: relative;

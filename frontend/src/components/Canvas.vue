@@ -584,7 +584,18 @@ async function drawPlotly() {
   display: flex; align-items: center; gap: 6px; padding: 0 12px;
   height: var(--gg-strip-h);
   border-bottom: 1px solid var(--gg-border); background: var(--gg-panel); flex-shrink: 0;
-  flex-wrap: nowrap; min-width: 0;
+  flex-wrap: nowrap; min-width: 0; overflow: hidden;
+}
+/* 页签与尺寸这类"必须完整显示"的控件不允许收缩；其余按钮允许被裁 */
+.gg-canvas-head :deep(.el-radio-group) { flex-shrink: 0; }
+.gg-canvas-head :deep(.el-button) { flex-shrink: 0; }
+.btn-label { white-space: nowrap; }
+/* 画布变窄时逐级收起次要按钮：先隐文字，再整体隐藏 */
+@media (max-width: 1480px) {
+  .gg-canvas-head .wide-only .btn-label { display: none; }
+}
+@media (max-width: 1240px) {
+  .gg-canvas-head .wide-only { display: none; }
 }
 .render-spin { position: absolute; top: var(--gg-strip-h); right: 22px; z-index: 5; }
 .err-box { padding: 8px 14px; flex-shrink: 0; }

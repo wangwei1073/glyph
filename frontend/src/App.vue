@@ -11,6 +11,7 @@ import { downloadBlob, snapshotData, getEdits, importEdits, pasteData } from './
 import DataPanel from './components/DataPanel.vue'
 import Canvas from './components/Canvas.vue'
 import EditorTabs from './components/EditorTabs.vue'
+import ActionBar from './components/ActionBar.vue'
 
 const meta = useMetaStore()
 const data = useDataStore()
@@ -46,16 +47,6 @@ const draftTime = computed(() => {
   if (!draftOffer.value) return ''
   const d = new Date(draftOffer.value.at)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-})
-const saveLabel = computed(() => {
-  if (!spec.spec.layers.length) return '新建'
-  return spec.dirty ? '未保存' : '已保存'
-})
-const saveHint = computed(() => {
-  if (!spec.spec.layers.length) return '新项目：添加图层后开始'
-  return spec.dirty
-    ? '有未保存的修改（草稿已自动存到本机，可随时恢复）'
-    : '当前内容已保存到项目文件'
 })
 function onBeforeUnload() { if (spec.dirty) spec.saveDraft() }
 
@@ -270,55 +261,6 @@ function onProjectCmd(cmd) {
   </div>
 
   <div v-else class="gg-layout">
-    <header class="gg-header">
-      <div class="h-left">
-        <div class="gg-logo" :title="`ggplot2 ${meta.ggplot2Version}`">
-          <b>ggplotGUI</b>
-        </div>
-      </div>
-
-      <div class="h-mid" title="渲染控制">
-        <el-tooltip content="自动渲染：修改后自动出图；关闭后用右侧按钮手动渲染">
-          <el-switch v-model="spec.autoRender" size="small" />
-        </el-tooltip>
-        <span class="h-mid-label" :class="{ off: !spec.autoRender }">
-          {{ spec.autoRender ? '自动渲染' : '手动渲染' }}
-        </span>
-        <el-button type="primary" size="small" :loading="spec.rendering" @click="spec.renderNow()">
-          <el-icon class="el-icon--left"><MagicStick /></el-icon>渲染
-        </el-button>
-      </div>
-
-      <div class="h-right">
-        <el-tooltip :content="saveHint">
-          <span class="gg-save-state" :class="{ dirty: spec.dirty, empty: !spec.spec.layers.length }">
-            <i class="dot" />{{ saveLabel }}
-          </span>
-        </el-tooltip>
-        <el-dropdown trigger="click" @command="onProjectCmd">
-          <el-button text class="h-dd">
-            <el-icon><FolderOpened /></el-icon>项目<el-icon><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="save">
-                <el-icon><FolderAdd /></el-icon>保存项目 (JSON)
-              </el-dropdown-item>
-              <el-dropdown-item command="load">
-                <el-icon><FolderOpened /></el-icon>载入项目
-              </el-dropdown-item>
-              <el-dropdown-item command="clear" divided>
-                <el-icon><Delete /></el-icon>清空画布（恢复默认）
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-tooltip content="暗色模式"><el-button text @click="toggleDark">
-          <el-icon><component :is="spec.dark ? 'Sunny' : 'Moon'" /></el-icon></el-button>
-        </el-tooltip>
-      </div>
-    </header>
-
     <!-- 未保存草稿恢复条：上次异常退出/误关时出现 -->
     <div v-if="draftOffer" class="gg-recover">
       <el-icon><WarningFilled /></el-icon>
@@ -329,11 +271,17 @@ function onProjectCmd(cmd) {
     </div>
 
     <div class="gg-main">
-      <div v-show="ui.leftOpen" class="gg-left"><DataPanel /></div>
+      <div v-show="ui.leftOpen" class="gg-left">
+        <DataPanel @project="onProjectCmd" />
+      </div>
       <button v-show="!ui.leftOpen" class="gg-side-strip" title="展开数据面板"
         @click="ui.toggleLeft()">
         <el-icon><ArrowRight /></el-icon>
       </button>
+
+      <!-- 左栏收起时：工具区浮在左下角，保证渲染/项目仍可操作 -->
+      <ActionBar v-if="!ui.leftOpen" compact class="gg-float-tools"
+        @project="onProjectCmd" />
 
       <div class="gg-center"><Canvas /></div>
 
