@@ -121,7 +121,7 @@ body {
   color: var(--gg-text-1);
 }
 .gg-layout { height: 100%; display: flex; flex-direction: column; }
-.gg-main { flex: 1; min-height: 0; display: flex; position: relative; }
+.gg-main { flex: 1; min-height: 0; display: flex; }
 .gg-left {
   width: clamp(240px, 21vw, 292px); min-width: 240px; flex-shrink: 0;
   border-right: 1px solid var(--gg-border);
@@ -142,13 +142,6 @@ body {
   display: flex; justify-content: center; align-items: flex-start;
 }
 .gg-side-strip:hover { color: var(--gg-brand); background: var(--gg-panel-2); }
-
-/* 左栏收起时的浮动工具区（渲染/项目/暗色仍要可达） */
-.gg-float-tools {
-  position: absolute; left: 30px; bottom: 12px; z-index: 30;
-  width: 168px; box-shadow: 0 4px 16px rgba(0, 0, 0, .16);
-  backdrop-filter: blur(4px);
-}
 .gg-panel-title .collapse-btn { padding: 0 4px; height: 22px; color: var(--gg-text-4); }
 .gg-panel-title .collapse-btn:hover { color: var(--gg-brand); }
 
@@ -177,3 +170,161 @@ body {
 
 .gg-mono { font-family: Consolas, "JetBrains Mono", "Courier New", monospace; }
 
+/* 原顶栏已移除：渲染/项目/暗色并入左栏底部工具区（ActionBar.vue） */
+
+/* 草稿恢复条 */
+.gg-recover {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 6px 14px; font-size: 12px; color: var(--gg-text-2);
+  background: #fff8e8; border-bottom: 1px solid #f0e0bd;
+}
+html.dark .gg-recover { background: #3a2f18; border-bottom-color: #5a4a25; color: #e8d9b8; }
+.gg-recover .el-icon { color: #c98a1a; }
+.gg-recover-sub { color: var(--gg-text-3); font-size: 11px; }
+.gg-recover .el-button:first-of-type { margin-left: auto; }
+
+/* 数据列类型徽标 */
+.col-type { font-size: 11px; padding: 0 4px; border-radius: var(--gg-r-sm); line-height: 16px; flex-shrink: 0; font-weight: 500; }
+.col-type.numeric { background: #e1effc; color: #2170b5; }
+.col-type.character { background: #f3e9d7; color: #a4700f; }
+.col-type.factor { background: #e8f3e4; color: #3e8929; }
+.col-type.logical { background: #efe3f5; color: #8d3fb0; }
+.col-type.date, .col-type.datetime { background: #fdeae0; color: #c55a11; }
+html.dark .col-type.numeric { background: #14344f; color: #7cb8e8; }
+html.dark .col-type.character { background: #46371c; color: #ddb26a; }
+html.dark .col-type.factor { background: #1d3a17; color: #8cc973; }
+html.dark .col-type.logical { background: #3a2150; color: #c48ade; }
+html.dark .col-type.date { background: #4f2611; color: #e89a6b; }
+
+/* 图层面板 */
+.layer-card {
+  border: 1px solid var(--gg-border); border-radius: var(--gg-r-md); padding: 8px 10px;
+  margin: 6px 10px; cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s;
+  display: flex; align-items: center; gap: 8px; background: var(--gg-panel);
+}
+.layer-card:hover { border-color: var(--gg-brand); box-shadow: var(--gg-shadow-1); }
+.layer-card.active { border-color: var(--gg-brand); box-shadow: 0 0 0 2px rgba(47, 111, 191, .16); }
+/* 隐藏的图层：整体淡化 + 虚线边框，序号与文字降饱和，避免与正常层混淆 */
+.layer-card.hidden { opacity: .5; border-style: dashed; background: transparent; }
+.layer-card.hidden .drag-no { background: var(--gg-text-3, #9aa5b1); }
+.layer-card.hidden:hover { opacity: .8; }
+.hidden-tag {
+  display: inline-block; margin-left: 5px; padding: 0 4px;
+  font-size: 9.5px; line-height: 14px; border-radius: 3px;
+  background: rgba(128, 128, 128, .16); color: var(--gg-text-3, #6b7480);
+  vertical-align: 1px; font-weight: 400;
+}
+.eye-btn.off { color: var(--gg-text-3, #9aa5b1); }
+/* 多重标度开关：开启时高亮，提示该层会重开一套 fill 标度 */
+.reset-btn.on { color: var(--gg-brand, #2f6fbf); background: rgba(47, 111, 191, .12); }
+.layer-card .drag-no {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  background: var(--gg-brand); color: #fff; font-size: 11px;
+  display: flex; align-items: center; justify-content: center; font-weight: 600;
+}
+.layer-ops { margin-left: auto; display: flex; gap: 2px; }
+.layer-ops .el-button {
+  padding: 0; width: 24px; min-width: 24px; height: 24px; border-radius: var(--gg-r-sm);
+}
+.layer-ops .el-button:hover { background: var(--gg-panel-2); }
+
+/* geom 选择网格 */
+.geom-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 4px 8px 8px;
+}
+.geom-chip {
+  border: 1px solid var(--gg-border); border-radius: var(--gg-r-ctl); padding: 6px 8px;
+  cursor: pointer; font-size: var(--gg-fs-sm); transition: all .12s; user-select: none;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.geom-chip:hover { border-color: var(--gg-brand); color: var(--gg-brand); background: var(--gg-brand-weak); }
+
+/* 参数行 */
+.p-row { display: flex; align-items: center; gap: 8px; padding: 4px 12px; min-height: 32px; }
+.p-row > label { width: 104px; flex-shrink: 0; font-size: var(--gg-fs-sm); color: var(--gg-text-2); }
+.p-row > .p-ctl { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.p-row .el-input-number, .p-row .el-select, .p-row .el-input { width: 100%; max-width: 240px; }
+.fx-btn { flex-shrink: 0; }
+.fx-btn.on { color: var(--gg-brand); font-weight: 700; }
+
+/* 画布 */
+/* 画布：中性底 + 细边框，不再用棋盘格（预览是不透明白底图，棋盘格会误导为透明） */
+.gg-canvas-wrap {
+  flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+  padding: var(--gg-sp-4); overflow: auto;
+  background: var(--gg-canvas);
+}
+html.dark .gg-canvas-wrap { background: var(--gg-canvas); }
+.gg-canvas-img {
+  max-width: 100%; max-height: 100%;
+  box-shadow: var(--gg-shadow-2); background: #fff;
+  border: 1px solid rgba(0, 0, 0, .06);
+}
+.gg-canvas-img.zoom100 { max-width: none; max-height: none; }
+.gg-empty-hint { color: var(--gg-text-3); text-align: center; user-select: none; }
+.gg-empty-hint .big { font-size: 42px; margin-bottom: 10px; opacity: .35; }
+
+/* 代码块 */
+.code-block {
+  margin: 0; padding: 12px 14px; white-space: pre; font-size: var(--gg-fs-sm); line-height: 1.6;
+  font-family: Consolas, "JetBrains Mono", monospace;
+  tab-size: 2;
+}
+.code-head {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--gg-border); position: sticky; top: 0;
+  background: var(--gg-panel); z-index: 2;
+}
+
+/* 折叠面板微调 */
+.el-collapse { --el-collapse-border-color: var(--gg-border); }
+.el-collapse-item__header { font-size: var(--gg-fs-md); }
+.gg-subhead {
+  font-size: var(--gg-fs-xs); font-weight: 600; color: var(--gg-text-3);
+  padding: 12px 12px 4px; letter-spacing: .2px;
+}
+
+.gg-tabs > .el-tabs__header { margin-bottom: 0; padding: 0 8px; }
+.gg-tabs .el-tabs__nav-wrap::after { height: 1px; }
+.gg-tabs .el-tabs__content { display: none; }
+.gg-tab-scroll { padding-bottom: 30px; }
+
+.el-message-box { max-width: 520px; }
+
+/* 浮层圆角与阴影统一 */
+.el-popper.is-light,
+.el-select__popper,
+.el-dropdown__popper {
+  border-radius: var(--gg-r-lg);
+  box-shadow: var(--gg-shadow-2);
+  border-color: var(--gg-border);
+}
+.el-dialog,
+.el-message-box { border-radius: var(--gg-r-lg); }
+
+/* 常用小字与说明（替代模板里的内联字号） */
+.gg-hint {
+  font-size: var(--gg-fs-xs);
+  color: var(--gg-text-3);
+  line-height: 1.5;
+}
+.gg-hint-md { font-size: var(--gg-fs-sm); color: var(--gg-text-3); line-height: 1.5; }
+.gg-section-gap { margin-top: var(--gg-sp-4); }
+
+/* ---- 响应式：详情见 UI_REVIEW.md 第七节 ---- */
+.narrow-only { display: none; }
+
+@media (max-width: 1440px) {
+  /* 工具栏放不下时先收文字，只留图标 */
+  .gg-canvas-head .btn-label { display: none; }
+  .gg-canvas-head { gap: 4px; padding: 6px 8px; }
+}
+
+@media (max-width: 1200px) {
+  /* 再窄就把次要动作收进「更多」菜单 */
+  .narrow-only { display: inline-flex; }
+  .wide-only { display: none !important; }
+  .size-btn .size-text { display: none; }
+  .gg-left { min-width: 220px; }
+  .gg-right { min-width: 320px; }
+}
