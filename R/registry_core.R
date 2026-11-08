@@ -407,7 +407,9 @@ ggspec_build_meta <- function() {
     )
   }
   # 扩展 geom
-  for (pkg in c("ggrepel", "ggthemes")) {
+  # 第一批接入：ggrepel / ggthemes（原有）+ ggpubr / ggbeeswarm / ggtext / ggside（新增）
+  # 这些包的 geom_* 都在各自命名空间，代码生成会自动加 pkg:: 前缀（见 .qualified_fn）
+  for (pkg in c("ggrepel", "ggthemes", "ggpubr", "ggbeeswarm", "ggtext", "ggside")) {
     for (g in .ggspec_scan_pkg_geoms(pkg, NULL)) {
       f <- tryCatch(get(g$fn, envir = asNamespace(pkg)), error = function(e) NULL)
       if (is.null(f)) next
@@ -614,6 +616,11 @@ ggspec_build_meta <- function() {
       ggthemes = requireNamespace("ggthemes", quietly = TRUE),
       ggrepel = requireNamespace("ggrepel", quietly = TRUE),
       ggprism = requireNamespace("ggprism", quietly = TRUE),
+      # 第一批新接入
+      ggpubr = requireNamespace("ggpubr", quietly = TRUE),
+      ggbeeswarm = requireNamespace("ggbeeswarm", quietly = TRUE),
+      ggtext = requireNamespace("ggtext", quietly = TRUE),
+      ggside = requireNamespace("ggside", quietly = TRUE),
       patchwork = requireNamespace("patchwork", quietly = TRUE),
       plotly = requireNamespace("plotly", quietly = TRUE)
     )

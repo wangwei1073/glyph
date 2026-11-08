@@ -28,11 +28,28 @@
   paste0("aes(", paste(parts, collapse = ", "), ")")
 }
 
+# ---- 扩展函数限定名 ---------------------------------------------------------
+# ggplot2 自身的函数保持裸名（如 geom_point），扩展包函数写成 pkg::fn。
+# 这样生成的代码在任何只 library(ggplot2) 的环境里都能跑，
+# 也避免与用户环境里的同名函数冲突。
+.qualified_fn <- function(fn, pkg) {
+  fn <- as.character(fn %||% "")
+  if (!nzchar(fn)) return(fn)
+  pkg <- as.character(pkg %||% "ggplot2")
+  # 已带前缀（如 "ggpubr::stat_compare_means"）则原样返回
+  if (grepl("::", fn, fixed = TRUE)) return(fn)
+  if (identical(pkg, "ggplot2") || !nzchar(pkg)) return(fn)
+  paste0(pkg, "::", fn)
+}
+
 # 图层调用
 .layer_call <- function(layer, meta) {
   geom_name <- layer$geom %||% "point"
   gmeta <- meta$geom_by_name[[geom_name]]
   fn <- gmeta$fn %||% paste0("geom_", geom_name)
+  # 扩展包的图层函数不在 ggplot2 命名空间里，必须写成 pkg::fn，
+  # 否则渲染时报「没有 geom_xxx 这个函数」（ggbeeswarm / ggtext / ggside 等）
+  fn <- .qualified_fn(fn, gmeta$package %||% "ggplot2")
 
   args <- list()
   aes_line <- .aes_line(layer$aes)
@@ -55,6 +72,7 @@
       # identity 无参数 → 不输出
     } else {
       pfn <- meta$position_fn[[pos$type]] %||% paste0("position_", pos$type)
+      pfn <- .qualified_fn(pfn, meta$fn_package[[pfn]] %||% "ggplot2")   # 先用裸名查包名
       args[["position"]] <- paste0(pfn, "(", .args_line(pargs), ")")
     }
   }
@@ -80,6 +98,7 @@
   key <- paste0(aes, "|", type)
   fn <- meta$scale_fn[[key]]
   if (is.null(fn)) return(list(code = NULL, warn = sprintf("未找到标度函数 scale_%s_%s", aes, type)))
+  fn <- .qualified_fn(fn, meta$fn_package[[fn]] %||% "ggplot2")   # 先用裸名查包名再加前缀
   args <- list()
   for (pnm in names(sc$params %||% list())) {
     if (has_val(sc$params[[pnm]])) args[[pnm]] <- .enc(sc$params[[pnm]])
@@ -103,6 +122,7 @@
   type <- coord$type
   flip <- isTRUE(coord$flip)
   fn <- meta$coord_fn[[type]] %||% paste0("coord_", type)
+  fn <- .qualified_fn(fn, meta$fn_package[[fn]] %||% "ggplot2")
   args <- list()
   for (pnm in names(coord$params %||% list())) {
     if (has_val(coord$params[[pnm]])) args[[pnm]] <- .enc(coord$params[[pnm]])
@@ -189,6 +209,7 @@
     line
   } else if (identical(kind, "fn")) {
     fn <- meta$annotation_fn[[a$name %||% ""]] %||% paste0("annotation_", a$name %||% "")
+  fn <- .qualified_fn(fn, meta$fn_package[[fn]] %||% "ggplot2")
     args <- list()
     for (pnm in names(a$params %||% list())) {
       if (has_val(a$params[[pnm]])) args[[pnm]] <- .enc(a$params[[pnm]])
@@ -246,6 +267,7 @@
   if (nzchar(base)) {
     tmeta <- meta$theme_by_name[[base]]
     fn <- tmeta$fn %||% paste0("theme_", base)
+    fn <- .qualified_fn(fn, (tmeta$package %||% "ggplot2"))
     args <- list()
     for (pnm in names(theme$args %||% list())) {
       if (has_val(theme$args[[pnm]])) args[[pnm]] <- .enc(theme$args[[pnm]])

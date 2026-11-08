@@ -77,12 +77,50 @@ GEOM_META <- list(
   gm("sf_text",  "空间文本",          "多边形与地图", "sf 对象上的文本"),
   gm("segment",  "线段",              "特殊",     "(x,y) 到 (xend,yend) 的线段"),
   gm("spoke",    "辐条",              "特殊",     "带角度长度的辐条"),
-  gm("blank",    "空白占位",          "特殊",     "什么都不画（占位/影响标度）")
+  gm("blank",    "空白占位",          "特殊",     "什么都不画（占位/影响标度）"),
+
+  # ---- 扩展包 geom（第一批）------------------------------------------------
+  # ggbeeswarm：蜂群图，算法避让重叠点（比 jitter 的随机抖动更规整）
+  gm("beeswarm",     "蜂群图",        "点与线",   "ggbeeswarm：按算法错开重叠的点"),
+  gm("quasirandom",  "准随机散点",    "点与线",   "ggbeeswarm：类蜂群的准随机排布"),
+  # ggtext：富文本标签，支持 markdown/HTML 片段
+  gm("richtext",     "富文本标签",    "文本与标签", "ggtext：支持 <b>/<i>/<span> 样式的文本"),
+  gm("textbox",      "富文本框",      "文本与标签", "ggtext：带换行与样式文本框"),
+  # ggpubr：统计标注图层（追加图层，而非 stat= 参数）
+  gm("signif",       "显著性标注",    "区间与误差", "ggpubr：自动计算并标注组间显著性"),
+  gm("bracket",      "显著性括号",    "区间与误差", "ggpubr：两组或多组括号标注"),
+  gm("pwc",          "成对比较",      "区间与误差", "ggpubr：两两比较并标注 p 值"),
+  gm("exec",         "表达式标注",    "文本与标签", "ggpubr：执行 R 表达式后标注结果")
 )
 GEOM_META <- setNames(GEOM_META, vapply(GEOM_META, function(x) x$name, character(1)))
 
+# ---- ggside 的 36 个边际 geom：模式高度规整，程序化生成标签 ----------------
+# 命名规则：xside/yside + geom 类型（histogram/density/boxplot/violin/…）
+# 36 条手写既冗长又易错，这里按「侧 + 类型」组合生成，缺项自动跳过。
+GG_SIDE_GEOM <- local({
+  side_label <- c(xside = "X 轴边际", yside = "Y 轴边际")
+  kind_label <- c(
+    histogram = "直方图", density = "密度曲线", boxplot = "箱线图", violin = "小提琴图",
+    point = "散点", line = "折线", bar = "条形", col = "柱状", tile = "瓦片",
+    text = "文本", label = "标签", path = "路径", segment = "线段", hline = "水平线",
+    vline = "垂直线", abline = "参考线", `function` = "函数曲线", freqpoly = "频率多边形"
+  )
+  out <- list()
+  for (sd in names(side_label)) {
+    for (kd in names(kind_label)) {
+      nm <- paste0(sd, kd)
+      out[[nm]] <- gm(nm, paste0(side_label[[sd]], "·", kind_label[[kd]]), "边际分布",
+                      sprintf("ggside：在 %s 绘制 %s", substr(side_label[[sd]], 1, 1), kind_label[[kd]]))
+    }
+  }
+  out
+})
+for (nm in names(GG_SIDE_GEOM)) {
+  if (is.null(GEOM_META[[nm]])) GEOM_META[[nm]] <- GG_SIDE_GEOM[[nm]]
+}
+
 GEOM_GROUP_ORDER <- c("点与线", "条形与频数", "分布", "区间与误差", "文本与标签",
-                      "二维分箱与密度", "瓦片与栅格", "多边形与地图", "参考线", "特殊")
+                      "二维分箱与密度", "瓦片与栅格", "多边形与地图", "边际分布", "参考线", "特殊")
 
 # ---- 数据形态分组（cheatsheet 式：按「你手上是什么数据」分类） --------------
 # 界面可在「按图形族 / 按数据形态」之间切换；每个 geom 只归入一类，保证列表不重复。
@@ -90,7 +128,7 @@ GEOM_SHAPE_ORDER <- c(
   "一变量 · 连续", "一变量 · 离散",
   "两变量 · 连续×连续", "两变量 · 离散×连续", "两变量 · 离散×离散",
   "二维分布（双连续）", "三变量", "区间与误差",
-  "图形基元", "地图与空间", "特殊"
+  "图形基元", "地图与空间", "边际分布", "特殊"
 )
 GEOM_SHAPE <- c(
   # 一变量
@@ -120,9 +158,15 @@ GEOM_SHAPE <- c(
   vline = "图形基元", `function` = "图形基元",
   # 地图与空间
   map = "地图与空间", sf = "地图与空间", sf_label = "地图与空间", sf_text = "地图与空间",
+  # 扩展包（第一批）
+  beeswarm = "两变量 · 离散×连续", quasirandom = "两变量 · 离散×连续",
+  richtext = "两变量 · 连续×连续", textbox = "两变量 · 连续×连续",
+  signif = "区间与误差", bracket = "区间与误差", pwc = "区间与误差", exec = "文本与标签",
   # 特殊
   blank = "特殊", rangeframe = "特殊"
 )
+# ggside 的边际 geom 统一归入「边际分布」数据形态
+for (nm in names(GG_SIDE_GEOM)) GEOM_SHAPE[[nm]] <- "边际分布"
 
 # ---- 美学映射元数据 ---------------------------------------------------------
 AES_META <- list(

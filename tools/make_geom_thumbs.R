@@ -110,12 +110,53 @@ T <- list(
   rect           = list(aes = c(xmin = "xmin", xmax = "xmax", ymin = "ymin", ymax = "ymax", fill = "cat"), data = "grid"),
   polygon        = list(aes = c(x = "x", y = "y", group = "group"), data = "poly"),
   segment        = list(aes = c(x = "x", y = "y", xend = "xend", yend = "yend")),
-  spoke          = list(aes = c(x = "x", y = "y", angle = "angle", radius = "radius"))
+  spoke          = list(aes = c(x = "x", y = "y", angle = "angle", radius = "radius")),
+
+  # ---- 扩展包 geom（第一批）----
+  beeswarm       = list(aes = c(x = "cat", y = "y", colour = "cat")),
+  quasirandom    = list(aes = c(x = "cat", y = "y", colour = "cat")),
+  richtext       = list(aes = c(x = "x", y = "y", label = "lab")),
+  textbox        = list(aes = c(x = "x", y = "y", label = "lab")),
+  signif         = list(aes = c(x = "cat", y = "y")),
+  # bracket 的默认 comparisons 依赖分组，需显式给 y.position 才能出图
+  bracket        = list(aes = c(x = "cat", y = "y"), params = list(y.position = 40)),
+  pwc            = list(aes = c(x = "cat", y = "y")),
+  exec           = list(aes = c(x = "x", y = "y", label = "lab"))
 )
+# ggside 的 36 个边际 geom：统一用「主图散点 + 边际层」示意，
+# 否则只有边际图层会因缺少主图而看不出效果。
+# 注意：部分边际类型有必需参数（vline/hline 要 intercept、text/label 要 label、
+# function 要 fun、segment 要端点），缺参数会 setup geom 失败，需逐个给出。
+GG_SIDE_THUMBS <- local({
+  # 每类需要的额外参数（缺失则为空）
+  extra <- list(
+    vline = list(xintercept = 12),
+    hline = list(yintercept = 6),
+    text = list(label = "p"),
+    label = list(label = "p"),
+    `function` = list(fun = list(expr = "~ .x")),
+    segment = list(xend = 20, yend = 8)
+  )
+  kinds <- c("histogram", "density", "boxplot", "violin", "point", "line", "bar",
+             "col", "tile", "text", "label", "path", "segment", "hline", "vline",
+             "abline", "function", "freqpoly")
+  out <- list()
+  for (sd in c("xside", "yside")) {
+    for (kd in kinds) {
+      nm <- paste0(sd, kd)
+      out[[nm]] <- list(aes = c(x = "x", y = "y"), data = "d", side = TRUE,
+                        params = extra[[kd]] %||% list())
+    }
+  }
+  out
+})
 # 需要专用数据、无法用合成数据示意的 geom → 生成占位图
 SKIP <- c("map", "sf", "sf_label", "sf_text", "blank", "hex",
           # hex 需要 hexbin 包；ggrepel 的富文本标签需要 marquee 包 —— 未安装时用占位图
-          "marquee_repel")
+          "marquee_repel",
+          # ggpubr::geom_bracket 必须在 comparisons 里给出具体的组名，
+          # 合成数据无法通用示意，用占位图（实际使用时由用户指定比较组）
+          "bracket")
 
 pick_data <- function(key) {
   switch(if (is.null(T[[key]]$data)) "d" else T[[key]]$data,
@@ -123,7 +164,8 @@ pick_data <- function(key) {
 }
 
 build_spec <- function(key) {
-  cfg <- T[[key]] %||% list()
+  # ggside 的边际 geom 定义在 GG_SIDE_THUMBS 里
+  cfg <- T[[key]] %||% GG_SIDE_THUMBS[[key]] %||% list()
   aes_map <- cfg$aes %||% c(x = "x", y = "y")
   aes_list <- lapply(aes_map, function(col) list(map = as.character(col)))
   layer <- list(geom = key, stat = "", position = list(type = "", params = list()),
@@ -137,9 +179,19 @@ build_spec <- function(key) {
                     y = list(map = col_of("y", "y")))
   blank <- list(geom = "blank", stat = "", position = list(type = "", params = list()),
                 aes = blank_aes, params = list(), aesParams = list())
+  layers <- list(blank, layer)
+  # ggside 的边际 geom 必须配一个主图图层，否则看不出「边际」效果
+  # （它们画在面板外侧，单独存在时是一片空白）
+  if (isTRUE(cfg$side)) {
+    main <- list(geom = "point", stat = "", position = list(type = "", params = list()),
+                 aes = list(x = list(map = col_of("x", "x")),
+                            y = list(map = col_of("y", "y"))),
+                 params = list(), aesParams = list())
+    layers <- list(blank, main, layer)
+  }
   list(
     data = list(source = list(type = "none")),
-    layers = list(blank, layer),
+    layers = layers,
     scales = list(),
     labs = list(),
     theme = list(base = cfg$theme %||% "void", args = list(base_size = 8),
@@ -169,7 +221,7 @@ ok <- 0L; fail <- 0L
 for (g in META$geoms) {
   key <- g$name
   dst <- file.path(out_dir, paste0(key, ".png"))
-  if (key %in% SKIP || is.null(T[[key]])) {
+  if (key %in% SKIP || (is.null(T[[key]]) && is.null(GG_SIDE_THUMBS[[key]]))) {
     file.copy(file.path(out_dir, "_placeholder.png"), dst, overwrite = TRUE)
     cat(sprintf("  [占位] %s\n", key))
     next
