@@ -24,7 +24,10 @@
 
 ### 数据
 - 40+ 内置数据集（ggplot2 的 mpg / diamonds / economics… 与 base R 数据集）
-- 上传 CSV / TSV / TXT / XLSX / XLS / RDS / JSON / RData
+- **统一导入向导弹层**：文件 / 剪贴板 / SQLite 数据库，先配置（分隔符、编码、表头、跳过行）
+  再预览前 50 行，确认后导入；预览带列类型徽标
+- 文件：CSV / TSV / TXT / XLSX / XLS / RDS / JSON / RData；SQLite：选择 .db 文件后浏览表、预览 100 行再导入
+- 导入后记录来源（文件 / 库表），随项目保存，供图注与可复现包使用
 - 粘贴表格文本（自动识别逗号/制表符分隔）
 - 数据加工：行筛选（R 表达式）、新增列、随机抽样 + 种子
 - 列面板带类型徽标（numeric / character / factor / date…）与唯一值预览
@@ -130,6 +133,7 @@ Rscript tests/test_project_data.R   # 项目数据：落盘 / 快照 / 重建 / 
 Rscript tests/test_bundle.R         # 可复现包：图 + 数据 + 代码 + 图注 + 项目文件
 Rscript tests/test_export_check.R   # 导出前检查：白底 / dpi / 尺寸 / 字号 / 可渲染性
 Rscript tests/test_ext_install.R    # 扩展一键安装：白名单 / 并发保护 / 状态机
+Rscript tests/test_import.R         # 数据导入：文件预览/提交/来源记录/SQLite
 
 # 重新生成 geom 示意图（改了默认主题/映射后跑一次，产物在 frontend/public/geom-thumbs）
 Rscript tools/make_geom_thumbs.R

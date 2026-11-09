@@ -11,7 +11,8 @@ EXT_INSTALL_STATE$rebuilt <- FALSE
 
 .ext_install_pkgs <- function() {
   pkgs <- vapply(GGSPEC_EXTENSIONS, function(e) e$pkg, character(1))
-  unique(c(pkgs, unlist(EXT_RUNTIME_DEPS, use.names = FALSE)))
+  extra <- if (exists("DATA_DRIVER_PKGS", inherits = TRUE)) DATA_DRIVER_PKGS else character(0)
+  unique(c(pkgs, unlist(EXT_RUNTIME_DEPS, use.names = FALSE), extra))
 }
 
 ext_install_allowed <- function(pkg) {

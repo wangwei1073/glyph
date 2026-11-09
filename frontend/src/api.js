@@ -46,6 +46,21 @@ export const toggleExtension = (id, enabled) =>
 export const installExtension = (pkg) => post('/api/extensions/install', { pkg })
 export const getInstallStatus = () => api('/api/extensions/install/status')
 export const getSources = () => api('/api/sources')
+
+// ---- 导入向导（P0）----
+export const getImportDrivers = () => api('/api/import/drivers')
+export const importUpload = (name, ext, dataBase64) =>
+  post('/api/import/upload', { name, ext, dataBase64 }, T_HEAVY)
+export const importPreview = (token, opts = {}, limit = 50) =>
+  post('/api/import/preview', { token, opts, limit }, T_HEAVY)
+export const importCommit = (token, opts = {}, label = '') =>
+  post('/api/import/commit', { token, opts, label }, T_HEAVY)
+export const sqliteTables = (token) =>
+  api(`/api/import/sqlite/tables?token=${encodeURIComponent(token)}`)
+export const sqlitePreview = (token, table, limit = 100) =>
+  post('/api/import/sqlite/preview', { token, table, limit }, T_HEAVY)
+export const sqliteCommit = (token, table, label = '') =>
+  post('/api/import/sqlite/commit', { token, table, label }, T_HEAVY)
 export const getColumns = (src) => api(`/api/columns?src=${encodeURIComponent(src)}`)
 export const deleteData = (id) => post('/api/data/delete', { id })
 export const previewData = (source, prep, opts = {}) => {

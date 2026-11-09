@@ -10,6 +10,7 @@ import { setExprEl } from '../exprInsert'
 import DataPreviewDialog from './DataPreviewDialog.vue'
 import ColumnActions from './ColumnActions.vue'
 import ActionBar from './ActionBar.vue'
+import ImportDialog from './ImportDialog.vue'
 
 const emit = defineEmits(['project'])   // 工具区的项目操作交给 App 处理
 
@@ -20,6 +21,7 @@ const meta = useMetaStore()
 
 const pasteVisible = ref(false)
 const pasteText = ref('')
+const importVisible = ref(false)
 const prepVisible = ref(false)     // 加工对话框
 const uploading = ref(false)
 const fileInput = ref(null)
@@ -52,6 +54,12 @@ function onSelect(key) {
     spec.setSource(src.type === 'dataset' ? { type: 'dataset', name: src.name }
       : src.type === 'user' ? { type: 'user', id: src.name } : { type: 'none' })
   }
+}
+async function onImported(src) {
+  await data.load()
+  if (src && src.id) onSelect(`user:${src.id}`)
+  importVisible.value = false
+  if (src) ElMessage.success(`已导入：${src.label}（${src.nrow}×${src.ncol}）`)
 }
 async function onFile(e) {
   const f = e.target.files ? e.target.files[0] : e.dataTransfer ? e.dataTransfer.files[0] : null
@@ -167,18 +175,9 @@ function openPreview(colName = '') {
     </div>
     <!-- 数据源 -->
     <div class="dp-srcrow">
-      <el-dropdown trigger="click" @command="(c) => c === 'up' ? fileInput.click() : (pasteVisible = true)">
-        <el-button size="small" :loading="uploading">
-          <el-icon><Plus /></el-icon>添加数据
-          <el-icon><ArrowDown /></el-icon>
-        </el-button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="up"><el-icon><UploadFilled /></el-icon>上传文件</el-dropdown-item>
-            <el-dropdown-item command="paste"><el-icon><Document /></el-icon>粘贴数据</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+      <el-button size="small" type="primary" :loading="uploading" @click="importVisible = true">
+        <el-icon><Plus /></el-icon>导入数据
+      </el-button>
       <el-button size="small" :type="prepCount ? 'primary' : ''" plain @click="prepVisible = true">
         <el-icon><Filter /></el-icon>加工
         <span v-if="prepCount" class="prep-badge">{{ prepCount }}</span>
@@ -315,6 +314,7 @@ function openPreview(colName = '') {
       </template>
     </el-dialog>
 
+    <ImportDialog v-model="importVisible" @imported="onImported" />
     <DataPreviewDialog v-model:visible="pvdVisible" :focus-col="pvdFocus" />
     <div v-if="dragging" class="drop-mask">
       <el-icon :size="42"><UploadFilled /></el-icon>

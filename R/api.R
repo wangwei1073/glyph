@@ -180,6 +180,53 @@ ggspec_api_app <- function(state) {
       return(json_response(list(ok = TRUE, sources = data_sources())))
     }
 
+    ## ---- 导入向导（P0）----
+    if (path == "/api/import/drivers" && method == "GET") {
+      return(json_response(list(ok = TRUE, drivers = import_drivers())))
+    }
+    if (path == "/api/import/upload" && method == "POST") {
+      res <- tryCatch(
+        import_upload(body$name %||% "upload.csv", body$ext %||% NULL, body$dataBase64 %||% ""),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE, session = res)))
+    }
+    if (path == "/api/import/preview" && method == "POST") {
+      res <- tryCatch(
+        import_preview(body$token %||% "", body$opts %||% list(), body$limit %||% 50),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE, preview = res)))
+    }
+    if (path == "/api/import/commit" && method == "POST") {
+      res <- tryCatch(
+        import_commit_file(body$token %||% "", body$opts %||% list(), body$label %||% NULL),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE, source = res$info, columns = res$columns)))
+    }
+    if (path == "/api/import/sqlite/tables" && method == "GET") {
+      tok <- .query_param(req, "token") %||% ""
+      res <- tryCatch(.import_sqlite_tables(tok), error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE, tables = res)))
+    }
+    if (path == "/api/import/sqlite/preview" && method == "POST") {
+      res <- tryCatch(
+        .import_sqlite_preview(body$token %||% "", body$table %||% "", body$limit %||% 100),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE, preview = res)))
+    }
+    if (path == "/api/import/sqlite/commit" && method == "POST") {
+      res <- tryCatch(
+        import_commit_sqlite(body$token %||% "", body$table %||% "", body$label %||% NULL,
+                             body$limit %||% 1000000L),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE, source = res$info, columns = res$columns)))
+    }
+
     if (path == "/api/data/upload" && method == "POST") {
       name <- body$name %||% "upload.csv"
       ext <- body$ext %||% tools::file_ext(name)

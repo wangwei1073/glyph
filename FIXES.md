@@ -130,7 +130,19 @@ Rscript tests/review_findings.R     # 走查证据脚本，逐条对照修复状
 | 安装/启停扩展后 `/api/meta` 仍返回旧注册表 | `run.R` 的 `STATE` 改为 environment（引用语义），请求内的 `state$meta <-` 才能真正生效 | [run.R](run.R) |
 
 验证：全套测试 20 个套件全绿（3 个因缺少可选扩展打印 SKIP）；`test_extension_prism` 3/3、`test_table1_l5` 42/42；Positron 扩展 `tsc` 编译通过。
-## 仍未处理（有意留下）
+## 批次 11 — 数据导入向导（2026-11-09）
+
+| 内容 | 说明 |
+|---|---|
+| 统一导入弹层 | 文件 / 剪贴板 / SQLite 三种来源；文件先配置（分隔符、编码、表头、跳过行、NA）再预览前 50 行 |
+| 后端会话 | 上传一次返回 token，预览/建表/导入复用；预览只读前 N 行，提交才整表读入 |
+| SQLite | 选择 .db/.sqlite 文件 → 表列表（含行数）→ 预览 100 行 → 导入；驱动缺失可一键安装 |
+| 来源记录 | DataStore origin 落盘（kind/file/table/importedAt），重新加载仍在；供图注/可复现包使用 |
+| 左栏入口 | 「添加数据」下拉改为「导入数据」按钮，导入后自动选中新数据源 |
+| 测试 | 新增 tests/test_import.R（12 项：预览/类型/来源/持久化/SQLite/拒绝不支持类型） |
+| P0 细节 | 文件大小、导入按钮显示总行数（文本按行数估算）、列统计页签内可改列类型、两步指示、更换文件/库 |
+| 修复 | SQLite「选择数据库文件…」点击无反应：模板用了 `dbInput` 但未声明 ref，补 `const dbInput = ref(null)` | 
+| 设计稿 | docs/import_mock_file.png、docs/import_mock_db.png |## 仍未处理（有意留下）
 
 1. **httpuv 单线程**：已用前端串行化 + 长超时缓解，但重渲染期间取图仍会排队；彻底解决需要异步任务队列或子进程渲染。
 2. **`state$raw_data` 全局**：原始代码模式的 df 仍挂在全局，多标签页并发时可能互相覆盖。

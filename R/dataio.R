@@ -13,7 +13,9 @@ DataStore <- local({
   .save_meta <- function() {
     if (is.null(.dir)) return(invisible(FALSE))
     meta <- lapply(.items, function(it) {
-      list(id = it$id, label = it$label, nrow = it$nrow, ncol = it$ncol)
+      out <- list(id = it$id, label = it$label, nrow = it$nrow, ncol = it$ncol)
+      if (!is.null(it$origin)) out$origin <- it$origin
+      out
     })
     invisible(tryCatch({
       write_file_atomic(jsonlite::toJSON(unname(meta), auto_unbox = TRUE, pretty = TRUE,
@@ -34,7 +36,7 @@ DataStore <- local({
       d <- tryCatch(readRDS(.item_file(id)), error = function(e) NULL)
       if (is.null(d)) next
       .items[[id]] <<- list(df = d, label = as.character(m$label %||% id), id = id,
-                            nrow = nrow(d), ncol = ncol(d))
+                            nrow = nrow(d), ncol = ncol(d), origin = m$origin)
       n <- suppressWarnings(as.integer(sub("^u", "", id)))
       if (!is.na(n)) .counter <<- max(.counter, n)
     }
@@ -48,11 +50,11 @@ DataStore <- local({
       .load()
     },
     dir = function() .dir,
-    add = function(df, label) {
+    add = function(df, label, origin = NULL) {
       .counter <<- .counter + 1L
       id <- sprintf("u%d", .counter)
       .items[[id]] <<- list(df = df, label = label, id = id,
-                            nrow = nrow(df), ncol = ncol(df))
+                            nrow = nrow(df), ncol = ncol(df), origin = origin)
       if (!is.null(.dir)) {
         try(saveRDS(df, .item_file(id)), silent = TRUE)
         .save_meta()
@@ -64,7 +66,8 @@ DataStore <- local({
       it <- .items[[id]]
       if (is.null(it)) return(NULL)
       list(type = "user", id = it$id, name = it$id, label = it$label,
-           nrow = it$nrow, ncol = it$ncol, package = NULL)
+           nrow = it$nrow, ncol = it$ncol, package = NULL,
+           origin = it$origin %||% NULL)
     },
     list = function() lapply(names(.items), function(id) .info_wrap(.items[[id]])),
     remove = function(id) {
@@ -77,7 +80,8 @@ DataStore <- local({
   )
 })
 .info_wrap <- function(it) list(type = "user", id = it$id, name = it$id, label = it$label,
-                                nrow = it$nrow, ncol = it$ncol, package = NULL)
+                                nrow = it$nrow, ncol = it$ncol, package = NULL,
+                                origin = it$origin %||% NULL)
 
 # 解码 base64 -> 临时文件 -> 读取为 data.frame
 data_from_upload <- function(name, ext, data_base64) {
