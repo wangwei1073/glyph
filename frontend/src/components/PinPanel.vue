@@ -89,13 +89,14 @@ async function openCode(p) {
   try {
     const res = await pins.openCode(p.id)
     if (res.type !== 'code') return
-    spec.last = { ...(spec.last || {}), ok: true, pngUrl: res.pngUrl, png: null,
+    spec.last = { ...(spec.last || {}), ok: true, pngUrl: res.pngUrl || null, png: null,
       code: res.code, warnings: [], messages: [], error: null, elapsed: 0 }
     if (res.renderOpts && res.renderOpts.width) {
       spec.renderOpts = { ...spec.renderOpts, ...res.renderOpts }
     }
     spec.pendingCode = res.code
-    ElMessage.success('已打开代码图，可在「高级」中查看与运行')
+    if (!res.pngUrl) ElMessage.warning('该条目没有预览图，已在高级页载入代码，运行后可重新生成')
+    else ElMessage.success('已打开代码图，可在「高级」中查看与运行')
   } catch (e) { ElMessage.error('打开失败：' + e.message) }
 }
 </script>
@@ -114,14 +115,16 @@ async function openCode(p) {
     </div>
     <div v-if="pins.loading" v-loading="true" style="min-height:40px" />
     <div v-for="p in pins.items" :key="p.id" class="pin-row">
-      <span class="pin-badge gg-mono">{{ p.id }}</span>`n      <el-tag v-if="p.type === 'code'" size="small" type="warning">代码</el-tag>
+      <span class="pin-badge gg-mono">{{ p.id }}</span>
+      <el-tag v-if="p.type === 'code'" size="small" type="warning">代码</el-tag>
       <span class="pin-name">{{ p.label }}</span>
       <span class="pin-meta">
         {{ p.layers }} 层
         <template v-if="p.srcType === 'dataset'"> · {{ p.src }}</template>
         <template v-else-if="p.srcType === 'user'"> · 自有数据</template>
       </span>
-      <el-button v-if="p.type === 'code'" size="small" text type="primary" @click="openCode(p)">打开</el-button>`n      <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
+      <el-button v-if="p.type === 'code'" size="small" text type="primary" @click="openCode(p)">打开</el-button>
+      <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
         <template #reference>
           <el-button size="small" text type="danger"><el-icon><Delete /></el-icon></el-button>
         </template>

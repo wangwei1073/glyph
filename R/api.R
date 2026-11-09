@@ -835,6 +835,19 @@ ggspec_api_app <- function(state) {
         srcf <- file.path(state$plot_dir, fn)
         if (file.exists(srcf)) file.copy(srcf, state$pin_store$thumb_path(id), overwrite = TRUE)
       }
+      # 没有可用预览图时，用代码现场渲染一张作为缩略图
+      if (!file.exists(state$pin_store$thumb_path(id))) {
+        ro <- body$renderOpts %||% list()
+        rr <- tryCatch(ggspec_render_rawcode(
+          code, state,
+          as.integer(ro$width %||% 900), as.integer(ro$height %||% 560),
+          as.integer(ro$dpi %||% 150), png_dir = state$plot_dir),
+          error = function(e) NULL)
+        if (!is.null(rr) && nzchar(rr$pngUrl %||% "")) {
+          file.copy(file.path(state$plot_dir, basename(rr$pngUrl)),
+                    state$pin_store$thumb_path(id), overwrite = TRUE)
+        }
+      }
       return(json_response(list(ok = TRUE, id = id, pins = state$pin_store$list())))
     }
     if (path == "/api/pins/open" && method == "POST") {
@@ -847,11 +860,25 @@ ggspec_api_app <- function(state) {
       }
       dp <- state$pin_store$data_path(id)
       if (file.exists(dp)) state$raw_data <- tryCatch(readRDS(dp), error = function(e) state$raw_data)
+      # 旧条目缺缩略图：按保存的代码补渲染一张
+      if (!file.exists(state$pin_store$thumb_path(id))) {
+        ro <- it$renderOpts %||% list()
+        rr <- tryCatch(ggspec_render_rawcode(
+          as.character((it$code %||% list())$text %||% ""), state,
+          as.integer(ro$width %||% 900), as.integer(ro$height %||% 560),
+          as.integer(ro$dpi %||% 150), png_dir = state$plot_dir),
+          error = function(e) NULL)
+        if (!is.null(rr) && nzchar(rr$pngUrl %||% "")) {
+          file.copy(file.path(state$plot_dir, basename(rr$pngUrl)),
+                    state$pin_store$thumb_path(id), overwrite = TRUE)
+        }
+      }
+      thumb_ok <- file.exists(state$pin_store$thumb_path(id))
       return(json_response(list(
         ok = TRUE, type = "code",
         code = as.character((it$code %||% list())$text %||% ""),
         renderOpts = it$renderOpts %||% list(),
-        pngUrl = paste0("/api/pins/thumb/", id, ".png")
+        pngUrl = if (thumb_ok) paste0("/api/pins/thumb/", id, ".png") else ""
       )))
     }
     if (startsWith(path, "/api/pins/thumb/") && method == "GET") {
