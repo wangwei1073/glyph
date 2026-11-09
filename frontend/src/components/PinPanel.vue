@@ -297,7 +297,6 @@ async function openCode(p) {
         <el-option v-for="t in ['A', 'a', '1', 'i']" :key="t" :value="t" :label="t" />
       </el-select>
     </div>
-  </div>
 
   <el-dialog v-model="pickerVisible" title="从图库选择（按选择顺序入槽）" width="560" append-to-body>
     <div class="pick-grid">
@@ -322,6 +321,7 @@ async function openCode(p) {
       </el-button>
     </template>
   </el-dialog>
+  </div>
 </template>
 
 <style scoped>
