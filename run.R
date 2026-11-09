@@ -66,6 +66,9 @@ STATE <- list(
   allowed_hosts = unique(c("127.0.0.1", "localhost", "::1", HOST)),
   allow_any_host = identical(HOST, "0.0.0.0")
 )
+# 用 environment 承载 STATE：list 是值语义，请求处理函数里的 state$meta <- ...
+# 只会改局部副本，导致「安装扩展 / 启停扩展」后 /api/meta 仍返回旧注册表。
+STATE <- list2env(STATE, parent = emptyenv())
 dir.create(STATE$plot_dir, showWarnings = FALSE, recursive = TRUE)
 Pins$bind(STATE$pin_file)
 EditStore$bind(file.path(root, "edits.json"))

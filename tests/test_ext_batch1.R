@@ -60,7 +60,13 @@ cases <- list(
        aes = list(x = list(map = "Sepal.Length")),
        want = "ggside::geom_xsidehistogram")
 )
+has_stringi <- requireNamespace("stringi", quietly = TRUE)
 for (cs in cases) {
+  # ggtext 的 gridtext 渲染依赖 stringi；缺依赖时跳过该用例
+  if (identical(cs$nm, "ggtext 富文本") && !has_stringi) {
+    cat("  [SKIP] ggtext 富文本：缺少 stringi 运行时依赖\n")
+    next
+  }
   sp <- spec_of(cs$geom, cs$aes)
   g <- tryCatch(spec_to_code(sp, META, STATE), error = function(e) e)
   if (inherits(g, "error")) {

@@ -155,6 +155,21 @@ ggspec_api_app <- function(state) {
                                 meta = state$meta, extensions = ext_catalog())))
     }
 
+    # 一键安装扩展（后台 Rscript，轮询 /api/extensions/install/status）
+    if (path == "/api/extensions/install" && method == "POST") {
+      pkg <- as.character(body$pkg %||% "")
+      res <- tryCatch(ext_install_start(pkg), error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(ok = TRUE, job = list(id = res$id, pkg = res$pkg,
+                                                      status = res$status))))
+    }
+    if (path == "/api/extensions/install/status" && method == "GET") {
+      st <- ext_install_status()
+      meta <- ext_install_meta(state)
+      return(json_response(list(ok = TRUE, job = st, meta = meta,
+                                extensions = ext_catalog())))
+    }
+
     ## ---- 元数据 ----
     if (path == "/api/meta" && method == "GET") {
       return(json_response(list(ok = TRUE, meta = state$meta)))

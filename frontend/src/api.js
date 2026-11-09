@@ -42,6 +42,9 @@ export const getMeta = () => api('/api/meta')
 export const getExtensions = () => api('/api/extensions')
 export const toggleExtension = (id, enabled) =>
   post('/api/extensions/toggle', { id, enabled }, T_HEAVY)
+// 一键安装扩展 / 运行期依赖（后台任务，轮询状态）
+export const installExtension = (pkg) => post('/api/extensions/install', { pkg })
+export const getInstallStatus = () => api('/api/extensions/install/status')
 export const getSources = () => api('/api/sources')
 export const getColumns = (src) => api(`/api/columns?src=${encodeURIComponent(src)}`)
 export const deleteData = (id) => post('/api/data/delete', { id })

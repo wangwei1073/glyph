@@ -1,4 +1,7 @@
-# ggplotGUI · ggplot2 可视化工作台
+# Glyph · ggplot2 可视化工作台
+
+> 原名 ggplotGUI。项目文件里的 `app: "ggplotgui"` 与本地存储键（如 `ggplotgui-draft-v1`）保持不变，
+> 旧项目可直接打开。
 
 一个**本地 GUI 绘图工具**：用可视化界面构建任意 ggplot2 图形，实时生成**规范、可复制的 R 代码**。
 覆盖最新 **ggplot2 4.0.x**（S7 架构）的全部图表类型与设置能力。
@@ -29,6 +32,8 @@
 ### 图层（graph 类型全覆盖）
 - **全部 58 个 ggplot2 geom**（运行时从已安装版本自动枚举，永不缺漏），
   加上已安装扩展：ggrepel、ggthemes 的 geom
+- 未安装的扩展可在「高级 → 扩展管理」**一键安装**（后台安装、完成后自动刷新注册表，无需重启）；
+  已安装但缺运行期依赖（如 ggtext 缺 stringi）也会提示并可直接安装依赖
 - 选择器带**示意图缩略图**（3 列卡片，可搜索中文名 / 英文名 / 函数名），
   tooltip 显示「说明 · 函数名 · 需要映射的 aes」
 - 分组可在「**按图形族**」（点与线 / 分布 / 区间…）与「**按数据形态**」
@@ -124,6 +129,7 @@ Rscript tests/test_api_guard.R      # 请求来源校验（防跨站 / DNS 重�
 Rscript tests/test_project_data.R   # 项目数据：落盘 / 快照 / 重建 / 手工编辑恢复
 Rscript tests/test_bundle.R         # 可复现包：图 + 数据 + 代码 + 图注 + 项目文件
 Rscript tests/test_export_check.R   # 导出前检查：白底 / dpi / 尺寸 / 字号 / 可渲染性
+Rscript tests/test_ext_install.R    # 扩展一键安装：白名单 / 并发保护 / 状态机
 
 # 重新生成 geom 示意图（改了默认主题/映射后跑一次，产物在 frontend/public/geom-thumbs）
 Rscript tools/make_geom_thumbs.R

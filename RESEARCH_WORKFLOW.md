@@ -368,7 +368,7 @@ PDF 要嵌字体、不能透明背景……这些全部靠人肉。
 | `figure.R` | 可运行代码；用户数据改为 `read.csv("data.csv")`，内置数据集直接引用 `mpg` 等 |
 | `sessionInfo.txt` | R 与包版本 |
 | `caption.md` | 图注草稿：数据来源、物理尺寸、dpi、模板、软件版本（标注需人工核对） |
-| `project.json` | 可重新导入 ggplotGUI 的项目文件（含数据快照与手工编辑） |
+| `project.json` | 可重新导入 Glyph 的项目文件（含数据快照与手工编辑） |
 | `README.txt` | 文件说明与复现步骤 |
 
 ### 16.2 实现

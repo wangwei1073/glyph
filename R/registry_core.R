@@ -593,15 +593,21 @@ ggspec_build_meta <- function() {
       } else {
         paste0(key, " (", pkg, ")")
       }
+      args <- (function() {
+        fm <- tryCatch(formals(get(fn, envir = tns)), error = function(e) NULL)
+        if (is.null(fm)) return(list())
+        lapply(setdiff(names(fm), "..."), function(nm) {
+          PARAM_WIDGETS[[nm]] %||% pv(nm, "text")
+        })
+      })()
+      # ggprism 的 theme_prism 需要专用控件（palette 65 选 1、字号/边框等），
+      # 否则会退化成纯文本输入（历史回归，见 test_extension_prism）
+      if (identical(pkg, "ggprism") && identical(key, "prism")) {
+        args <- .ggprism_theme_args(args)
+      }
       themes[[length(themes) + 1]] <- list(
         name = key, fn = paste0(pkg, "::", fn), package = pkg, label = lbl,
-        args = (function() {
-          fm <- tryCatch(formals(get(fn, envir = tns)), error = function(e) NULL)
-          if (is.null(fm)) return(list())
-          lapply(setdiff(names(fm), "..."), function(nm) {
-            PARAM_WIDGETS[[nm]] %||% pv(nm, "text")
-          })
-        })()
+        args = args
       )
     }
   }

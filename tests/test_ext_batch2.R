@@ -10,6 +10,14 @@ for (f in sort(list.files(file.path(getwd(), "R"), pattern = "\\.R$", full.names
 }
 suppressPackageStartupMessages(library(ggplot2))
 
+# 可选扩展：本机没装就跳过，避免「新机器一片红」
+.need <- c("ggridges", "ggh4x", "ggnewscale")
+.miss <- .need[!vapply(.need, function(p) requireNamespace(p, quietly = TRUE), logical(1))]
+if (length(.miss)) {
+  cat(sprintf("[SKIP] 缺少可选包：%s（安装后再跑本套件）\n", paste(.miss, collapse = ", ")))
+  quit(status = 0)
+}
+
 META <- meta_build_lookup(ggspec_build_meta())
 tmp <- file.path(tempdir(), paste0("b2-", as.integer(Sys.time())))
 dir.create(tmp, showWarnings = FALSE, recursive = TRUE)

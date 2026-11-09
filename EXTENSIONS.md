@@ -112,7 +112,7 @@ p <- ggplot(df) +
 
 ### 关键判断：高层函数不要接
 
-`ggboxplot(df, x, y, add="jitter", palette="jco")` 这类函数与 ggplotGUI 的定位**正面重复**：
+`ggboxplot(df, x, y, add="jitter", palette="jco")` 这类函数与 Glyph 的定位**正面重复**：
 GUI 本身就是「点选生成 `geom_boxplot() + theme()` 代码」。把它接进来意味着再造一套
 「函数式出图」面板，且这些函数返回的图无法再用图层/标度/主题面板编辑（它的参数是字符串列名）。
 更关键的是：生成的代码会变成 `ggboxplot(...)`，与项目「spec → 规范 ggplot2 代码」的唯一事实来源冲突。

@@ -10,6 +10,12 @@ for (f in sort(list.files(file.path(getwd(), "R"), pattern = "\\.R$", full.names
 }
 suppressPackageStartupMessages(library(ggplot2))
 
+# 可选扩展：未安装时跳过
+if (!requireNamespace("ggnewscale", quietly = TRUE)) {
+  cat("[SKIP] 缺少可选包：ggnewscale（安装后再跑本套件）\n")
+  quit(status = 0)
+}
+
 META <- meta_build_lookup(ggspec_build_meta())
 tmp <- file.path(tempdir(), paste0("ns-", as.integer(Sys.time())))
 dir.create(tmp, showWarnings = FALSE, recursive = TRUE)

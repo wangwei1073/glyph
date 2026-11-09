@@ -77,6 +77,20 @@ GGSPEC_EXTENSIONS <- list(
   isTRUE(tryCatch(requireNamespace(pkg, quietly = TRUE), error = function(e) FALSE))
 }
 
+## ---- 运行期依赖 -------------------------------------------------------------
+# 有些包 requireNamespace() 能通过，但真正用起来还缺运行期依赖
+# （典型：ggtext 的 gridtext 渲染依赖 stringi）。这里显式登记，
+# 供 UI 标注「缺依赖」，避免误报「已安装、可用」。
+EXT_RUNTIME_DEPS <- list(
+  ggtext = c("stringi")
+)
+
+.ext_missing_deps <- function(pkg) {
+  need <- EXT_RUNTIME_DEPS[[pkg]] %||% character(0)
+  if (!length(need)) return(character(0))
+  need[!vapply(need, function(p) requireNamespace(p, quietly = TRUE), logical(1))]
+}
+
 ## ---- 启停状态持久化 ---------------------------------------------------------
 # 文件格式：{"disabled": ["ggsci", ...]}  —— 默认全部启用
 # 只记录「关闭」的项，这样新增扩展默认可用，不需迁移配置。
@@ -147,11 +161,14 @@ ext_catalog <- function() {
   out <- list()
   for (e in GGSPEC_EXTENSIONS) {
     inst <- .ext_installed(e$pkg)
+    miss <- if (inst) .ext_missing_deps(e$pkg) else character(0)
     out[[length(out) + 1]] <- list(
       id = e$id, label = e$label, desc = e$desc, pkg = e$pkg,
       kind = as.list(e$kind),
       installed = inst,
-      enabled = inst && ext_is_enabled(e$id)
+      enabled = inst && ext_is_enabled(e$id),
+      missingDeps = as.list(miss),
+      usable = inst && !length(miss)
     )
   }
   out

@@ -113,8 +113,11 @@
   if (inherits(tb, "error")) stop(conditionMessage(tb))
 
   # add_p / add_overall 是 gtsummary 的后置管道函数，不是 tbl_summary 的参数
+  p_error <- NULL
   if (isTRUE(addP) && nzchar(by)) {
-    tb <- tryCatch(suppressWarnings(gtsummary::add_p(tb)), error = function(e) tb)
+    tb <- tryCatch(
+      suppressWarnings(gtsummary::add_p(tb)),
+      error = function(e) { p_error <<- conditionMessage(e); tb })
   }
   if (isTRUE(includeOverall) && nzchar(by)) {
     tb <- tryCatch(suppressWarnings(gtsummary::add_overall(tb)), error = function(e) tb)
@@ -147,6 +150,9 @@
              "缺失值按变量单独统计（显示为 Unknown）")
   if (isTRUE(addP) && nzchar(by)) {
     notes <- c(notes, "p 值由 gtsummary 自动选择检验方法（连续用 t/秩和，分类用卡方/Fisher）")
+    if (!is.null(p_error)) {
+      notes <- c(notes, sprintf("未能生成 p 值：%s", p_error))
+    }
   }
 
   list(
@@ -160,6 +166,7 @@
     n = nrow(sub),
     groups = as.list(if (nzchar(by)) unique(as.character(sub[[by]][!is.na(sub[[by]])])) else character(0)),
     notes = as.list(notes),
+    warnings = as.list(if (is.null(p_error)) character(0) else p_error),
     code = paste(.ggspec_table1_code(vars, by, st, addP, includeOverall, digits), collapse = "\n")
   )
 }
@@ -260,6 +267,7 @@
     n = nrow(sub),
     groups = as.list(grp_levels),
     notes = as.list(notes),
+    warnings = list(),
     code = paste(.ggspec_table1_code(vars, by, st, addP, includeOverall, digits), collapse = "\n")
   )
 }
@@ -275,14 +283,25 @@
     lines <- c(lines, sprintf("  statistic = list(gtsummary::all_continuous() ~ %s,", r_string(st$cont)))
     lines <- c(lines, "                   gtsummary::all_categorical() ~ \"{n} ({p}%)\"),")
     lines <- c(lines, sprintf("  digits = list(gtsummary::all_continuous() ~ %dL))", digits))
-    if (isTRUE(addP) && nzchar(by)) lines <- c(lines, "tbl <- gtsummary::add_p(tbl)")
+    if (isTRUE(addP) && nzchar(by)) {
+      lines <- c(lines,
+        "if (requireNamespace(\"stringr\", quietly = TRUE)) {",
+        "  tbl <- gtsummary::add_p(tbl)",
+        "} else {",
+        "  message(\"跳过 p 值：gtsummary::add_p() 需要 stringr 包\")",
+        "}")
+    }
     if (isTRUE(includeOverall) && nzchar(by)) lines <- c(lines, "tbl <- gtsummary::add_overall(tbl)")
     lines <- c(lines, "tbl")
     lines <- c(lines, "# 导出 Word / Excel")
     if (.ggspec_has_pkg("flextable") && .ggspec_has_pkg("officer")) {
       lines <- c(lines,
-        "ft <- gtsummary::as_flex_table(tbl)",
-        "flextable::save_as_docx(ft, path = \"table1.docx\")")
+        "if (requireNamespace(\"stringr\", quietly = TRUE)) {",
+        "  ft <- gtsummary::as_flex_table(tbl)",
+        "  flextable::save_as_docx(ft, path = \"table1.docx\")",
+        "} else {",
+        "  message(\"跳过 Word 导出：gtsummary::as_flex_table() 需要 stringr 包\")",
+        "}")
     }
     if (.ggspec_has_pkg("writexl")) {
       lines <- c(lines, "writexl::write_xlsx(as.data.frame(tbl), \"table1.xlsx\")")

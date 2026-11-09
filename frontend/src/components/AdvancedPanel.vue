@@ -1,10 +1,10 @@
 <script setup>
 // 高级面板：原始代码模式 / plotly / 扩展状态
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
-import { rawRender, toggleExtension } from '../api'
+import { rawRender, toggleExtension, installExtension, getInstallStatus } from '../api'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
@@ -125,6 +125,50 @@ function extWhere(e) {
   if (e.id === 'plotly') return '画布「交互预览」'
   return parts.length ? [...new Set(parts)].join(' · ') : '—'
 }
+
+// ---- 一键安装（后台任务 + 轮询）----
+const installing = ref('')       // 正在安装的包名
+let installTimer = null
+
+async function pollInstall() {
+  installTimer = null
+  try {
+    const res = await getInstallStatus()
+    const job = res.job || {}
+    if (job.status === 'running') {
+      installTimer = setTimeout(pollInstall, 1200)
+      return
+    }
+    installing.value = ''
+    if (job.status === 'done') {
+      if (res.meta) meta.applyMeta(res.meta)
+      ElMessage.success(`${job.pkg} 安装完成，扩展已可用`)
+    } else if (job.status === 'failed') {
+      ElMessageBox.alert(
+        (job.message ? job.message + '\n\n' : '') + (job.log || '（无日志）'),
+        `${job.pkg} 安装失败`, { customClass: 'install-log-box', confirmButtonText: '知道了' }
+      )
+    }
+  } catch (e) {
+    installing.value = ''
+    ElMessage.error('查询安装状态失败：' + e.message)
+  }
+}
+
+async function installPkg(pkg) {
+  if (installing.value) return
+  installing.value = pkg
+  try {
+    await installExtension(pkg)
+    ElMessage.info(`开始安装 ${pkg}，完成后会自动刷新`)
+    pollInstall()
+  } catch (e) {
+    installing.value = ''
+    ElMessage.error('安装失败：' + e.message)
+  }
+}
+
+onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 </script>
 
 <template>
@@ -151,7 +195,21 @@ function extWhere(e) {
           :loading="extToggling === e.id"
           @update:model-value="(v) => toggleExt(e, v)" />
         <span class="ext-name" :class="{ off: !e.enabled }">{{ e.label }}</span>
-        <el-tag v-if="!e.installed" size="small" type="info" :disable-transitions="true">未安装</el-tag>
+        <template v-if="!e.installed">
+          <el-tag size="small" type="info" :disable-transitions="true">未安装</el-tag>
+          <el-button size="small" text class="ext-install" :loading="installing === e.pkg"
+            :disabled="!!installing && installing !== e.pkg" @click="installPkg(e.pkg)">安装</el-button>
+        </template>
+        <template v-else-if="e.missingDeps && e.missingDeps.length">
+          <el-tooltip :content="`缺少运行期依赖：${e.missingDeps.join('、')}；安装后才能正常出图`" placement="top">
+            <el-tag size="small" type="warning" :disable-transitions="true">
+              缺依赖 {{ e.missingDeps.join('、') }}
+            </el-tag>
+          </el-tooltip>
+          <el-button size="small" text class="ext-install" :loading="installing === e.missingDeps[0]"
+            :disabled="!!installing && installing !== e.missingDeps[0]"
+            @click="installPkg(e.missingDeps[0])">安装 {{ e.missingDeps[0] }}</el-button>
+        </template>
         <span v-else class="ext-where">{{ extWhere(e) }}</span>
       </div>
       <div class="gg-hint" style="padding-top: 6px">
@@ -190,5 +248,9 @@ function extWhere(e) {
 .ext-where {
   margin-left: auto; padding-left: 10px; font-size: 11px; text-align: right;
   color: var(--gg-text-3); white-space: nowrap;
+}
+.ext-install {
+  margin-left: auto; padding: 0 5px; height: 20px; font-size: 11px;
+  color: var(--gg-brand); flex-shrink: 0;
 }
 </style>

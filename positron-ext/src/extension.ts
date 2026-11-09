@@ -61,10 +61,11 @@ function findFreePort(start = 4330): Promise<number> {
 }
 
 // ---------- 轮询等待服务就绪 ----------
-function waitForServer(port: number, timeoutMs = 60000): Promise<boolean> {
+function waitForServer(port: number, timeoutMs = 60000, shouldAbort?: () => boolean): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve) => {
     const tick = () => {
+      if (shouldAbort && shouldAbort()) return resolve(false);
       if (Date.now() > deadline) return resolve(false);
       const url = `http://127.0.0.1:${port}/api/meta`;
       const http = require('http') as typeof import('http');
@@ -87,6 +88,7 @@ interface ServerHandle {
   url: string;
   root: string;
   heartbeat?: NodeJS.Timeout;
+  spawnError?: string;
 }
 
 let current: ServerHandle | null = null;
@@ -130,6 +132,16 @@ function stopServer(): void {
       output.appendLine(`[glyph] taskkill 失败，回退 kill：${String(e)}`);
     }
   }
+  // POSIX：spawn 时开了 detached，子进程是进程组组长，杀整个组才能带走 R 子进程
+  if (process.platform !== 'win32' && proc.pid) {
+    try {
+      process.kill(-proc.pid, 'SIGTERM');
+      output.appendLine('[glyph] 已结束进程组');
+      return;
+    } catch (e) {
+      output.appendLine(`[glyph] 进程组 kill 失败，回退单进程：${String(e)}`);
+    }
+  }
   try {
     proc.kill();
   } catch (e) {
@@ -164,26 +176,35 @@ async function startServer(): Promise<ServerHandle> {
   // R 侧超过 60 秒没收到就自行退出，避免孤儿进程。
   const proc = cp.spawn(
     rs,
-    ['run.R', '--port', String(port), '--no-browser', '--heartbeat', '--heartbeat-timeout', '60'],
+    ['run.R', '--port', String(port), '--no-browser', '--heartbeat', '--heartbeat-timeout', '120'],
     {
       cwd: root,
       windowsHide: true,
+      detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe']
     }
   );
   proc.stdout?.on('data', (d) => output.append(d.toString()));
   proc.stderr?.on('data', (d) => output.append(d.toString()));
+  const handle: ServerHandle = { proc, port, url: `http://127.0.0.1:${port}`, root };
+  proc.on('error', (e) => {
+    // Rscript 不存在 / 无执行权限时 spawn 只发 error，不会走 exit
+    handle.spawnError = String(e);
+    output.appendLine(`[glyph] R 进程启动失败：${String(e)}`);
+  });
   proc.on('exit', (code) => {
     output.appendLine(`[glyph] R 进程退出，code=${code}`);
     if (current && current.proc === proc) current = null;
   });
 
-  const handle: ServerHandle = { proc, port, url: `http://127.0.0.1:${port}`, root };
   current = handle;
 
-  const ok = await waitForServer(port);
+  const ok = await waitForServer(port, 60000, () => !!handle.spawnError);
   if (!ok) {
     stopServer();
+    if (handle.spawnError) {
+      throw new Error(`R 进程启动失败：${handle.spawnError}（检查 glyph.rscriptPath 配置）`);
+    }
     throw new Error(`服务在 60 秒内未就绪，详见输出面板「Glyph」。`);
   }
   startHeartbeat(handle);
@@ -213,17 +234,13 @@ async function openGlyph(context: vscode.ExtensionContext): Promise<void> {
       return;
     }
 
-    // 回退：普通 webview 面板（CSP 更严，作为兜底）
-    const panel = vscode.window.createWebviewPanel(
-      'glyph', 'Glyph', vscode.ViewColumn.One,
-      { enableScripts: true, retainContextWhenHidden: true }
+    // 普通 VS Code 的 webview CSP 通常不允许 iframe 指向 http://127.0.0.1，
+    // 直接交给系统浏览器，行为可预期（也不会出现"白屏但服务在跑"）
+    await vscode.env.openExternal(vscode.Uri.parse(handle.url));
+    vscode.window.showInformationMessage(
+      '当前环境没有 Positron 预览 API，已在系统浏览器打开 Glyph。'
     );
-    panel.webview.html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}
-      .tip{padding:24px;font-family:system-ui}</style></head>
-      <body><iframe src="${handle.url}"></iframe></body></html>`;
-    panel.onDidDispose(() => { /* 面板关闭不自动停服务，保留给多次打开 */ });
-    output.appendLine('[glyph] 已通过 webview 面板打开（回退模式）');
+    output.appendLine('[glyph] 已通过系统浏览器打开（回退模式）');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     output.appendLine(`[glyph] 失败：${msg}`);

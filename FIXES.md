@@ -115,6 +115,21 @@ Rscript tests/review_findings.R     # 走查证据脚本，逐条对照修复状
 | 回归缺失 | `test_patchwork.R` 新增「ggprism 主题 + 标度」的拼图用例（两个 Prism 图），断言代码含 `library(ggprism)`、不含 `library(library(`，并真实渲染 | [tests/test_patchwork.R](tests/test_patchwork.R) |
 
 触发条件：图库里的图用了扩展包（默认 Prism 主题就会带 `ggprism`），普通 ggplot2 图不会触发，所以此前测试没覆盖。
+## 批次 10 — 走查修复（2026-11-09）
+
+| 问题 | 改动 | 位置 |
+|---|---|---|
+| `theme_prism` 的 palette 等控件退化成文本框 | 扩展主题扫描在生成 args 后补 `.ggprism_theme_args()`，恢复 65 选 1 下拉 / 字号 / 边框控件 | [R/registry_core.R](R/registry_core.R) |
+| 基线表 `add_p()` 失败被静默吞掉、生成代码不可跑 | 记录 `p_error` 写进 notes 与 `warnings`；生成代码对 `add_p` 与 Word 导出加 `requireNamespace("stringr")` 守卫，缺依赖时跳过并 message | [R/table1.R](R/table1.R) |
+| 缺可选包时 5 个测试套件直接失败 | `ext_batch2/3`、`newscale` 缺少包时打印 `[SKIP]` 并以 0 退出；`ext_batch1` 的 ggtext 用例缺 stringi 时跳过 | `tests/test_ext_batch*.R`、`tests/test_newscale.R` |
+| 「已安装但缺运行期依赖」误报为可用 | `ext_catalog()` 增加 `missingDeps`/`usable`（ggtext → stringi）；高级面板显示「缺依赖 stringi」标签 | [R/extensions.R](R/extensions.R)、[AdvancedPanel.vue](frontend/src/components/AdvancedPanel.vue) |
+| 1100px 下图层名竖排 | `.layer-name` 加 nowrap + ellipsis | [LayerPanel.vue](frontend/src/components/LayerPanel.vue) |
+| Positron 扩展：spawn 失败空等 60s、POSIX 留子进程、webview iframe 可能被 CSP 拦 | 增加 `proc.on('error')` 快速失败；POSIX 用 detached + 进程组 kill；心跳超时 120s；兜底改为系统浏览器打开；`@posit-dev/positron` 移到 devDependencies | [positron-ext/src/extension.ts](positron-ext/src/extension.ts)、[package.json](positron-ext/package.json) |
+| 品牌改名不彻底 | README / REVIEW / UI_REVIEW / EXTENSIONS / RESEARCH_WORKFLOW 统一为 Glyph，并注明 `app: "ggplotgui"` 等兼容标识保留 | 各文档 |
+| 未安装扩展无法在界面内处理 | 新增一键安装：白名单校验 + 后台 Rscript 安装 + 状态轮询 + 完成后自动重建注册表；高级面板对未安装/缺依赖显示「安装」按钮 | [R/ext_install.R](R/ext_install.R)、[AdvancedPanel.vue](frontend/src/components/AdvancedPanel.vue) |
+| 安装/启停扩展后 `/api/meta` 仍返回旧注册表 | `run.R` 的 `STATE` 改为 environment（引用语义），请求内的 `state$meta <-` 才能真正生效 | [run.R](run.R) |
+
+验证：全套测试 20 个套件全绿（3 个因缺少可选扩展打印 SKIP）；`test_extension_prism` 3/3、`test_table1_l5` 42/42；Positron 扩展 `tsc` 编译通过。
 ## 仍未处理（有意留下）
 
 1. **httpuv 单线程**：已用前端串行化 + 长超时缓解，但重渲染期间取图仍会排队；彻底解决需要异步任务队列或子进程渲染。
