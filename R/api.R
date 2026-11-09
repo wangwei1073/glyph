@@ -817,13 +817,19 @@ ggspec_api_app <- function(state) {
       if (!nzchar(trimws(code))) return(json_error("代码为空", 400))
       src <- body$source %||% list()
       prep <- body$prep %||% list()
-      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
-      if (inherits(pv, "error")) return(json_error(conditionMessage(pv), 400))
+      # 允许“无数据源”的代码图（代码直接用 mpg/iris 等内置数据）
+      has_src <- !identical(as.character(src$type %||% "none"), "none")
+      pv <- NULL
+      if (has_src) {
+        pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+        if (inherits(pv, "error")) return(json_error(conditionMessage(pv), 400))
+      }
+      data_meta <- if (has_src) list(mode = "snapshot", source = src, prep = prep)
+                   else list(mode = "none", source = src)
       id <- state$pin_store$add_code(
         body$label %||% NULL, code, body$packages %||% list(),
-        list(mode = "snapshot", source = src, prep = prep),
-        body$renderOpts %||% list(), body$project %||% NULL)
-      saveRDS(pv$d, state$pin_store$data_path(id))
+        data_meta, body$renderOpts %||% list(), body$project %||% NULL)
+      if (has_src) saveRDS(pv$d, state$pin_store$data_path(id))
       fn <- basename(as.character(body$pngUrl %||% ""))
       if (nzchar(fn)) {
         srcf <- file.path(state$plot_dir, fn)
