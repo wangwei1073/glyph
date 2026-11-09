@@ -217,6 +217,19 @@ ggspec_api_app <- function(state) {
       return(json_response(list(ok = TRUE, meta = state$meta)))
     }
 
+    ## ---- 代码补全词表 ----
+    ## 从 meta（geom/stat/scale/coord/theme 主题函数）+ 已安装包生成，
+    ## 供前端编辑器做静态补全。结果缓存在 state 上，避免每次重算。
+    if (path == "/api/completions" && method == "GET") {
+      if (is.null(state$completions)) {
+        state$completions <- tryCatch(
+          ggspec_build_completions(state$meta),
+          error = function(e) list(error = conditionMessage(e))
+        )
+      }
+      return(json_response(list(ok = TRUE, completions = state$completions)))
+    }
+
     ## ---- 数据源 ----
     if (path == "/api/sources" && method == "GET") {
       return(json_response(list(ok = TRUE, sources = data_sources())))

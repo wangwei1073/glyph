@@ -53,6 +53,35 @@ async function build() {
     })
   ]
 
+  // 补全只在可编辑模式启用（只读的代码视图不需要）
+  if (!props.readonly) {
+    const AC = await import('@codemirror/autocomplete')
+    const { rCompletionSource, preloadCompletions, setDataColumns } = await import('../rCompletion.js')
+    // 把当前数据的列名注入补全模块（aes() 内补列名用）
+    try {
+      const { useDataStore } = await import('../stores/data.js')
+      const ds = useDataStore()
+      setDataColumns((ds.columns || []).map((c) => c.name))
+      // 数据源变化时同步（用户切换数据集后 aes() 里的列名要跟着变）
+      const stop = watch(() => (ds.columns || []).map((c) => c.name).join('\u0001'), () => {
+        setDataColumns((ds.columns || []).map((c) => c.name))
+      })
+      onBeforeUnmount(stop)
+    } catch { /* 数据 store 不可用时忽略，仅少了列名补全 */ }
+    extensions.push(
+      AC.autocompletion({
+        override: [rCompletionSource],
+        activateOnTyping: true,
+        // 输入 1 个字符就可以触发（geom_ 这类前缀本身已足够长）
+        closeOnBlur: true,
+        maxRenderedOptions: 80,
+        defaultKeymap: true
+      })
+    )
+    // 异步预拉词表，不阻塞编辑器初始化
+    preloadCompletions()
+  }
+
   if (props.readonly) {
     // 只读：可选择、可复制，但不能改
     extensions.push(EditorState.readOnly.of(true))
