@@ -187,38 +187,6 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
       当前数据的加工结果绑定在变量 <code class="gg-mono">df</code> 上；修改代码后点运行即可覆盖预览。
     </div>
 
-    <div class="gg-subhead gg-section-gap">扩展管理</div>
-    <div class="adv-pad">
-      <div v-for="e in (meta.extensionCatalog || [])" :key="e.id" class="ext-row">
-        <el-switch :model-value="e.enabled" size="small"
-          :disabled="!e.installed || extToggling === e.id"
-          :loading="extToggling === e.id"
-          @update:model-value="(v) => toggleExt(e, v)" />
-        <span class="ext-name" :class="{ off: !e.enabled }">{{ e.label }}</span>
-        <template v-if="!e.installed">
-          <el-tag size="small" type="info" :disable-transitions="true">未安装</el-tag>
-          <el-button size="small" text class="ext-install" :loading="installing === e.pkg"
-            :disabled="!!installing && installing !== e.pkg" @click="installPkg(e.pkg)">安装</el-button>
-        </template>
-        <template v-else-if="e.missingDeps && e.missingDeps.length">
-          <el-tooltip :content="`缺少运行期依赖：${e.missingDeps.join('、')}；安装后才能正常出图`" placement="top">
-            <el-tag size="small" type="warning" :disable-transitions="true">
-              缺依赖 {{ e.missingDeps.join('、') }}
-            </el-tag>
-          </el-tooltip>
-          <el-button size="small" text class="ext-install" :loading="installing === e.missingDeps[0]"
-            :disabled="!!installing && installing !== e.missingDeps[0]"
-            @click="installPkg(e.missingDeps[0])">安装 {{ e.missingDeps[0] }}</el-button>
-        </template>
-        <span v-else class="ext-where">{{ extWhere(e) }}</span>
-      </div>
-      <div class="gg-hint" style="padding-top: 6px">
-        关闭扩展只会把它提供的组件从面板中移除（并重新生成注册表），不会卸载 R 包；
-        生成的代码仍会自动带上 <code class="gg-mono">library(pkg)</code> 与
-        <code class="gg-mono">pkg::</code> 前缀。
-      </div>
-    </div>
-
     <div class="gg-subhead gg-section-gap">渲染设置</div>
     <div class="p-row">
       <label>预览尺寸</label>
