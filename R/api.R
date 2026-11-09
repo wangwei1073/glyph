@@ -855,8 +855,15 @@ ggspec_api_app <- function(state) {
       return(json_response(list(ok = TRUE, pins = state$pin_store$list())))
     }
     if (path == "/api/pins/rename" && method == "POST") {
-      state$pin_store$rename(body$id %||% "", as.character(body$label %||% ""))
-      return(json_response(list(ok = TRUE, pins = state$pin_store$list())))
+      id <- as.character(body$id %||% "")
+      label <- trimws(as.character(body$label %||% ""))
+      if (!nzchar(label)) return(json_error("名称不能为空", 400))
+      # 卡片宽度有限，过长名字没有意义；按字符截断（中文一个字算 1）
+      if (nchar(label) > 40) label <- substr(label, 1, 40)
+      ok <- isTRUE(state$pin_store$rename(id, label))
+      if (!ok) return(json_error("图库条目不存在", 404))
+      return(json_response(list(ok = TRUE, id = id, label = label,
+                                pins = state$pin_store$list())))
     }
     if (path == "/api/pins/save-code" && method == "POST") {
       code <- as.character(body$code %||% "")

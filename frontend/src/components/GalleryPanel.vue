@@ -6,11 +6,61 @@
 // 两类条目都能打开：
 //   code 图 → 还原代码到画布（不碰编辑器，需手动「载入编辑器」）
 //   spec 图 → 还原整个 spec（含数据源与加工步骤）到画布，可直接继续编辑
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePinStore } from '../stores/pins'
 import { useSpecStore } from '../stores/spec'
 import { useDataStore } from '../stores/data'
+
+// ---- 卡片内联重命名 ----
+// 卡片本身可点击（打开该图），所以重命名走「铅笔按钮 → 就地变输入框」，
+// 不用双击（双击会先触发两次 click，把图打开）。
+const renamingId = ref('')
+const renameText = ref('')
+let renameEl = null
+let renameCancelled = false
+
+function setRenameRef(el) { if (el) renameEl = el }
+
+async function startRename(p) {
+  renamingId.value = p.id
+  renameText.value = p.label || ''
+  renameCancelled = false
+  await nextTick()
+  renameEl?.focus?.()
+  renameEl?.select?.()
+}
+
+function cancelRename() {
+  renameCancelled = true
+  renamingId.value = ''
+  renameText.value = ''
+}
+
+async function commitRename() {
+  if (renameCancelled) { renameCancelled = false; return }
+  const id = renamingId.value
+  if (!id) return
+  const label = (renameText.value || '').trim()
+  const cur = pins.byId[id]
+  // 空名或没改动：直接退出，不打扰
+  if (!label || (cur && label === cur.label)) {
+    renamingId.value = ''
+    return
+  }
+  try {
+    const saved = await pins.rename(id, label)
+    // 画布若正编辑这条，顶栏/按钮上的名字要跟着变
+    if (spec.sourcePinId === id) spec.sourcePinLabel = saved || label
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+  renamingId.value = ''
+  renameText.value = ''
+}
+
+// 组件卸载时结束编辑态，避免 blur 回调打到已销毁的引用
+onBeforeUnmount(() => { renamingId.value = '' })
 
 const pins = usePinStore()
 const spec = useSpecStore()
@@ -219,14 +269,25 @@ onMounted(() => { pins.load() })
           <span v-if="p.type === 'code'" class="pc-badge">代码</span>
         </div>
         <div class="pc-line">
-          <span class="pc-name">{{ p.label }}</span>
-          <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
-            <template #reference>
-              <button class="pc-del" title="从图库删除" @click.stop>
-                <el-icon><Delete /></el-icon>
-              </button>
-            </template>
-          </el-popconfirm>
+          <template v-if="renamingId === p.id">
+            <!-- 重命名：回车确认，Esc 取消，失焦按确认处理 -->
+            <el-input :ref="setRenameRef" v-model="renameText" size="small" class="pc-rename"
+              maxlength="40" placeholder="名称" @click.stop
+              @keyup.enter="commitRename" @keyup.esc="cancelRename" @blur="commitRename" />
+          </template>
+          <template v-else>
+            <span class="pc-name" :title="p.label">{{ p.label }}</span>
+            <button class="pc-edit" title="重命名" @click.stop="startRename(p)">
+              <el-icon><EditPen /></el-icon>
+            </button>
+            <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
+              <template #reference>
+                <button class="pc-del" title="从图库删除" @click.stop>
+                  <el-icon><Delete /></el-icon>
+                </button>
+              </template>
+            </el-popconfirm>
+          </template>
         </div>
         <div class="pc-meta">
           {{ p.type === 'code' ? '代码图' : (p.layers + ' 层') }}
@@ -294,6 +355,19 @@ onMounted(() => { pins.load() })
   display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
 }
 .pc-del:hover { color: #c0392b; background: rgba(192,57,43,.08); }
+/* 重命名按钮：常显但弱化。用户此前反馈「找不到改名入口」，
+   所以不做成 hover 才出现；悬停卡片时提亮，避免抢注意力。 */
+.pc-edit {
+  flex-shrink: 0; width: 18px; height: 18px; padding: 0; border: 0; background: none;
+  color: var(--gg-text-4); cursor: pointer; border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+  opacity: .5; transition: opacity .12s, color .12s;
+}
+.pin-card:hover .pc-edit { opacity: 1; }
+.pc-edit:hover { color: var(--gg-brand); background: rgba(47,111,191,.10); }
+/* 输入框占满名称那一行；卡片宽度有限，去掉默认内边距让它更紧凑 */
+.pc-rename { flex: 1; min-width: 0; }
+.pc-rename :deep(.el-input__wrapper) { padding: 0 4px; }
 .pc-meta {
   font-size: 10.5px; color: var(--gg-text-4); padding: 0 6px 4px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

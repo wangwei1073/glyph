@@ -198,6 +198,7 @@ export const savePin = (specJson, label = null, project = '') => post('/api/pins
 export const updatePin = (id, specJson, label = null, project = '') =>
   post('/api/pins/update', { id, specJson, label, project })
 export const deletePin = (id) => post('/api/pins/delete', { id })
+export const renamePin = (id, label) => post('/api/pins/rename', { id, label })
 export const saveCodePin = (payload) => post('/api/pins/save-code', payload)
 export const openPin = (id) => post('/api/pins/open', { id })
 

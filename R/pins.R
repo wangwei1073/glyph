@@ -65,11 +65,17 @@ Pins <- local({
       .save()
       TRUE
     },
+    # 只改显示名，不动 specJson / 缩略图 / project。
+    # 返回 TRUE / FALSE，便于调用方区分「改了」与「条目不存在」。
+    #
+    # 注意必须用 <<-：`.pins[[id]]$label <- x` 在函数内会先复制一份 .pins 到本地，
+    # 闭包里的原列表不会被改（R 的列表值语义）。这里此前写成 <- ，
+    # 导致改名接口一直「返回成功但实际没改」。
     rename = function(id, label) {
-      if (!is.null(.pins[[id]])) {
-        .pins[[id]]$label <- label
-        .save()
-      }
+      if (is.null(.pins[[id]])) return(FALSE)
+      .pins[[id]]$label <<- label
+      .save()
+      TRUE
     },
     add_code = function(label, code, packages, data, renderOpts, project = NULL) {
       n <- max(length(.pins) + 1L, .pins_max_n() + 1L)

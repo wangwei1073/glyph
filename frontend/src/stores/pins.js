@@ -1,7 +1,7 @@
 // Glyph - 图库 store：保存当前绘图、管理槽位，供拼图面板使用
 // 图库按项目隔离：条目带 project 字段；旧条目（无 project）对所有项目可见
 import { defineStore } from 'pinia'
-import { getPins, savePin, updatePin, deletePin, saveCodePin, openPin } from '../api'
+import { getPins, savePin, updatePin, deletePin, renamePin, saveCodePin, openPin } from '../api'
 import { useSpecStore } from './spec'
 
 export const usePinStore = defineStore('pins', {
@@ -76,6 +76,13 @@ export const usePinStore = defineStore('pins', {
     async remove(id) {
       const res = await deletePin(id)
       if (res.ok) this.all = res.pins || []
+    },
+    // 重命名图库条目（只改显示名，不影响规格与缩略图）
+    async rename(id, label) {
+      const res = await renamePin(id, label)
+      if (!res.ok) throw new Error(res.error || '重命名失败')
+      this.all = res.pins || []
+      return res.label
     }
   }
 })
