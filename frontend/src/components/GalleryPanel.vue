@@ -1,14 +1,20 @@
 <script setup>
-// 图库面板：管理已存档的图（存入 / 搜索 / 筛选 / 删除 / 打开代码图）
+// 图库面板：管理已存档的图（存入 / 搜索 / 筛选 / 删除 / 打开）
 // 从拼图页拆出——图库是「资产」，拼图是「编辑」，分开后各自一屏可见。
 // 拼图页通过「从图库选择…」弹窗消费这里的内容。
+//
+// 两类条目都能打开：
+//   code 图 → 还原代码到画布（不碰编辑器，需手动「载入编辑器」）
+//   spec 图 → 还原整个 spec（含数据源与加工步骤）到画布，可直接继续编辑
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { usePinStore } from '../stores/pins'
 import { useSpecStore } from '../stores/spec'
+import { useDataStore } from '../stores/data'
 
 const pins = usePinStore()
 const spec = useSpecStore()
+const data = useDataStore()
 
 const q = ref('')
 const typeFilter = ref('all')
@@ -65,6 +71,81 @@ async function openCode(p) {
   } catch (e) { ElMessage.error('打开失败：' + e.message) }
 }
 
+// 打开「spec 图」：还原整个绘图规格（含数据源与加工步骤）到画布，可直接继续编辑。
+//
+// 为什么连数据源一起切：图层映射只对生成它的那个数据集有意义。
+// 只还原绘图设置、沿用当前数据集，会出现「列名恰好相同但含义不同」→ 静默画错。
+// 因此这里按「打开的就是那张图，包括它的数据」来做，仅在数据源失效时才阻断。
+async function openSpec(p) {
+  let pinSpec
+  try {
+    const res = await pins.openCode(p.id)     // /api/pins/open 对 spec 类型返回 specJson
+    if (res.type !== 'spec' || !res.specJson) {
+      return ElMessage.error('该条目不是可编辑的图')
+    }
+    pinSpec = JSON.parse(res.specJson)
+  } catch (e) {
+    return ElMessage.error('打开失败：' + e.message)
+  }
+
+  // 1) 空图没有意义
+  if (!Array.isArray(pinSpec.layers) || !pinSpec.layers.length) {
+    return ElMessage.warning('该条目没有图层，无法打开')
+  }
+
+  // 2) 数据源可用性预检：内置数据集一定在；用户上传数据可能已被清理
+  const src = (pinSpec.data && pinSpec.data.source) || { type: 'none' }
+  let srcLabel = ''
+  if (src.type === 'dataset') {
+    const hit = data.sources.find((s) => s.type === 'dataset' && s.name === src.name)
+    if (!hit) return ElMessage.error(`该图使用的内置数据集 ${src.name} 不存在，无法打开`)
+    srcLabel = hit.label || src.name
+  } else if (src.type === 'user') {
+    const hit = data.sources.find((s) => s.type === 'user' && s.name === src.id)
+    if (!hit) {
+      return ElMessage.error('该图使用的上传数据已不存在（可能已被清理），无法打开')
+    }
+    srcLabel = hit.label || hit.name
+  } else {
+    return ElMessage.warning('该图没有绑定数据源，无法还原')
+  }
+
+  // 3) 覆盖当前画布前确认（数据源会被一起切换）
+  if (spec.spec.layers.length && spec.dirty) {
+    try {
+      await ElMessageBox.confirm(
+        `打开该图会替换当前画布内容，并切换到它使用的数据集「${srcLabel}」。\n当前改动尚未保存，可用 Ctrl+Z 撤销。`,
+        '打开图库中的图',
+        { type: 'warning', confirmButtonText: '打开', cancelButtonText: '取消' }
+      )
+    } catch { return }
+  }
+
+  // 4) 还原 spec + 同步左侧数据面板
+  // 顺序不能反：data.select() 会读 spec.spec.data 的加工步骤来算列，
+  // 所以先 loadProject 再 select，列才是这张图对应的列。
+  spec.loadProject(pinSpec)
+  // 图谱条目永远是单图，清掉可能残留的拼图状态与代码图标记
+  spec.spec.combine = { ...(spec.spec.combine || {}), active: false, slots: [] }
+  if (spec.last) spec.last.renderedFromCode = false
+
+  const key = src.type === 'dataset' ? `dataset:${src.name}` : `user:${src.id}`
+  try {
+    await data.select(key)
+  } catch (e) {
+    return ElMessage.error('切换数据源失败：' + e.message)
+  }
+
+  spec.renderNow()
+  ElMessage.success(`已打开「${p.label}」，数据源已切换到 ${srcLabel}`)
+}
+
+// 卡片点击：按类型分派
+function onOpenPin(p) {
+  if (p.type === 'code') return openCode(p)
+  return openSpec(p)
+}
+
 onMounted(() => { pins.load() })
 </script>
 
@@ -93,9 +174,11 @@ onMounted(() => { pins.load() })
 
     <div class="pin-grid">
       <div v-for="p in filteredPins" :key="p.id" class="pin-card"
-        :class="{ code: p.type === 'code', clickable: p.type === 'code' }"
-        :title="p.type === 'code' ? `${p.label}（点击打开代码图）` : p.label"
-        @click="p.type === 'code' && openCode(p)">
+        :class="{ code: p.type === 'code', clickable: true }"
+        :title="p.type === 'code'
+          ? `${p.label}（点击打开代码图）`
+          : `${p.label}（点击打开并继续编辑，会切换到它使用的数据集）`"
+        @click="onOpenPin(p)">
         <div class="pc-thumb">
           <img :src="thumbUrl(p)" loading="lazy" alt="" />
           <span v-if="p.type === 'code'" class="pc-badge">代码</span>
@@ -125,7 +208,8 @@ onMounted(() => { pins.load() })
       没有匹配「{{ q }}」的条目
     </div>
     <div class="gal-tip">
-      共 {{ pins.items.length }} 条 · 存入后可在「拼图」页签通过「从图库选择…」组合
+      共 {{ pins.items.length }} 条 · 点击卡片可打开并继续编辑 ·
+      也可在「拼图」页签通过「从图库选择…」组合
     </div>
   </div>
 </template>
