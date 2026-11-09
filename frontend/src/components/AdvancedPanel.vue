@@ -287,7 +287,7 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
     <div class="gg-subhead">原始代码模式（完全自由，直接运行 R 代码；数据通过 df 变量使用）</div>
     <div class="adv-pad">
       <el-tooltip content="载入画布当前图形的生成代码" placement="bottom">
-        <el-button text size="small" @click="loadFromSpec"><el-icon><Download /></el-icon></el-button>
+        <el-button size="small" @click="loadFromSpec"><el-icon><Download /></el-icon>载入当前</el-button>
       </el-tooltip>
       <el-button size="small" type="primary" :loading="rawRunning" @click="runRaw" title="运行代码 (Ctrl+Enter)">
         <el-icon><VideoPlay /></el-icon>运行
@@ -310,7 +310,7 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
         <el-button text size="small" @click="formatNow"><el-icon><MagicStick /></el-icon></el-button>
       </el-tooltip>
       <el-tooltip content="下载 .R" placement="bottom">
-        <el-button text size="small" @click="downloadCode"><el-icon><Download /></el-icon></el-button>
+        <el-button text size="small" @click="downloadCode"><el-icon><Document /></el-icon></el-button>
       </el-tooltip>
       <el-tooltip content="存入图库（代码图）" placement="bottom">
         <el-button text size="small" @click="saveVisible = true"><el-icon><Collection /></el-icon></el-button>
@@ -351,7 +351,8 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 
 <style scoped>
 .adv-pad { padding: 0 12px; display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; }
-.adv-pad .el-button { margin-left: 0; padding-left: 6px; padding-right: 6px; }
+.adv-pad .el-button { margin-left: 0; padding-left: 2px; padding-right: 2px; }
+.adv-pad .el-icon { font-size: 15px; }
 .adv-spacer { flex: 1; }
 .adv-pad .el-button { margin-left: 0; }
 .cm-editor-box {
