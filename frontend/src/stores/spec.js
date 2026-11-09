@@ -76,10 +76,13 @@ export const useSpecStore = defineStore('spec', {
     hasPlot(state) {
       return !!state.last.pngUrl || !!state.last.png
     },
+    // 「画布上有没有东西可画」= 有图层或有拼图槽位。
+    // 注意：不要在这里判断 last.pngUrl/png —— 原始代码模式渲染出的图也会写进 last，
+    // 若把它算作「有内容」，空画布就会显示一张空白图、并吞掉首屏引导。
+    // 需要「有没有渲染结果」时用 hasPlot。
     hasContent(state) {
       const cb = state.spec.combine
-      return !!state.last.pngUrl || !!state.last.png ||
-        state.spec.layers.length > 0 ||
+      return state.spec.layers.length > 0 ||
         !!(cb && cb.active && cb.slots && cb.slots.length)
     },
     composeActive(state) {

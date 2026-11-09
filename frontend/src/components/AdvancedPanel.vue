@@ -31,7 +31,7 @@ async function initEditor() {
 
 let initPromise = null
 async function buildEditor() {
-  const [{ EditorState }, { EditorView: EV, keymap, lineNumbers, highlightActiveLine }, { StreamLanguage }, { r }, { oneDark: od }, { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo, toggleComment }] = await Promise.all([
+  const [{ EditorState }, { EditorView: EV, keymap, lineNumbers, highlightActiveLine }, { StreamLanguage }, { r }, { oneDark: od }, { defaultKeymap, history, historyKeymap, indentWithTab, toggleComment }] = await Promise.all([
     import('@codemirror/state'),
     import('@codemirror/view'),
     import('@codemirror/language'),
@@ -161,7 +161,9 @@ async function runCode(code, successMsg = '渲染成功') {
   try {
     const res = await rawRender(code, spec.spec, spec.renderOpts)
     if (res.ok) {
-      spec.last = { ok: true, pngUrl: res.pngUrl || null, png: res.png || null, code, warnings: res.warnings || [], messages: [], error: null, elapsed: res.elapsedMs || 0 }
+      // renderedFromCode: 标记这次图来自「原始代码模式」。
+      // 画布据此决定：即使没有图层也要显示图（否则会被当成空画布显示引导）。
+      spec.last = { ok: true, pngUrl: res.pngUrl || null, png: res.png || null, code, warnings: res.warnings || [], messages: [], error: null, elapsed: res.elapsedMs || 0, renderedFromCode: true }
       ElMessage.success(`${successMsg} (${res.elapsedMs}ms)`)
     } else {
       ElMessage.error(String(res.error).slice(0, 300))
@@ -182,8 +184,7 @@ function runSelection() {
   runCode(text, '选中代码渲染成功')
 }
 
-function doUndo() { if (editor) undo(editor) }
-function doRedo() { if (editor) redo(editor) }
+// 撤销/重做：工具栏已去掉，CodeMirror 的 historyKeymap 保证 Ctrl+Z / Ctrl+Y 可用
 
 function toggleCommentLines(view) {
   if (!view) return
@@ -286,34 +287,31 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
   <div class="gg-tab-scroll adv-root">
     <div class="gg-subhead">原始代码模式（完全自由，直接运行 R 代码；数据通过 df 变量使用）</div>
     <div class="adv-pad">
-      <el-tooltip content="载入画布当前图形的生成代码" placement="bottom">
-        <el-button size="small" @click="loadFromSpec"><el-icon><Download /></el-icon>载入当前</el-button>
-      </el-tooltip>
+      <!-- 运行类：保留文字，语义明确 -->
       <el-button size="small" type="primary" :loading="rawRunning" @click="runRaw" title="运行代码 (Ctrl+Enter)">
         <el-icon><VideoPlay /></el-icon>运行
       </el-button>
       <el-button size="small" @click="runSelection" title="只运行选中的代码">运行选中</el-button>
+      <el-tooltip content="载入当前图形的生成代码" placement="bottom">
+        <el-button size="small" text class="adv-icon-btn" @click="loadFromSpec">
+          <el-icon><Download /></el-icon>
+        </el-button>
+      </el-tooltip>
+
       <span class="adv-spacer" />
-      <el-tooltip content="撤销" placement="bottom">
-        <el-button text size="small" @click="doUndo"><el-icon><RefreshLeft /></el-icon></el-button>
-      </el-tooltip>
-      <el-tooltip content="重做" placement="bottom">
-        <el-button text size="small" @click="doRedo"><el-icon><RefreshRight /></el-icon></el-button>
-      </el-tooltip>
+
+      <!-- 编辑类：图标按钮，撤销/重做已去掉（CodeMirror 原生 Ctrl+Z / Ctrl+Y 仍可用） -->
       <el-tooltip content="注释 / 取消注释 (Ctrl+/)" placement="bottom">
-        <el-button text size="small" @click="doComment"><el-icon><EditPen /></el-icon></el-button>
-      </el-tooltip>
-      <el-tooltip content="复制代码" placement="bottom">
-        <el-button text size="small" @click="copyCode"><el-icon><CopyDocument /></el-icon></el-button>
+        <el-button text size="small" class="adv-icon-btn" @click="doComment"><el-icon><EditPen /></el-icon></el-button>
       </el-tooltip>
       <el-tooltip content="格式化 (Ctrl+Shift+F)" placement="bottom">
-        <el-button text size="small" @click="formatNow"><el-icon><MagicStick /></el-icon></el-button>
+        <el-button text size="small" class="adv-icon-btn" @click="formatNow"><el-icon><MagicStick /></el-icon></el-button>
+      </el-tooltip>
+      <el-tooltip content="复制代码" placement="bottom">
+        <el-button text size="small" class="adv-icon-btn" @click="copyCode"><el-icon><CopyDocument /></el-icon></el-button>
       </el-tooltip>
       <el-tooltip content="下载 .R" placement="bottom">
-        <el-button text size="small" @click="downloadCode"><el-icon><Document /></el-icon></el-button>
-      </el-tooltip>
-      <el-tooltip content="存入图库（代码图）" placement="bottom">
-        <el-button text size="small" @click="saveVisible = true"><el-icon><Collection /></el-icon></el-button>
+        <el-button text size="small" class="adv-icon-btn" @click="downloadCode"><el-icon><Document /></el-icon></el-button>
       </el-tooltip>
     </div>
     <div ref="editorEl" class="cm-editor-box" @keydown.ctrl.enter.prevent="runRaw" />
@@ -334,8 +332,14 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
     </div>
 
     <div class="adv-meta-line">
-      {{ spec.renderOpts.width }} × {{ spec.renderOpts.height }} @ {{ spec.renderOpts.dpi }} dpi
-      · 尺寸在画布顶部工具栏调整 · 当前 df 已应用数据准备
+      <span>{{ spec.renderOpts.width }} × {{ spec.renderOpts.height }} @ {{ spec.renderOpts.dpi }} dpi
+        · 尺寸在画布顶部工具栏调整 · 当前 df 已应用数据准备</span>
+      <span class="adv-meta-spacer" />
+      <el-tooltip content="把当前代码渲染结果存入图库，可在拼图中复用" placement="top">
+        <el-button size="small" text class="adv-save-btn" @click="saveVisible = true">
+          <el-icon><Collection /></el-icon>存入图库
+        </el-button>
+      </el-tooltip>
     </div>
 
     <el-dialog v-model="saveVisible" title="存入图库（代码图）" width="420" append-to-body>
@@ -350,11 +354,15 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 </template>
 
 <style scoped>
-.adv-pad { padding: 0 12px; display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; }
-.adv-pad .el-button { margin-left: 0; padding-left: 2px; padding-right: 2px; }
-.adv-pad .el-icon { font-size: 15px; }
-.adv-spacer { flex: 1; }
+.adv-pad { padding: 0 12px; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; }
 .adv-pad .el-button { margin-left: 0; }
+/* 图标按钮：24×24 点击区，图标视觉居中 */
+.adv-pad .adv-icon-btn {
+  padding: 0; width: 24px; min-width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.adv-pad .adv-icon-btn .el-icon { font-size: 15px; }
+.adv-spacer { flex: 1; min-width: 4px; }
 .cm-editor-box {
   margin: 8px 12px; border: 1px solid var(--gg-border); border-radius: var(--gg-r-ctl);
   overflow: hidden; flex: 1 1 auto; min-height: 240px; font-size: 13px;
@@ -382,5 +390,11 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 .adv-meta { margin: 4px 12px 8px; }
 .adv-root { display: flex; flex-direction: column; height: 100%; }
 .adv-root .cm-editor-box { margin-bottom: 4px; }
-.adv-meta-line { margin: 0 12px 8px; font-size: 11px; color: var(--gg-text-4); }
+.adv-meta-line {
+  margin: 0 12px 8px; font-size: 11px; color: var(--gg-text-4);
+  display: flex; align-items: center; gap: 8px;
+}
+.adv-meta-spacer { flex: 1; }
+.adv-save-btn { padding: 0 4px; height: 22px; font-size: 12px; color: var(--gg-text-3); }
+.adv-save-btn:hover { color: var(--gg-brand); }
 </style>

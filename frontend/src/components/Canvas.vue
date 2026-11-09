@@ -469,7 +469,15 @@ async function drawPlotly() {
   </div>
 
   <div v-show="view === 'plot'" class="gg-canvas-wrap">
-    <img v-if="imgSrc && spec.hasContent" :src="imgSrc" class="gg-canvas-img" :class="{ zoom100 }" alt="plot" />
+    <!--
+      显示条件用 hasContent（有图层/拼图槽位），而不是 hasPlot：
+      - 空画布时后端也会渲染一张空白图并写进 last，若只看 hasPlot 就会显示这块白板，
+        同时把首屏引导吞掉；
+      - 「原始代码模式」只产出图、没有图层的情况，由 codeMode 兜住
+        （该模式下 spec.layers 为空但确实要显示渲染结果）。
+    -->
+    <img v-if="imgSrc && (spec.hasContent || spec.last.renderedFromCode)"
+      :src="imgSrc" class="gg-canvas-img" :class="{ zoom100 }" alt="plot" />
     <div v-else-if="!spec.last.error" class="gg-empty-hint">
       <el-icon class="ghost" :size="58"><TrendCharts /></el-icon>
       <div class="t">还没有图形</div>
@@ -481,14 +489,15 @@ async function drawPlotly() {
     </el-icon>
   </div>
 
-  <div v-if="view === 'plot' && spec.last.error && spec.hasContent" class="err-box">
+  <!-- 错误/警告：只要有图层或已产出过图就展示，避免渲染失败时把报错也藏起来 -->
+  <div v-if="view === 'plot' && spec.last.error && (spec.hasContent || spec.hasPlot)" class="err-box">
     <el-alert type="error" :closable="false" show-icon>
       <template #title>渲染出错</template>
       <pre class="err-pre">{{ spec.last.error }}</pre>
     </el-alert>
   </div>
 
-  <div v-if="view === 'plot' && spec.last.warnings.length && spec.hasContent" class="warn-box">
+  <div v-if="view === 'plot' && spec.last.warnings.length && (spec.hasContent || spec.hasPlot)" class="warn-box">
     <el-collapse>
       <el-collapse-item :title="`警告 (${spec.last.warnings.length})`">
         <div v-for="(w, i) in spec.last.warnings.slice(0, 8)" :key="i" class="warn-item">{{ w }}</div>

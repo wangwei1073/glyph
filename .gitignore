@@ -37,3 +37,6 @@ stats-summary.R
 
 # 扩展开关状态（运行时）
 extensions.json
+
+# 拼图/图库生成的面板预览图（运行时产物，P1.png / P2.png …）
+/P[0-9]*.png
