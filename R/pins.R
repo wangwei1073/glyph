@@ -55,6 +55,23 @@ Pins <- local({
         .save()
       }
     },
+    add_code = function(label, code, packages, data, renderOpts, project = NULL) {
+      n <- max(length(.pins) + 1L, .pins_max_n() + 1L)
+      id <- sprintf("P%d", n)
+      .pins[[id]] <<- list(
+        id = id, type = "code",
+        label = (label %||% paste0("代码图 ", n)),
+        code = list(text = as.character(code),
+                    packages = as.character(packages %||% character(0))),
+        data = data, renderOpts = renderOpts,
+        project = as.character(project %||% ""),
+        t = format(Sys.time(), "%m-%d %H:%M")
+      )
+      .save()
+      id
+    },
+    data_path = function(id) file.path(dirname(.file), paste0(id, ".rds")),
+    thumb_path = function(id) file.path(dirname(.file), paste0(id, ".png")),
     get = function(id) {
       .pins[[id]]$specJson %||% NULL
     },
@@ -74,7 +91,10 @@ Pins <- local({
           t = as.character(it$t %||% ""),
           src = as.character(src$name %||% ""),
           srcType = as.character(src$type %||% "none"),
-          layers = length((sp %||% list())$layers %||% list())
+          layers = length((sp %||% list())$layers %||% list()),
+          type = as.character(it$type %||% "spec"),
+          codePackages = as.character((it$code %||% list())$packages %||% character(0)),
+          dataMode = as.character((it$data %||% list())$mode %||% "")
         )
       })
     }

@@ -1,13 +1,18 @@
 <script setup>
 // 高级面板：原始代码模式 / plotly / 扩展状态
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
+import { usePinStore } from '../stores/pins'
 import { rawRender, formatCode } from '../api'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
+const pins = usePinStore()
+const saveVisible = ref(false)
+const saveLabel = ref('')
+const savingPin = ref(false)
 
 // ---- CodeMirror 原始代码编辑器 ----
 const editorEl = ref(null)
@@ -90,6 +95,48 @@ function downloadCode() {
   a.download = 'plot.R'
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
+watch(() => spec.pendingCode, async (code) => {
+  if (!code) return
+  rawCode.value = code
+  await initEditor()
+  editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: code } })
+  spec.pendingCode = ''
+})
+
+function packagesFromCode(code) {
+  return [...String(code).matchAll(/library\(\s*["']?([A-Za-z0-9._]+)/g)].map(m => m[1])
+}
+
+async function saveToGallery() {
+  if (!rawCode.value.trim()) return ElMessage.warning('代码为空')
+  if (!spec.last || !spec.last.pngUrl) return ElMessage.warning('先运行一次代码，生成可保存的预览图')
+  savingPin.value = true
+  try {
+    const sd = spec.spec.data
+    await pins.saveCode({
+      label: saveLabel.value || '代码图',
+      code: rawCode.value,
+      packages: packagesFromCode(rawCode.value),
+      source: sd.source,
+      prep: {
+        filter: sd.filter || '', filterDisabled: !!sd.filterDisabled,
+        mutate: sd.mutate || [], sample: sd.sample, sampleDisabled: !!sd.sampleDisabled,
+        seed: sd.seed, types: sd.types || [], text: sd.text || [],
+        outliers: sd.outliers || [], fillna: sd.fillna || [],
+        dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any',
+        dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [],
+        dedupEnabled: !!sd.dedupEnabled
+      },
+      renderOpts: { ...spec.renderOpts },
+      pngUrl: spec.last.pngUrl
+    })
+    saveVisible.value = false
+    ElMessage.success('已存入图库（代码图）')
+  } catch (e) {
+    ElMessage.error('保存失败：' + e.message)
+  } finally { savingPin.value = false }
 }
 
 async function loadFromSpec() {
@@ -214,6 +261,7 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
       <el-button size="small" @click="copyCode">复制</el-button>
       <el-button size="small" @click="formatNow">格式化</el-button>
       <el-button size="small" @click="downloadCode">下载 .R</el-button>
+      <el-button size="small" type="primary" plain @click="saveVisible = true">存入图库</el-button>
     </div>
     <div ref="editorEl" class="cm-editor-box" @keydown.ctrl.enter.prevent="runRaw" />
     <div class="adv-console" :class="consoleClass">
@@ -236,6 +284,15 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
       {{ spec.renderOpts.width }} × {{ spec.renderOpts.height }} @ {{ spec.renderOpts.dpi }} dpi
       · 尺寸在画布顶部工具栏调整 · 当前 df 已应用数据准备
     </div>
+
+    <el-dialog v-model="saveVisible" title="存入图库（代码图）" width="420" append-to-body>
+      <div class="gg-hint" style="margin-bottom:8px">将保存：代码 + 当前数据快照 + 预览图。</div>
+      <el-input v-model="saveLabel" size="small" placeholder="名称" />
+      <template #footer>
+        <el-button @click="saveVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingPin" @click="saveToGallery">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

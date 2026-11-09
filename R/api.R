@@ -812,6 +812,50 @@ ggspec_api_app <- function(state) {
       state$pin_store$rename(body$id %||% "", as.character(body$label %||% ""))
       return(json_response(list(ok = TRUE, pins = state$pin_store$list())))
     }
+    if (path == "/api/pins/save-code" && method == "POST") {
+      code <- as.character(body$code %||% "")
+      if (!nzchar(trimws(code))) return(json_error("代码为空", 400))
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(conditionMessage(pv), 400))
+      id <- state$pin_store$add_code(
+        body$label %||% NULL, code, body$packages %||% list(),
+        list(mode = "snapshot", source = src, prep = prep),
+        body$renderOpts %||% list(), body$project %||% NULL)
+      saveRDS(pv$d, state$pin_store$data_path(id))
+      fn <- basename(as.character(body$pngUrl %||% ""))
+      if (nzchar(fn)) {
+        srcf <- file.path(state$plot_dir, fn)
+        if (file.exists(srcf)) file.copy(srcf, state$pin_store$thumb_path(id), overwrite = TRUE)
+      }
+      return(json_response(list(ok = TRUE, id = id, pins = state$pin_store$list())))
+    }
+    if (path == "/api/pins/open" && method == "POST") {
+      id <- as.character(body$id %||% "")
+      full <- state$pin_store$list_full()
+      it <- full[[id]]
+      if (is.null(it)) return(json_error("图库条目不存在", 404))
+      if (!identical(as.character(it$type %||% "spec"), "code")) {
+        return(json_response(list(ok = TRUE, type = "spec", specJson = it$specJson)))
+      }
+      dp <- state$pin_store$data_path(id)
+      if (file.exists(dp)) state$raw_data <- tryCatch(readRDS(dp), error = function(e) state$raw_data)
+      return(json_response(list(
+        ok = TRUE, type = "code",
+        code = as.character((it$code %||% list())$text %||% ""),
+        renderOpts = it$renderOpts %||% list(),
+        pngUrl = paste0("/api/pins/thumb/", id, ".png")
+      )))
+    }
+    if (startsWith(path, "/api/pins/thumb/") && method == "GET") {
+      fn <- gsub("[^A-Za-z0-9_.-]", "", basename(path))
+      full <- file.path(dirname(state$pin_store$thumb_path("x")), fn)
+      if (!file.exists(full)) return(list(status = 404L, headers = list("Content-Type" = "text/plain"), body = "not found"))
+      return(list(status = 200L,
+                  headers = list("Content-Type" = "image/png", "Cache-Control" = "no-store"),
+                  body = readBin(full, "raw", file.info(full)$size)))
+    }
 
     ## ---- 大 JSON 数据文件（plotly 等）----
     if (startsWith(path, "/api/plotdata/") && method == "GET") {

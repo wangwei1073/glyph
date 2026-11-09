@@ -194,6 +194,8 @@ export const editsClear = (source) => post('/api/edits/clear', { source })
 export const getPins = () => api('/api/pins')
 export const savePin = (specJson, label = null, project = '') => post('/api/pins/save', { specJson, label, project })
 export const deletePin = (id) => post('/api/pins/delete', { id })
+export const saveCodePin = (payload) => post('/api/pins/save-code', payload)
+export const openPin = (id) => post('/api/pins/open', { id })
 
 // 退出服务：后端置标志位，由 R 主循环优雅停止（进程退出后本页面将不再可用）
 export const shutdownServer = () => post('/api/shutdown', {})

@@ -54,6 +54,7 @@ export const useSpecStore = defineStore('spec', {
     renderQueued: false,
     // pngUrl: /api/plot/xxx.png（后端落盘）；png: base64 备用
     last: { pngUrl: null, png: null, code: '', warnings: [], messages: [], error: null, elapsed: 0, ok: false },
+    pendingCode: '',
     renderOpts: { width: 900, height: 560, dpi: 150 },
     dark: false,
     history: [],

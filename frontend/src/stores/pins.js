@@ -1,7 +1,7 @@
 // Glyph - 图库 store：保存当前绘图、管理槽位，供拼图面板使用
 // 图库按项目隔离：条目带 project 字段；旧条目（无 project）对所有项目可见
 import { defineStore } from 'pinia'
-import { getPins, savePin, deletePin } from '../api'
+import { getPins, savePin, deletePin, saveCodePin, openPin } from '../api'
 import { useSpecStore } from './spec'
 
 export const usePinStore = defineStore('pins', {
@@ -46,6 +46,17 @@ export const usePinStore = defineStore('pins', {
       } finally {
         this.saving = false
       }
+    },
+    async saveCode({ label, code, packages, source, prep, renderOpts, pngUrl }) {
+      this.saving = true
+      try {
+        const res = await saveCodePin({ label, code, packages, source, prep, renderOpts, pngUrl })
+        if (res.ok) { this.all = res.pins || []; return res.id }
+        throw new Error(res.error || '保存失败')
+      } finally { this.saving = false }
+    },
+    async openCode(id) {
+      return await openPin(id)
     },
     async remove(id) {
       const res = await deletePin(id)
