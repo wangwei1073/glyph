@@ -60,7 +60,8 @@ const items = [
       <AnnotatePanel v-show="tab === 'annot'" />
       <ThemePanel v-show="tab === 'theme'" />
       <PinPanel v-show="tab === 'patch'" />
-      <AdvancedPanel v-show="tab === 'adv'" />`n      <ExtensionsPanel v-show="tab === 'ext'" />
+      <AdvancedPanel v-show="tab === 'adv'" />
+      <ExtensionsPanel v-show="tab === 'ext'" />
     </div>
   </div>
 </template>
