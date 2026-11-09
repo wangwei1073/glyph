@@ -130,7 +130,7 @@ body {
   display: flex; flex-direction: column; overflow: hidden;
 }
 .gg-center { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
-.gg-resizer { width: 8px; flex-shrink: 0; cursor: col-resize; display: flex; align-items: center; justify-content: center; margin-left: -4px; position: relative; z-index: 3; }
+.gg-resizer { width: 8px; flex-shrink: 0; cursor: col-resize; display: flex; align-items: center; justify-content: center; margin-left: 0; position: relative; z-index: 5; }
 .gg-rbar { width: 3px; height: 46px; border-radius: 2px; background: rgba(128,128,128,.3); transition: background .12s, height .12s; }
 .gg-resizer:hover .gg-rbar, .gg-resizer.active .gg-rbar { background: var(--gg-accent); height: 64px; }
 .gg-right {
@@ -349,7 +349,7 @@ html.dark .gg-canvas-wrap { background: var(--gg-canvas); }
 
 @media (max-width: 1200px) {
   .gg-left { min-width: 220px; }
-  .gg-resizer { width: 8px; flex-shrink: 0; cursor: col-resize; display: flex; align-items: center; justify-content: center; margin-left: -4px; position: relative; z-index: 3; }
+  .gg-resizer { width: 8px; flex-shrink: 0; cursor: col-resize; display: flex; align-items: center; justify-content: center; margin-left: 0; position: relative; z-index: 5; }
 .gg-rbar { width: 3px; height: 46px; border-radius: 2px; background: rgba(128,128,128,.3); transition: background .12s, height .12s; }
 .gg-resizer:hover .gg-rbar, .gg-resizer.active .gg-rbar { background: var(--gg-accent); height: 64px; }
 .gg-right { min-width: 320px; }
