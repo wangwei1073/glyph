@@ -77,7 +77,8 @@ export const useSpecStore = defineStore('spec', {
     },
     hasContent(state) {
       const cb = state.spec.combine
-      return state.spec.layers.length > 0 ||
+      return !!state.last.pngUrl || !!state.last.png ||
+        state.spec.layers.length > 0 ||
         !!(cb && cb.active && cb.slots && cb.slots.length)
     },
     composeActive(state) {
