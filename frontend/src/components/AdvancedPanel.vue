@@ -1,11 +1,12 @@
 <script setup>
 // 高级面板：原始代码模式 / plotly / 扩展状态
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
 import { usePinStore } from '../stores/pins'
 import { rawRender, formatCode } from '../api'
+import CodeEditor from './CodeEditor.vue'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
@@ -14,62 +15,23 @@ const saveVisible = ref(false)
 const saveLabel = ref('')
 const savingPin = ref(false)
 
-// ---- CodeMirror 原始代码编辑器 ----
-const editorEl = ref(null)
-let editor = null
-let EditorView, rMode, oneDark
-
+// ---- 代码编辑器（复用共享 CodeEditor 组件）----
+const codeEditorRef = ref(null)
 const rawCode = ref('')
 const rawRunning = ref(false)
 const consoleClass = computed(() => ({ hasErr: !!(spec.last && spec.last.error) }))
 
-async function initEditor() {
-  if (editor) return editor
-  if (!initPromise) initPromise = buildEditor()
-  return initPromise
+// 编辑器实例由子组件创建；这里只持有引用，用于「外部载入代码」时替换全文
+function onEditorReady(view) {
+  editorView = view
 }
+let editorView = null
 
-let initPromise = null
-async function buildEditor() {
-  const [{ EditorState }, { EditorView: EV, keymap, lineNumbers, highlightActiveLine }, { StreamLanguage }, { r }, { oneDark: od }, { defaultKeymap, history, historyKeymap, indentWithTab, toggleComment }] = await Promise.all([
-    import('@codemirror/state'),
-    import('@codemirror/view'),
-    import('@codemirror/language'),
-    import('@codemirror/legacy-modes/mode/r'),
-    import('@codemirror/theme-one-dark'),
-    import('@codemirror/commands')
-  ])
-  EditorView = EV
-  rMode = r
-  oneDark = od
-  editor = new EditorView({
-    parent: editorEl.value,
-    state: EditorState.create({
-      doc: rawCode.value,
-      extensions: [
-        lineNumbers(),
-        highlightActiveLine(),
-        history(),
-        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab,
-          { key: 'Mod-/', run: (v) => { toggleCommentLines(v); return true } },
-          { key: 'Mod-Shift-f', run: () => { formatNow(); return true } }]),
-        StreamLanguage.define(r),
-        EditorView.lineWrapping,
-        oneDark,
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged) rawCode.value = u.state.doc.toString()
-        })
-      ]
-    })
-  })
-  return editor
+// 把文本写进编辑器（外部载入 / 格式化后回填）
+function setEditorText(text) {
+  rawCode.value = text
+  // CodeEditor 内部 watch 会把 modelValue 同步进编辑器，这里无需再 dispatch
 }
-
-// 面板由 EditorTabs 用 v-show 挂载，DOM 一开始就在，可直接初始化
-onMounted(() => { initEditor().catch((e) => ElMessage.error('代码编辑器初始化失败: ' + e.message)) })
-onBeforeUnmount(() => {
-  if (editor) { editor.destroy(); editor = null; initPromise = null }
-})
 
 async function copyCode() {
   if (!rawCode.value.trim()) return ElMessage.warning('代码为空')
@@ -83,9 +45,8 @@ async function formatNow() {
   if (!rawCode.value.trim()) return ElMessage.warning('代码为空')
   try {
     const res = await formatCode(rawCode.value)
+    // 赋值 modelValue 即可，CodeEditor 会自动同步进编辑器
     rawCode.value = res.code
-    await initEditor()
-    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: res.code } })
     ElMessage.success('已格式化（styler）')
   } catch (e) { ElMessage.error('格式化失败：' + e.message) }
 }
@@ -99,11 +60,12 @@ function downloadCode() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }
 
-watch(() => spec.pendingCode, async (code) => {
+// 接收来自「代码」视图的「载入编辑器」动作。
+// 只有用户主动点该按钮才会写 pendingCode —— 打开图库条目、切换页签都不会自动填充，
+// 保证编辑器内容始终由用户动作决定，不会被意外覆盖。
+watch(() => spec.pendingCode, (code) => {
   if (!code) return
   rawCode.value = code
-  await initEditor()
-  editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: code } })
   spec.pendingCode = ''
 })
 
@@ -148,8 +110,6 @@ async function loadFromSpec() {
     return
   }
   rawCode.value = code
-  await initEditor()
-  editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: code } })
 }
 
 async function runCode(code, successMsg = '渲染成功') {
@@ -178,8 +138,9 @@ async function runCode(code, successMsg = '渲染成功') {
 function runRaw() { return runCode(rawCode.value) }
 
 function runSelection() {
-  const sel = editor && editor.state.selection.main
-  const text = sel ? editor.state.sliceDoc(sel.from, sel.to) : ''
+  const v = editorView
+  const sel = v && v.state.selection.main
+  const text = sel ? v.state.sliceDoc(sel.from, sel.to) : ''
   if (!text.trim()) return ElMessage.warning('先在编辑器里选中要运行的代码')
   runCode(text, '选中代码渲染成功')
 }
@@ -204,7 +165,7 @@ function toggleCommentLines(view) {
     }))
   })
 }
-function doComment() { toggleCommentLines(editor) }
+function doComment() { toggleCommentLines(editorView) }
 
 // 扩展清单：来自后端 /api/meta 的 extensionCatalog（含安装/启用状态与说明）
 // 开关只对「已安装」的扩展可用；关闭后后端会重建注册表，其组件从各面板消失
@@ -314,7 +275,11 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
         <el-button text size="small" class="adv-icon-btn" @click="downloadCode"><el-icon><Document /></el-icon></el-button>
       </el-tooltip>
     </div>
-    <div ref="editorEl" class="cm-editor-box" @keydown.ctrl.enter.prevent="runRaw" />
+    <!-- 复用共享 CodeEditor（高亮 / 行号 / 换行 / Ctrl+Enter 运行 / Ctrl+/ 注释） -->
+    <div class="cm-editor-box">
+      <CodeEditor ref="codeEditorRef" v-model="rawCode" height="fill"
+        @run="runRaw" @ready="onEditorReady" />
+    </div>
     <div class="adv-console" :class="consoleClass">
       <div class="adv-console-head">
         <span>输出</span>

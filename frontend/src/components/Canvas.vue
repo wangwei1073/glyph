@@ -8,11 +8,14 @@ import { useDataStore } from '../stores/data'
 import { usePinStore } from '../stores/pins'
 import { exportPlot, downloadBlob, genCode, getPlotly, checkExport, getJournalTemplates, bundlePlot } from '../api'
 import StatsPanel from './StatsPanel.vue'
+import CodeEditor from './CodeEditor.vue'
+import { useUiStore } from '../stores/ui'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
 const data = useDataStore()
 const pins = usePinStore()
+const ui = useUiStore()
 const view = ref('plot')
 const zoom100 = ref(false)
 const exporting = ref(false)
@@ -280,6 +283,17 @@ async function copyCode() {
 }
 
 const codeBlock = computed(() => spec.last.code || '')
+const codeLineCount = computed(() => (codeBlock.value ? codeBlock.value.split('\n').length : 0))
+
+// 把当前代码送进「高级」页编辑器：切页签 + 填内容
+// 之后用户在高级页改代码、点运行，画布与本代码视图会随渲染结果同步更新。
+function loadIntoEditor() {
+  const code = codeBlock.value
+  if (!code) return ElMessage.warning('还没有可载入的代码，先渲染一次图形')
+  spec.pendingCode = code
+  ui.setTab('adv')
+  ElMessage.success('已载入「高级」页编辑器，可修改后点击运行')
+}
 
 async function downloadCode() {
   let code = spec.last.code
@@ -505,16 +519,26 @@ async function drawPlotly() {
     </el-collapse>
   </div>
 
-  <div v-show="view === 'code'" class="gg-code-view gg-scroll">
+  <div v-show="view === 'code'" class="gg-code-view">
     <div class="code-head">
       <span class="gg-hint-md">
         由当前绘图规格生成，可直接粘贴到 RStudio / Positron 运行
       </span>
       <span style="flex:1" />
+      <el-tooltip content="等宽字体、语法高亮、自动换行；可框选后复制" placement="bottom-end">
+        <span class="code-lines gg-mono">{{ codeLineCount }} 行</span>
+      </el-tooltip>
+      <!-- 把当前代码送进「高级」页的编辑器，可改后再运行；跑完画布与本视图会同步更新 -->
+      <el-tooltip content="载入到「高级」页编辑器，可修改后重新运行" placement="bottom-end">
+        <el-button size="small" type="primary" plain :disabled="!codeBlock" @click="loadIntoEditor">
+          <el-icon><EditPen /></el-icon> 载入编辑器
+        </el-button>
+      </el-tooltip>
       <el-button size="small" text @click="copyCode"><el-icon><CopyDocument /></el-icon> 复制</el-button>
       <el-button size="small" text @click="downloadCode"><el-icon><Download /></el-icon> 下载 .R</el-button>
     </div>
-    <pre v-if="codeBlock" class="code-block gg-mono">{{ codeBlock }}</pre>
+    <!-- 只读代码编辑器：与「高级」页共用 CodeEditor，保留高亮/行号/换行能力 -->
+    <CodeEditor v-if="codeBlock" :model-value="codeBlock" readonly height="auto" class="code-editor" />
     <div v-else class="gg-empty-hint" style="padding:40px">暂无代码</div>
   </div>
 
@@ -649,7 +673,16 @@ async function drawPlotly() {
 .err-pre { margin: 4px 0 0; white-space: pre-wrap; font-size: 12px; font-family: Consolas, monospace; max-height: 140px; overflow: auto; }
 .warn-box { padding: 4px 14px 8px; flex-shrink: 0; }
 .warn-item { font-size: 12px; color: var(--gg-text-3); padding: 1px 0; }
-.gg-code-view { background: var(--gg-panel); flex: 1; min-height: 0; }
+/* 代码视图：头部固定，编辑器区域自身滚动 */
+.gg-code-view {
+  background: var(--gg-panel); flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+}
+.code-editor { flex: 1; min-height: 0; overflow: auto; }
+.code-lines {
+  font-size: var(--gg-fs-xs); color: var(--gg-text-4);
+  margin-right: 8px; white-space: nowrap;
+}
 
 /* 底栏：单行 34px。左侧状态提示（可省略），右侧产出与导出类动作 */
 .gg-footer {

@@ -1,5 +1,6 @@
 <script setup>
-// 拼图面板：图库（pins）+ 组合序列 + plot_layout / plot_annotation
+// 拼图面板：组合序列 + plot_layout / plot_annotation
+// 图库（素材管理）已拆到 GalleryPanel.vue；此页只负责"把选中的图组合成一张"。
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePinStore } from '../stores/pins'
@@ -10,18 +11,6 @@ import { checkPackages } from '../api'
 const pins = usePinStore()
 const spec = useSpecStore()
 const meta = useMetaStore()
-const saving = ref(false)
-const q = ref('')
-const typeFilter = ref('all')
-const filteredPins = computed(() => {
-  const kw = q.value.trim().toLowerCase()
-  return pins.items.filter(p => {
-    if (typeFilter.value !== 'all' && (p.type || 'spec') !== typeFilter.value) return false
-    if (!kw) return true
-    return (p.label || '').toLowerCase().includes(kw) || (p.src || '').toLowerCase().includes(kw)
-  })
-})
-function thumbUrl(p) { return `/api/pins/thumb/${p.id}.png` }
 
 // 拼图组合依赖 patchwork；关闭后禁用组合相关操作（图库存取本身不受影响）
 const patchworkOn = computed(() => !!(meta.ext && meta.ext.patchwork))
@@ -40,21 +29,7 @@ const cb = () => {
   return c
 }
 
-async function saveCurrent() {
-  if (!spec.spec.layers.length) {
-    ElMessage.warning('当前没有图层，先在画布上构建一个图')
-    return
-  }
-  saving.value = true
-  try {
-    const id = await pins.saveCurrent()
-    ElMessage.success(`已存入图库：${pins.byId[id]?.label || id}`)
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    saving.value = false
-  }
-}
+function thumbUrl(p) { return `/api/pins/thumb/${p.id}.png` }
 
 function addSlot() {
   if (!ensurePatchwork()) return
@@ -117,74 +92,35 @@ function setAnnot(name, v) {
   else c.annotation[name] = v
 }
 
-onMounted(() => { pins.load() })
-
-async function openCode(p) {
-  try {
-    const res = await pins.openCode(p.id)
-    if (res.type !== 'code') return
-    spec.last = { ...(spec.last || {}), ok: true, pngUrl: res.pngUrl || null, png: null,
-      code: res.code, warnings: [], messages: [], error: null, elapsed: 0 }
-    if (res.renderOpts && res.renderOpts.width) {
-      spec.renderOpts = { ...spec.renderOpts, ...res.renderOpts }
-    }
-    spec.pendingCode = res.code
-    if (!res.pngUrl) ElMessage.warning('该条目没有预览图，已在高级页载入代码，运行后可重新生成')
-    else ElMessage.success('已打开代码图，可在「高级」中查看与运行')
-  } catch (e) { ElMessage.error('打开失败：' + e.message) }
+// 标注样式（字号/加粗/颜色）单独放在 annotation.style，避免污染内容字段
+const styleOpen = ref(false)
+function styleOf() {
+  const c = cb()
+  if (!c.annotation.style) c.annotation.style = {}
+  return c.annotation.style
 }
+function setStyle(name, v) {
+  const s = styleOf()
+  if (v === null || v === '' || v === undefined) delete s[name]
+  else s[name] = v
+  // 空对象就整体删掉，保持 spec 干净
+  if (!Object.keys(s).length) delete cb().annotation.style
+}
+// 「恢复默认」：一次清掉所有标注样式
+function resetStyle() {
+  const c = cb()
+  if (c.annotation.style) delete c.annotation.style
+}
+
+onMounted(() => { pins.load() })
 </script>
 
 <template>
   <div class="gg-tab-scroll">
-    <div class="gg-subhead">图库（把画布当前图存档复用）</div>
-    <div style="padding: 0 12px 6px">
-      <el-button size="small" type="primary" plain :loading="saving"
-        :disabled="!spec.spec.layers.length || spec.composeActive" @click="saveCurrent">
-        <el-icon><AddFilled /></el-icon>存入当前绘图
-      </el-button>
-      <span v-if="spec.composeActive" style="font-size:11px;color:var(--el-text-color-secondary);margin-left:8px">
-        拼图模式下先关闭组合再存图
-      </span>
+    <div class="gg-subhead">组合序列</div>
+    <div class="patch-tip">
+      从「图库」页签管理素材；此处负责把选中的图组合成一张。
     </div>
-    <div v-if="pins.loading" v-loading="true" style="min-height:40px" />
-    <div class="pin-tools">
-      <el-input v-model="q" size="small" placeholder="搜索图库…" clearable />
-      <el-select v-model="typeFilter" size="small" style="width:104px">
-        <el-option value="all" label="全部" />
-        <el-option value="spec" label="图" />
-        <el-option value="code" label="代码" />
-      </el-select>
-    </div>
-    <div class="pin-grid">
-      <div v-for="p in filteredPins" :key="p.id" class="pin-card"
-        :class="{ code: p.type === 'code', clickable: p.type === 'code' }"
-        :title="p.type === 'code' ? `${p.label}（点击打开代码图）` : p.label"
-        @click="p.type === 'code' && openCode(p)">
-        <div class="pc-thumb">
-          <img :src="thumbUrl(p)" loading="lazy" alt="" />
-          <span v-if="p.type === 'code'" class="pc-badge">代码</span>
-        </div>
-        <div class="pc-line">
-          <span class="pc-name">{{ p.label }}</span>
-          <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
-            <template #reference>
-              <button class="pc-del" title="从图库删除" @click.stop>
-                <el-icon><Delete /></el-icon>
-              </button>
-            </template>
-          </el-popconfirm>
-        </div>
-        <div class="pc-meta">
-          {{ p.type === 'code' ? '代码图' : (p.layers + ' 层') }}
-          <template v-if="p.srcType === 'dataset'"> · {{ p.src }}</template>
-          <template v-else-if="p.srcType === 'user'"> · 自有数据</template>
-        </div>
-      </div>
-    </div>
-    <div v-if="!pins.items.length && !pins.loading" class="gg-empty-hint" style="padding:10px 12px">
-      图库为空：把画布当前图存进来，即可参与拼图组合
-    </div><div class="gg-subhead" style="margin-top:14px">组合序列</div>
     <el-alert v-if="!patchworkOn" type="warning" :closable="false" show-icon
       style="margin:0 12px 6px" title="patchwork 扩展已关闭">
       拼图组合不可用。可在「高级 → 扩展管理」中重新启用；图库的存取不受影响。
@@ -302,6 +238,65 @@ async function openCode(p) {
       </el-select>
     </div>
 
+    <!-- 标注样式：只作用于 plot_annotation 的标题/副标题/注释/标签，不影响子图 -->
+    <div class="sty-head" @click="styleOpen = !styleOpen">
+      <el-icon :size="12"><component :is="styleOpen ? 'ArrowDown' : 'ArrowRight'" /></el-icon>
+      <span>标注样式</span>
+      <span class="sty-hint">字号 / 加粗 / 颜色</span>
+      <span style="flex:1" />
+      <el-button size="small" text class="sty-reset" @click.stop="resetStyle">恢复默认</el-button>
+    </div>
+    <template v-if="styleOpen">
+      <div class="sty-block">
+      <div class="p-row">
+        <label>标题</label>
+        <el-input-number :model-value="styleOf().title_size ?? null" :min="6" :max="48" :step="1"
+          size="small" controls-position="right" style="width:88px" placeholder="自动"
+          @update:model-value="setStyle('title_size', $event)" />
+        <el-checkbox :model-value="styleOf().title_bold === true" size="small"
+          @update:model-value="setStyle('title_bold', $event || null)">加粗</el-checkbox>
+        <el-color-picker :model-value="styleOf().title_color || ''" size="small"
+          @update:model-value="setStyle('title_color', $event)" />
+      </div>
+      <div class="p-row">
+        <label>副标题</label>
+        <el-input-number :model-value="styleOf().subtitle_size ?? null" :min="6" :max="40" :step="1"
+          size="small" controls-position="right" style="width:88px" placeholder="自动"
+          @update:model-value="setStyle('subtitle_size', $event)" />
+        <el-color-picker :model-value="styleOf().subtitle_color || ''" size="small"
+          @update:model-value="setStyle('subtitle_color', $event)" />
+      </div>
+      <div class="p-row">
+        <label>注释</label>
+        <el-input-number :model-value="styleOf().caption_size ?? null" :min="6" :max="32" :step="1"
+          size="small" controls-position="right" style="width:88px" placeholder="自动"
+          @update:model-value="setStyle('caption_size', $event)" />
+        <el-color-picker :model-value="styleOf().caption_color || ''" size="small"
+          @update:model-value="setStyle('caption_color', $event)" />
+      </div>
+      <div class="p-row">
+        <label>标签 tag</label>
+        <el-input-number :model-value="styleOf().tag_size ?? null" :min="6" :max="32" :step="1"
+          size="small" controls-position="right" style="width:88px" placeholder="自动"
+          @update:model-value="setStyle('tag_size', $event)" />
+        <el-checkbox :model-value="styleOf().tag_bold === true" size="small"
+          @update:model-value="setStyle('tag_bold', $event || null)">加粗</el-checkbox>
+        <el-color-picker :model-value="styleOf().tag_color || ''" size="small"
+          @update:model-value="setStyle('tag_color', $event)" />
+      </div>
+      <div class="p-row">
+        <label>字体</label>
+        <el-select :model-value="styleOf().family || ''" size="small" clearable style="width:170px"
+          placeholder="继承主题" @update:model-value="setStyle('family', $event || null)">
+          <el-option value="sans" label="sans（无衬线）" />
+          <el-option value="serif" label="serif（衬线）" />
+          <el-option value="mono" label="mono（等宽）" />
+        </el-select>
+      </div>
+      <div class="sty-tip">仅影响上方标题/副标题/注释/标签，不改变各子图内部字号。</div>
+      </div>
+    </template>
+
   <el-dialog v-model="pickerVisible" title="从图库选择（按选择顺序入槽）"
     width="min(1100px, 82vw)" top="6vh" append-to-body class="pick-dialog">
     <div class="pick-grid">
@@ -330,6 +325,31 @@ async function openCode(p) {
 </template>
 
 <style scoped>
+.patch-tip {
+  padding: 0 12px 8px; font-size: 11px; line-height: 1.5; color: var(--gg-text-4);
+}
+/* 标注样式折叠区 */
+.sty-head {
+  display: flex; align-items: center; gap: 5px;
+  padding: 8px 12px 4px; cursor: pointer; user-select: none;
+  font-size: 12px; font-weight: 600; color: var(--gg-text-3);
+}
+.sty-head:hover { color: var(--gg-text-1); }
+.sty-hint { font-weight: 400; font-size: 11px; color: var(--gg-text-4); }
+.sty-reset { padding: 0 4px; height: 20px; font-size: 11px; color: var(--gg-text-4); }
+.sty-reset:hover { color: var(--gg-brand); }
+.sty-tip {
+  padding: 2px 12px 8px; font-size: 11px; line-height: 1.5; color: var(--gg-text-4);
+}
+/* 样式行的控件较窄，覆盖全局 .p-row 的 240px 上限；
+   标签缩窄到 76px，给「字号 + 加粗 + 颜色」留出空间 */
+.p-row .el-input-number, .p-row .el-select { max-width: none; }
+.p-row .el-checkbox { margin-right: 0; }
+.p-row .el-color-picker { flex-shrink: 0; }
+.sty-block .p-row { gap: 6px; padding-right: 14px; }
+.sty-block .p-row > label { width: 76px; }
+.sty-block .el-input-number { width: 82px !important; }
+
 .pin-row {
   display: flex; align-items: center; gap: 7px; padding: 4px 12px; font-size: 13px;
 }

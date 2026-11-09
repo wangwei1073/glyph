@@ -12,6 +12,7 @@ import AnnotatePanel from './AnnotatePanel.vue'
 import ThemePanel from './ThemePanel.vue'
 import AdvancedPanel from './AdvancedPanel.vue'
 import PinPanel from './PinPanel.vue'
+import GalleryPanel from './GalleryPanel.vue'
 import ExtensionsPanel from './ExtensionsPanel.vue'
 
 const ui = useUiStore()
@@ -19,18 +20,25 @@ const tab = computed({
   get: () => ui.tab,
   set: (v) => ui.setTab(v)
 })
+// 页签按职责分组（组间显示分隔线）：
+//   0 绘图核心：图层 → 美学 → 参数（从「画什么」到「怎么映射」到「细调」）
+//   1 图形设置：标度 → 坐标（改变图形本身的呈现规则）
+//   2 图上元素：标签 → 注释 → 主题（叠加在图上、影响外观的内容）
+//   3 产出：图库 → 拼图（把图存起来、把图组合出去）
+//   4 系统：高级 → 扩展（代码模式与能力管理）
 const items = [
   { name: 'layers', label: '图层', icon: 'Files', group: 0 },
   { name: 'aes', label: '美学', icon: 'CollectionTag', group: 0 },
   { name: 'params', label: '参数', icon: 'Tools', group: 0 },
   { name: 'scale', label: '标度', icon: 'Odometer', group: 1 },
   { name: 'coord', label: '坐标', icon: 'Grid', group: 1 },
-  { name: 'patch', label: '拼图', icon: 'Menu', group: 1 },
   { name: 'labs', label: '标签', icon: 'EditPen', group: 2 },
   { name: 'annot', label: '注释', icon: 'Location', group: 2 },
   { name: 'theme', label: '主题', icon: 'Brush', group: 2 },
-  { name: 'adv', label: '高级', icon: 'Setting', group: 3 },
-  { name: 'ext', label: '扩展', icon: 'Box', group: 3 }
+  { name: 'gallery', label: '图库', icon: 'PictureFilled', group: 3 },
+  { name: 'patch', label: '拼图', icon: 'Menu', group: 3 },
+  { name: 'adv', label: '高级', icon: 'Setting', group: 4 },
+  { name: 'ext', label: '扩展', icon: 'Box', group: 4 }
 ]
 </script>
 
@@ -59,6 +67,7 @@ const items = [
       <LabsGuidePanel v-show="tab === 'labs'" />
       <AnnotatePanel v-show="tab === 'annot'" />
       <ThemePanel v-show="tab === 'theme'" />
+      <GalleryPanel v-show="tab === 'gallery'" />
       <PinPanel v-show="tab === 'patch'" />
       <AdvancedPanel v-show="tab === 'adv'" />
       <ExtensionsPanel v-show="tab === 'ext'" />
@@ -83,7 +92,7 @@ const items = [
 }
 .rail-btn {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 7px 0 5px; border: none; background: none; cursor: pointer;
+  padding: 6px 0 4px; border: none; background: none; cursor: pointer;
   color: var(--el-text-color-secondary); position: relative;
   font-family: inherit; line-height: 1; font-size: inherit;
 }
@@ -99,6 +108,10 @@ const items = [
   justify-content: center;   /* 覆盖 .rail-btn 的默认顶部对齐，让箭头垂直居中 */
 }
 .rail-collapse:hover { color: var(--gg-brand); background: transparent; }
-.rail-sep { height: 1px; margin: 6px 12px; background: var(--gg-border); flex-shrink: 0; }
+/* 分组分隔线：比按钮间隙更明显，让「绘图核心 / 图形设置 / 图上元素 / 产出 / 系统」一眼可分 */
+.rail-sep {
+  height: 1px; margin: 7px 10px; flex-shrink: 0;
+  background: var(--gg-border-strong);
+}
 .tab-body { flex: 1; min-width: 0; min-height: 0; }
 </style>

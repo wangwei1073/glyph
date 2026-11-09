@@ -842,7 +842,37 @@ ggspec_compose_code <- function(combine, meta, state) {
     if (has_val(an[[nm]])) aargs[[nm]] <- .enc(an[[nm]])
   }
   if (has_val(an$tag_levels)) aargs[["tag_levels"]] <- .enc(an$tag_levels)
+
+  # 标注样式：plot_annotation(theme = theme(...))
+  # 只作用于标注层（标题/副标题/注释/标签），不会改变各子图内部的字号。
+  sty <- (an$style %||% list())
+  .sty_el <- function(kind, args) {
+    if (!length(args)) return(NULL)
+    sprintf("element_text(%s)", paste(args, collapse = ", "))
+  }
+  tparts <- character(0)
+  add_el <- function(elem, size, bold, color) {
+    a <- character(0)
+    if (has_val(size)) a <- c(a, sprintf("size = %s", as.numeric(size)))
+    if (isTRUE(bold)) a <- c(a, "face = \"bold\"")
+    if (has_val(color)) a <- c(a, sprintf("colour = \"%s\"", color))
+    e <- .sty_el(elem, a)
+    if (!is.null(e)) tparts <<- c(tparts, sprintf("%s = %s", elem, e))
+  }
+  add_el("plot.title",    sty$title_size,    sty$title_bold,    sty$title_color)
+  add_el("plot.subtitle", sty$subtitle_size, NULL,              sty$subtitle_color)
+  add_el("plot.caption",  sty$caption_size,  NULL,              sty$caption_color)
+  add_el("plot.tag",      sty$tag_size,      sty$tag_bold,      sty$tag_color)
+  if (has_val(sty$family)) {
+    tparts <- c(tparts, sprintf("text = element_text(family = \"%s\")", sty$family))
+  }
+  if (length(tparts)) {
+    aargs[["theme"]] <- sprintf("theme(%s)", paste(tparts, collapse = ", "))
+  }
+
   if (length(aargs)) {
+    # aargs 的值已经是可直接输出的 R 表达式（.enc 负责加引号，theme() 本身就是表达式），
+    # 因此统一交给 .args_line 拼接即可。
     expr <- paste0(expr, " + plot_annotation(", .args_line(aargs), ")")
   }
 

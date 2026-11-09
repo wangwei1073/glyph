@@ -68,7 +68,19 @@ async function shot(name) {
   console.log('saved', name)
 }
 
-const steps = JSON.parse(process.env.STEPS || '[]')
+// 步骤来源优先级：STEPS_FILE（文件，避免 shell 转义地狱）> STEPS（内联 JSON）> 无
+import { readFileSync } from 'node:fs'
+let steps = []
+if (process.env.STEPS_FILE) {
+  try {
+    steps = JSON.parse(readFileSync(process.env.STEPS_FILE, 'utf8'))
+  } catch (e) {
+    console.error('读取 STEPS_FILE 失败：', e.message)
+    process.exit(1)
+  }
+} else {
+  steps = JSON.parse(process.env.STEPS || '[]')
+}
 await shot(`${out}_0.png`)
 let i = 1
 for (const step of steps) {
