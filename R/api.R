@@ -608,6 +608,17 @@ ggspec_api_app <- function(state) {
       return(json_response(list(ok = TRUE, code = res$code, warnings = res$warnings)))
     }
 
+    if (path == "/api/code/format" && method == "POST") {
+      code <- body$code %||% ""
+      if (!nzchar(trimws(code))) return(json_error("代码为空", 400))
+      if (!requireNamespace("styler", quietly = TRUE)) {
+        return(json_error("未安装 styler 包，无法格式化", 400))
+      }
+      out <- tryCatch(paste(as.character(styler::style_text(code)), collapse = "\n"),
+                      error = function(e) e)
+      if (inherits(out, "error")) return(json_error(conditionMessage(out), 400))
+      return(json_response(list(ok = TRUE, code = out)))
+    }
     if (path == "/api/rawrender" && method == "POST") {
       code <- body$code %||% ""
       spec <- body$spec %||% list()

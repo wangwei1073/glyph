@@ -4,7 +4,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
-import { rawRender, toggleExtension, installExtension, getInstallStatus } from '../api'
+import { rawRender, formatCode } from '../api'
 
 const spec = useSpecStore()
 const meta = useMetaStore()
@@ -47,6 +47,7 @@ async function buildEditor() {
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         StreamLanguage.define(r),
+        EditorView.lineWrapping,
         oneDark,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) rawCode.value = u.state.doc.toString()
@@ -62,6 +63,34 @@ onMounted(() => { initEditor().catch((e) => ElMessage.error('代码编辑器初�
 onBeforeUnmount(() => {
   if (editor) { editor.destroy(); editor = null; initPromise = null }
 })
+
+async function copyCode() {
+  if (!rawCode.value.trim()) return ElMessage.warning('代码为空')
+  try {
+    await navigator.clipboard.writeText(rawCode.value)
+    ElMessage.success('代码已复制')
+  } catch { ElMessage.error('复制失败（浏览器不允许剪贴板）') }
+}
+
+async function formatNow() {
+  if (!rawCode.value.trim()) return ElMessage.warning('代码为空')
+  try {
+    const res = await formatCode(rawCode.value)
+    rawCode.value = res.code
+    await initEditor()
+    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: res.code } })
+    ElMessage.success('已格式化（styler）')
+  } catch (e) { ElMessage.error('格式化失败：' + e.message) }
+}
+
+function downloadCode() {
+  const blob = new Blob([rawCode.value], { type: 'text/plain;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'plot.R'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
 
 async function loadFromSpec() {
   const code = spec.last.code
@@ -182,6 +211,9 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
       <el-button size="small" type="primary" :loading="rawRunning" @click="runRaw">
         <el-icon><VideoPlay /></el-icon>运行代码 (Ctrl+Enter)
       </el-button>
+      <el-button size="small" @click="copyCode">复制</el-button>
+      <el-button size="small" @click="formatNow">格式化</el-button>
+      <el-button size="small" @click="downloadCode">下载 .R</el-button>
     </div>
     <div ref="editorEl" class="cm-editor-box" @keydown.ctrl.enter.prevent="runRaw" />
     <div class="adv-console" :class="consoleClass">

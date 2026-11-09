@@ -124,6 +124,7 @@ export const renderPlot = (spec, { width = 800, height = 500, dpi = 150 } = {}) 
 
 export const genCode = (spec) => post('/api/code', { spec })
 
+export const formatCode = (code) => post('/api/code/format', { code })
 export const rawRender = (code, spec, { width = 800, height = 500, dpi = 150 } = {}) =>
   post('/api/rawrender', { code, spec, width, height, dpi }, T_HEAVY)
 
