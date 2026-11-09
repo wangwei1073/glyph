@@ -26,7 +26,13 @@ window.__ModuleLoader__.load({
       '.gp-rail.gp-on{color:#1f9d55}',
       '.gp-rail-dot{width:6px;height:6px;border-radius:50%;background:#c9ced6}',
       '.gp-rail.gp-on .gp-rail-dot{background:#1f9d55}',
-      '.gp-panel{position:fixed;right:0;top:0;bottom:0;z-index:2139;width:min(1160px,58vw);display:flex;flex-direction:column;background:#fff;border-left:1px solid rgba(0,0,0,.14);box-shadow:-8px 0 32px rgba(0,0,0,.14);overflow:hidden;font:12px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}',
+      '.gp-panel{position:fixed;right:0;top:0;bottom:0;z-index:2139;width:min(1200px,52vw);min-width:420px;display:flex;flex-direction:column;background:#fff;border-left:1px solid rgba(0,0,0,.14);box-shadow:-8px 0 32px rgba(0,0,0,.14);overflow:hidden;font:12px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}',
+      // 面板打开时把 DSH 主区域让出空间（挤压而不是遮挡）
+      'html.gp-open .gp-shift{box-sizing:border-box!important;margin-right:var(--gp-dsh-w,0px)!important;transition:margin-right .12s ease}',
+      'html.gp-open .gp-shift-abs{box-sizing:border-box!important;right:var(--gp-dsh-w,0px)!important;transition:right .12s ease}',
+      // 左边缘拖拽手柄：改面板宽度
+      '.gp-resizer{position:absolute;left:0;top:0;bottom:0;width:6px;cursor:col-resize;z-index:6;background:transparent}',
+      '.gp-resizer:hover,.gp-resizer.gp-dragging{background:rgba(47,111,191,.35)}',
       '.gp-head{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f7f9fc;border-bottom:1px solid rgba(0,0,0,.08);flex:none;min-height:38px}',
       '.gp-title{font-weight:600;color:#1f2329}',
       '.gp-ws{color:#6b7280;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}',
@@ -111,14 +117,131 @@ window.__ModuleLoader__.load({
       }
       const codeBtn = mkBtn('推送代码', true)
       const dirBtn = mkBtn('项目目录')
+      const maxBtn = mkBtn('最大化')
       const restartBtn = mkBtn('重启')
       const closeBtn = mkBtn('收起')
+
+      // 左边缘拖拽手柄
+      const resizer = el('div', 'gp-resizer')
+      resizer.title = '拖动调整宽度'
+      panel.appendChild(resizer)
 
       const body = el('div', 'gp-body')
       const frameWrap = el('div', 'gp-frame')
       body.appendChild(frameWrap)
       panel.appendChild(head)
       panel.appendChild(body)
+
+      // ---- 让 DSH 主区域给面板让位（挤压而非覆盖）----
+      // 找到承载整个界面的根容器：优先 #root / #app，退回 body 的第一个元素。
+      // 若它是 fixed 定位（铺满视口），用 right 收窄；否则用 margin-right。
+      let shiftEl = null
+      let shiftMode = ''
+
+      function findRoot() {
+        const cands = ['#root', '#app', '#dsh-root']
+        for (let i = 0; i < cands.length; i++) {
+          const n = document.querySelector(cands[i])
+          if (n && n !== document.body) return n
+        }
+        const first = document.body.firstElementChild
+        return first && first !== rail && first !== panel ? first : null
+      }
+
+      function applyShift(px) {
+        document.documentElement.style.setProperty('--gp-dsh-w', Math.max(0, Math.round(px)) + 'px')
+        if (!shiftEl) {
+          shiftEl = findRoot()
+          if (!shiftEl) return
+          const pos = window.getComputedStyle(shiftEl).position
+          shiftMode = (pos === 'fixed' || pos === 'absolute') ? 'abs' : 'margin'
+        }
+        shiftEl.classList.add(shiftMode === 'abs' ? 'gp-shift-abs' : 'gp-shift')
+        document.documentElement.classList.add('gp-open')
+      }
+
+      function clearShift() {
+        document.documentElement.classList.remove('gp-open')
+        if (shiftEl) {
+          shiftEl.classList.remove('gp-shift')
+          shiftEl.classList.remove('gp-shift-abs')
+        }
+      }
+      // ---- 宽度：可拖拽 + 可最大化，记忆到 localStorage ----
+      const WIDTH_KEY = 'glyph-dsh-panel-width'
+      // 上限留出至少 380px 给对话区，避免把聊天挤没
+      const clamps = (px) => Math.max(420, Math.min(window.innerWidth - 380, px))
+
+      function setWidth(px) {
+        const w = clamps(px)
+        panel.style.width = w + 'px'
+        // 用 DOM 状态判断，避免依赖后面才声明的 open（TDZ）
+        if (panel.style.display === 'flex') applyShift(w)
+      }
+
+      try {
+        const saved = Number(localStorage.getItem(WIDTH_KEY) || 0)
+        if (saved > 0) setWidth(saved)
+      } catch (e) { /* 忽略 */ }
+
+      let dragging = false
+      let isMax = false
+
+      function startDrag(e) {
+        e.preventDefault()
+        dragging = true
+        resizer.classList.add('gp-dragging')
+        // 拖拽期间禁用 iframe 的指针事件，否则鼠标移到 iframe 上就收不到 move
+        frameWrap.style.pointerEvents = 'none'
+        document.body.style.userSelect = 'none'
+        try { resizer.setPointerCapture(e.pointerId) } catch (er) { /* 忽略 */ }
+      }
+
+      function onDrag(e) {
+        if (!dragging) return
+        if (isMax) { isMax = false; maxBtn.textContent = '最大化' }
+        setWidth(window.innerWidth - e.clientX)
+      }
+
+      function endDrag() {
+        if (!dragging) return
+        dragging = false
+        resizer.classList.remove('gp-dragging')
+        frameWrap.style.pointerEvents = ''
+        document.body.style.userSelect = ''
+        try {
+          localStorage.setItem(WIDTH_KEY, String(Math.round(panel.getBoundingClientRect().width)))
+        } catch (e) { /* 忽略 */ }
+      }
+
+      resizer.addEventListener('pointerdown', startDrag)
+      window.addEventListener('pointermove', onDrag)
+      window.addEventListener('pointerup', endDrag)
+      window.addEventListener('pointercancel', endDrag)
+
+      maxBtn.addEventListener('click', () => {
+        if (isMax) {
+          isMax = false
+          maxBtn.textContent = '最大化'
+          try {
+            const saved = Number(localStorage.getItem(WIDTH_KEY) || 0)
+            setWidth(saved > 0 ? saved : Math.min(1500, window.innerWidth * 0.74))
+          } catch (e) { setWidth(window.innerWidth * 0.74) }
+        } else {
+          try {
+            localStorage.setItem(WIDTH_KEY, String(Math.round(panel.getBoundingClientRect().width)))
+          } catch (e) { /* 忽略 */ }
+          isMax = true
+          maxBtn.textContent = '还原'
+          setWidth(window.innerWidth - 8)
+        }
+      })
+
+      const onWinResize = () => {
+        setWidth(panel.getBoundingClientRect().width)
+        if (panel.style.display === 'flex') applyShift(panel.getBoundingClientRect().width)
+      }
+      window.addEventListener('resize', onWinResize)
 
       let iframe = null
       let lastUrl = ''
@@ -245,6 +368,7 @@ window.__ModuleLoader__.load({
         open = true
         rail.style.display = 'none'
         panel.style.display = 'flex'
+        applyShift(panel.getBoundingClientRect().width || Math.min(1200, window.innerWidth * 0.52))
         hint('正在启动 Glyph …')
         api('/start', {}).catch(() => null).then(() => refresh())
         if (timer) clearInterval(timer)
@@ -254,6 +378,7 @@ window.__ModuleLoader__.load({
       function closePanel() {
         open = false
         closeComposer()
+        clearShift()
         panel.style.display = 'none'
         rail.style.display = 'flex'
         if (timer) { clearInterval(timer); timer = null }
@@ -293,6 +418,10 @@ window.__ModuleLoader__.load({
       return () => {
         if (timer) clearInterval(timer)
         document.removeEventListener('keydown', onKey)
+        window.removeEventListener('pointermove', onDrag)
+        window.removeEventListener('pointerup', endDrag)
+        window.removeEventListener('pointercancel', endDrag)
+        window.removeEventListener('resize', onWinResize)
         rail.remove()
         panel.remove()
       }
