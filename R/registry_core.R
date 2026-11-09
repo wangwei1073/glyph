@@ -242,7 +242,7 @@ SCALE_AES_PREFIXES <- c("x", "y", "colour", "color", "fill", "alpha", "size",
       base_size = pv(nm, "number", "基础字号", min = 4, max = 48, step = 1),
       base_family = pv(nm, "select", "基础字体", FONT_OPTIONS),
       header_family = pv(nm, "select", "标题字体", FONT_OPTIONS),
-      palette = pv(nm, "select", "调色板", PRISM_PALETTES),
+      palette = pv(nm, "text", "调色板"),
       scheme = pv(nm, "select", "配色方案", GGTHEMES_SCHEMES),
       style = pv(nm, "select", "样式", c("default", "darkunica")),
       legend = pv(nm, "select", "图例位置", LEGEND_POS_OPTIONS),
@@ -385,13 +385,36 @@ GGTHEMES_THEME_LABELS <- list(
   names(d[[key]])
 }
 
-# theme_prism 的专用控件（palette 是 65 选 1，border/轴线角度也需要合适的控件）
+# theme_prism(palette=) 用的调色板是 ggprism_data$themes，
+# 与 scale_*_prism 用的 colour_palettes 不是同一套（后者 65 个、前者 44 个，
+# 有 22 个名字只在 colour_palettes 里存在，选到就会报 "palette ... does not exist"）。
+# 因此这里按运行时数据取名，不硬编码，避免包升级后清单对不上。
+.ggprism_theme_palette_names <- function() {
+  d <- tryCatch({
+    if (exists("ggprism_data", envir = asNamespace("ggprism"), inherits = FALSE)) {
+      get("ggprism_data", envir = asNamespace("ggprism"))
+    } else {
+      e <- new.env()
+      utils::data("ggprism_data", package = "ggprism", envir = e)
+      get("ggprism_data", envir = e)
+    }
+  }, error = function(e2) NULL)
+  if (!is.list(d) || is.null(d$themes)) return(character(0))
+  names(d$themes)
+}
+
+# theme_prism 的专用控件（palette、border、轴线角度等需要合适的控件）
 .ggprism_theme_args <- function(args) {
   for (i in seq_along(args)) {
     nm <- args[[i]]$name
     if (identical(nm, "palette")) {
-      args[[i]] <- pv("palette", "select", "Prism 调色板",
-                      options = as.list(.ggprism_palette_names("colour")))
+      pals <- .ggprism_theme_palette_names()
+      args[[i]] <- if (length(pals)) {
+        pv("palette", "select", "Prism 调色板", pals)
+      } else {
+        # 取不到运行时清单时退回文本，避免给出一个空下拉
+        pv("palette", "text", "Prism 调色板")
+      }
     } else if (identical(nm, "base_fontface")) {
       args[[i]] <- pv("base_fontface", "select", "字体样式",
                       c("plain", "bold", "italic", "bold.italic"))

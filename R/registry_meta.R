@@ -744,27 +744,10 @@ FONT_OPTIONS <- c("sans", "serif", "mono", "Microsoft YaHei 微软雅黑", "SimH
 FACEFACE_OPTIONS <- c("plain", "bold", "italic", "bold.italic")
 # 图例位置（theme_pubr / hrbrthemes 的 legend / lp 参数）
 LEGEND_POS_OPTIONS <- c("top", "bottom", "left", "right", "none")
-# ggprism 调色板（取自 ggprism::ggprism_data$colour_palettes，共 65 个）
-PRISM_PALETTES <- c(
-  "colors", "black_and_white", "autumn_leaves", "beer_and_ales", "blueprint",
-  "blueprint2", "blueprint3", "candy_bright", "candy_soft", "colorblind_safe",
-  "diazo", "earth_tones", "evergreen", "fir", "fir2", "fir3", "flames", "flames2",
-  "floral", "floral2", "greenwash", "inferno", "magma", "mustard_field",
-  "mustard_field2", "muted_rainbow", "neon", "ocean", "ocean2", "ocean3", "office",
-  "pastels", "pearl", "pearl2", "plasma", "prism_dark", "prism_dark2",
-  "prism_light", "prism_light2", "purple_passion", "quiet", "quiet2",
-  "shades_of_gray", "spring", "spring2", "stained_glass", "stained_glass2",
-  "starry", "starry2", "summer", "sunny_garden", "sunny_garden2", "sunny_garden3",
-  "the_blues", "viridis", "warm_and_sunny", "warm_pastels", "warm_pastels2",
-  "waves", "waves2", "winter_bright", "winter_soft", "wool_muffler",
-  "wool_muffler2", "wool_muffler3"
-)
-# ggthemes 的 scheme 参数（theme_foundation 系）
-GGTHEMES_SCHEMES <- c("s2color", "s2cerulean", "s2emerald", "s2green", "s2mono",
-                      "s2orange", "s2purple", "s2red", "s2sand", "s2sierra", "s2stata",
-                      "s2excel", "s2gdocs", "s2economist", "s2theeconomist",
-                      "s2wsj", "s2hc", "s2pander", "s2calc", "s2solarized",
-                      "s2solarized2")
+# ggthemes::theme_stata 的 scheme 合法值（取自函数自带校验信息，共 8 个）
+# 注意：不要按名字臆测，s2gmanual 之类并不存在
+GGTHEMES_SCHEMES <- c("s1color", "s1manual", "s1mono", "s1rcolor",
+                      "s2color", "s2manual", "s2mono", "sj")
 
 # ---- 主题元素中文标签（未命中的用元素名本身） --------------------------------
 THEME_ELEMENT_LABELS <- list(

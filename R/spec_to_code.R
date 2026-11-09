@@ -299,7 +299,13 @@
     fn <- tmeta$fn %||% paste0("theme_", base)
     fn <- .qualified_fn(fn, (tmeta$package %||% "ggplot2"))
     args <- list()
+    # 只传当前主题函数接受的参数：切主题后旧参数（如 prism 的 palette）若继续传下去，
+    # 会得到「参数没有用(palette = ...)」并让整张图渲染失败。
+    accepted <- if (length(tmeta$args %||% list())) {
+      vapply(tmeta$args, function(a) as.character(a$name %||% ""), character(1))
+    } else character(0)
     for (pnm in names(theme$args %||% list())) {
+      if (length(accepted) && !(pnm %in% accepted)) next
       if (has_val(theme$args[[pnm]])) args[[pnm]] <- .enc(theme$args[[pnm]])
     }
     out <- c(out, paste0(fn, "(", .args_line(args), ")"))

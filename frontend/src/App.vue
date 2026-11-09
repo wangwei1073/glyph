@@ -42,19 +42,22 @@ function startResize() {
 
 // ---- 自动渲染（深度 watch spec + 渲染设置，550ms 防抖） ----
 // 两种情况要区分开：
-//   A) 只改了「画幅 / 尺寸」→ 当前代码图应保持代码、按新尺寸重渲染
-//   B) 改动了「绘图规格（图层/映射）」→ 用户回到了正常绘图流程，代码图应让位给 spec
+//   A) 只改了「画幅 / 尺寸」→ 当前代码图保持代码，按新尺寸重渲染
+//   B) 改动了「绘图规格（图层/映射/主题/标度…）」→ 不影响正在展示的代码图
+//
+// 关于 B：代码图是由一段 R 代码绘制出来的，主题、配色、标度这些设置对它**完全无效**。
+// 所以此时不应该按 spec 重新渲染 —— 那样只会把代码图替换掉（甚至因为 spec 没有图层
+// 或参数不匹配而报错，画面直接空白）。
+// 退出「代码图」状态改为显式动作：画布顶栏的「返回我的图」按钮。
 let debounceTimer = null
 function scheduleRender(fromSpec = false) {
   if (!spec.autoRender) return
+  // 代码图状态下忽略 spec 改动（设置仍会保存进 spec，只是不改画面）
+  if (fromSpec && spec.last && spec.last.renderedFromCode) return
   clearTimeout(debounceTimer)
   spec.renderQueued = true
   debounceTimer = setTimeout(() => {
     spec.renderQueued = false
-    // 用户改动了图层/映射 → 退出「代码图」状态，按 spec 渲染
-    if (fromSpec && spec.last && spec.last.renderedFromCode) {
-      spec.last = { ...spec.last, renderedFromCode: false }
-    }
     spec.renderNow()
   }, 550)
 }

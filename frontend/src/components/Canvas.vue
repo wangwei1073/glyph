@@ -507,7 +507,7 @@ async function drawPlotly() {
     <template v-if="spec.last.renderedFromCode">
       <span class="ch-sep" />
       <div class="ch-group">
-        <el-tooltip content="当前画布显示的是从图库打开的代码图" placement="bottom">
+        <el-tooltip content="当前画布显示的是从图库打开的代码图。它由代码绘制，主题、配色、标度等设置对它不生效；点右侧「返回我的图」可按当前设置重新出图" placement="bottom">
           <span class="head-code-tag"><el-icon><Tickets /></el-icon>代码图</span>
         </el-tooltip>
         <el-tooltip v-if="spec.hasContent" content="切回按当前图层设置生成的图" placement="bottom">
