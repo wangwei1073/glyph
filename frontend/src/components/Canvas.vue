@@ -33,6 +33,10 @@ const plotlyLoading = ref(false)
 const plotlyEl = ref(null)
 
 const imgSrc = computed(() => spec.imgSrc)
+// 代码图状态下，导出/检查/打包都必须针对「这段代码」而不是 spec：
+// 代码图没有图层，按 spec 走会导出一张空白图（而且不报错）。
+const activeCode = computed(() =>
+  (spec.last && spec.last.renderedFromCode) ? (spec.last.code || '') : '')
 // 扩展是否启用（关闭后隐藏/禁用对应入口，避免点了才报错）
 const plotlyOn = computed(() => !!(meta.ext && meta.ext.plotly))
 // 底栏状态：优先表达画布自身状态（空画布 / 拼图），其次数据上下文与耗时
@@ -91,14 +95,11 @@ const sizeHint = computed(() => {
     + `。字号按 pt 输出、与 dpi 无关；当前主题基础字号 ${base}pt。`
 })
 
-// 从「代码图」回到「自己的 spec 图」
-// 清掉来源标记后按 spec 重渲染；有未保存改动不受影响（spec 一直在内存里）
+// 从「代码图」回到「自己的 spec 图」—— 实际逻辑在 store，画布顶栏与设置面板共用
 function backToSpec() {
-  if (!spec.spec.layers.length && !spec.composeActive) {
-    return ElMessage.warning('画布没有图层，无法返回；先添加图层或载入项目')
+  if (!spec.backToSpec()) {
+    ElMessage.warning('画布没有图层，无法返回；先添加图层或载入项目')
   }
-  spec.last = { ...spec.last, renderedFromCode: false }
-  spec.renderNow()
 }
 
 // 计算「画布实际的渲染像素尺寸」：容器内容区尺寸 × DPR
@@ -279,7 +280,7 @@ const checkIcon = (level) => ({
 async function runExportCheck(format, { silentPass = false } = {}) {
   checking.value = true
   try {
-    const res = await checkExport(spec.spec, { ...exportOpts.value, format, journal: journalId.value })
+    const res = await checkExport(spec.spec, { ...exportOpts.value, format, journal: journalId.value, code: activeCode.value })
     checkIssues.value = res.issues || []
     checkInfo.value = res.info || null
     const blocking = checkIssues.value.some(i => i.level === 'warn' || i.level === 'fail')
@@ -349,7 +350,7 @@ async function bundleNow() {
   exporting.value = true
   try {
     const { width, height, dpi } = exportOpts.value
-    const res = await bundlePlot(spec.spec, { width, height, dpi, journal: journalId.value, projectId: spec.projectId })
+    const res = await bundlePlot(spec.spec, { width, height, dpi, journal: journalId.value, projectId: spec.projectId, code: activeCode.value })
     if (!res.ok || !res.url) throw new Error(res.error || '打包失败')
     const r = await fetch(res.url)
     if (!r.ok) throw new Error(`下载失败: HTTP ${r.status}`)
@@ -367,7 +368,7 @@ async function exportNow(format) {
   exporting.value = true
   try {
     const { width, height, dpi } = exportOpts.value
-    const { blob, filename } = await exportPlot(spec.spec, { width, height, dpi, format })
+    const { blob, filename } = await exportPlot(spec.spec, { width, height, dpi, format, code: activeCode.value })
     downloadBlob(blob, filename)
     ElMessage.success(`已导出 ${filename}`)
   } catch (e) {

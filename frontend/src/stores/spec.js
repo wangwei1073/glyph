@@ -476,6 +476,17 @@ export const useSpecStore = defineStore('spec', {
       return JSON.stringify(this.spec, null, 2)
     },
 
+    // 从「代码图」回到按当前 spec 渲染的图。
+    // 代码图状态下 spec 改动不会自动重渲染（见 App.vue 的守卫），
+    // 因此需要一个显式出口；画布顶栏与各设置面板都调这里。
+    // 返回 true 表示已切换，false 表示画布上没有可渲染的内容。
+    backToSpec() {
+      if (!this.hasContent) return false
+      if (this.last) this.last = { ...this.last, renderedFromCode: false }
+      this.renderNow()
+      return true
+    },
+
     // ---- 渲染 ----
     // 串行化：同一时刻只发一个渲染请求（后端 httpuv 单线程，排队只会让所有请求一起变慢）；
     // 渲染期间的新请求合并成「结束后再来一次」。

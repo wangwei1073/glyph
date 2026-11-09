@@ -1,7 +1,9 @@
 <script setup>
 // 右侧控制面板：图标竖栏 + 内容区（分组表达语义层级）
 import { computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useUiStore } from '../stores/ui'
+import { useSpecStore } from '../stores/spec'
 import LayerPanel from './LayerPanel.vue'
 import AesPanel from './AesPanel.vue'
 import ParamPanel from './ParamPanel.vue'
@@ -16,10 +18,22 @@ import GalleryPanel from './GalleryPanel.vue'
 import ExtensionsPanel from './ExtensionsPanel.vue'
 
 const ui = useUiStore()
+const spec = useSpecStore()
 const tab = computed({
   get: () => ui.tab,
   set: (v) => ui.setTab(v)
 })
+
+// 这些页签编辑的是「绘图规格」，而代码图是由一段 R 代码画出来的，
+// 规格对它的画面没有任何影响。此时把面板置灰并给出说明与出口，
+// 避免用户改了设置却看不出变化（或以为坏了）。
+const SPEC_TABS = ['layers', 'aes', 'params', 'scale', 'coord', 'labs', 'annot', 'theme']
+const isCodeImage = computed(() => !!(spec.last && spec.last.renderedFromCode))
+const locked = computed(() => isCodeImage.value && SPEC_TABS.includes(tab.value))
+
+function goBackToSpec() {
+  if (!spec.backToSpec()) ElMessage.warning('画布没有图层，无法返回；先添加图层或载入项目')
+}
 // 页签按职责分组（组间显示分隔线）：
 //   0 绘图核心：图层 → 美学 → 参数（从「画什么」到「怎么映射」到「细调」）
 //   1 图形设置：标度 → 坐标（改变图形本身的呈现规则）
@@ -59,14 +73,20 @@ const items = [
       </template>
     </nav>
     <div class="tab-body gg-scroll">
-      <LayerPanel v-show="tab === 'layers'" />
-      <AesPanel v-show="tab === 'aes'" />
-      <ParamPanel v-show="tab === 'params'" />
-      <ScalePanel v-show="tab === 'scale'" />
-      <CoordFacetPanel v-show="tab === 'coord'" />
-      <LabsGuidePanel v-show="tab === 'labs'" />
-      <AnnotatePanel v-show="tab === 'annot'" />
-      <ThemePanel v-show="tab === 'theme'" />
+      <!-- 代码图状态下，这 8 个面板的设置对画面不生效：置灰 + 说明 + 出口 -->
+      <div v-if="locked" class="lock-bar">
+        <el-icon class="lock-ico"><Tickets /></el-icon>
+        <span class="lock-txt">当前显示代码图，本页设置对它不生效</span>
+        <el-button size="small" text type="primary" @click="goBackToSpec">返回我的图</el-button>
+      </div>
+      <LayerPanel v-show="tab === 'layers'" :class="{ 'is-locked': locked }" />
+      <AesPanel v-show="tab === 'aes'" :class="{ 'is-locked': locked }" />
+      <ParamPanel v-show="tab === 'params'" :class="{ 'is-locked': locked }" />
+      <ScalePanel v-show="tab === 'scale'" :class="{ 'is-locked': locked }" />
+      <CoordFacetPanel v-show="tab === 'coord'" :class="{ 'is-locked': locked }" />
+      <LabsGuidePanel v-show="tab === 'labs'" :class="{ 'is-locked': locked }" />
+      <AnnotatePanel v-show="tab === 'annot'" :class="{ 'is-locked': locked }" />
+      <ThemePanel v-show="tab === 'theme'" :class="{ 'is-locked': locked }" />
       <GalleryPanel v-show="tab === 'gallery'" />
       <PinPanel v-show="tab === 'patch'" />
       <AdvancedPanel v-show="tab === 'adv'" />
@@ -114,4 +134,21 @@ const items = [
   background: var(--gg-border-strong);
 }
 .tab-body { flex: 1; min-width: 0; min-height: 0; }
+
+/* 代码图状态下锁定的面板：置灰 + 不可交互（滚动也一并禁用，避免误以为可编辑） */
+.is-locked {
+  opacity: .42; filter: saturate(.35); pointer-events: none; user-select: none;
+}
+/* 顶部说明条：常驻在内容区顶部，是唯一可点的元素（提供返回出口） */
+.lock-bar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px; margin-bottom: 4px;
+  background: #fff8ec; border-bottom: 1px solid #f0d9b5;
+  font-size: 11.5px; color: #8a5a00;
+}
+html.dark .lock-bar { background: #3a2f18; border-bottom-color: #5a4a25; color: #ddb26a; }
+.lock-ico { flex-shrink: 0; }
+.lock-txt { flex: 1; min-width: 0; }
+.lock-bar :deep(.el-button) { flex-shrink: 0; padding: 0 4px; height: 20px; font-size: 11.5px; }
 </style>

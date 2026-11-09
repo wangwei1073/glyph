@@ -683,7 +683,8 @@ ggspec_api_app <- function(state) {
       dpi <- as.integer(body$dpi %||% 300)
       journal <- body$journal %||% NULL
       res <- tryCatch(ggspec_bundle(spec, state$meta, state, width, height, dpi, format,
-                                    journal = journal, project_id = body$projectId %||% NULL),
+                                    journal = journal, project_id = body$projectId %||% NULL,
+                                    code = as.character(body$code %||% "")),
                       error = function(e) e)
       if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
       return(json_response(list(ok = TRUE, url = paste0("/api/plotfile/", res$filename),
@@ -698,7 +699,8 @@ ggspec_api_app <- function(state) {
       dpi <- as.integer(body$dpi %||% 300)
       journal <- body$journal %||% NULL
       res <- tryCatch(ggspec_export_check(spec, state$meta, state, width, height, dpi, format,
-                                          journal = journal),
+                                          journal = journal,
+                                          code = as.character(body$code %||% "")),
                       error = function(e) e)
       if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
       return(json_response(res))
@@ -708,15 +710,21 @@ ggspec_api_app <- function(state) {
       format <- body$format %||% "png"
       width <- as.integer(body$width %||% 1600); height <- as.integer(body$height %||% 1000)
       dpi <- as.integer(body$dpi %||% 300)
-      res <- tryCatch(ggspec_export(spec, state$meta, state, width, height, dpi, format),
-                      error = function(e) e)
+      code <- as.character(body$code %||% "")
+      # 有代码（代码图）就从代码导出，否则按 spec 导出
+      res <- tryCatch({
+        if (nzchar(code)) ggspec_export_code(code, spec, state, width, height, dpi, format)
+        else ggspec_export(spec, state$meta, state, width, height, dpi, format)
+      }, error = function(e) e)
       if (inherits(res, "error")) {
         msg <- if (inherits(res, "ggplot_error")) res$message else conditionMessage(res)
         return(json_error(msg, 400))
       }
       # 大文件落盘，前端经 /api/plotfile/<fn> 下载
+      # 文件名精确到秒，同一秒内连续导出两次会撞名并互相覆盖，故追加 3 位随机后缀
       ext <- switch(format, png = "png", svg = "svg", pdf = "pdf", "png")
-      fname <- sprintf("ggplotgui-%s.%s", format(Sys.time(), "%Y%m%d-%H%M%S"), ext)
+      fname <- sprintf("ggplotgui-%s-%03d.%s", format(Sys.time(), "%Y%m%d-%H%M%S"),
+                       as.integer(stats::runif(1, 0, 999)), ext)
       fname <- gsub("[^A-Za-z0-9_.-]", "", fname)
       ok <- file.copy(res$path, file.path(state$plot_dir, fname), overwrite = TRUE)
       unlink(res$path)

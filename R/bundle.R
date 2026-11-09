@@ -3,12 +3,15 @@
 # 全部打成一个 zip，解压后 `Rscript figure.R` 即可复现。
 
 ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
-                          dpi = 300, format = "png", journal = NULL, project_id = NULL) {
+                          dpi = 300, format = "png", journal = NULL, project_id = NULL,
+                          code = NULL) {
   spec <- spec %||% list()
+  is_code <- is.character(code) && length(code) == 1L && nzchar(code)
   if (isTRUE((spec$combine %||% list())$active)) {
     stop("拼图模式暂不支持可复现包：请先关闭「渲染组合图」")
   }
-  has_layers <- length(spec$layers %||% list()) > 0
+  # 代码图没有图层，但确实有内容可打包 —— 之前会误报「画布为空」
+  has_layers <- is_code || length(spec$layers %||% list()) > 0
   if (!has_layers) stop("画布为空，没有可打包的内容")
 
   bdir <- file.path(tempdir(), paste0("ggbundle-", as.integer(stats::runif(1, 1, 1e9))))
@@ -35,15 +38,23 @@ ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
                           if (is.null(d)) "" else sprintf("，%d 行 × %d 列", nrow(d), ncol(d)))
   }
 
-  # ---- 代码（用户数据读 data.csv） ----
-  gen <- spec_to_code(spec, meta, state, data_file = data_file)
-  writeLines(gen$code, file.path(bdir, "figure.R"), useBytes = TRUE)
+  # ---- 代码 ----
+  if (is_code) {
+    # 代码图：figure.R = 数据准备行 + 用户自己的代码，保证解压后能直接 Rscript 复现
+    preamble <- .data_lines(spec, state, df_name = "df", data_file = data_file)
+    writeLines(c(preamble, "", code), file.path(bdir, "figure.R"), useBytes = TRUE)
+  } else {
+    gen <- spec_to_code(spec, meta, state, data_file = data_file)
+    writeLines(gen$code, file.path(bdir, "figure.R"), useBytes = TRUE)
+  }
 
   # ---- 图（PNG + PDF） ----
   fig_files <- character(0)
   for (fmt in c("png", "pdf")) {
-    rf <- tryCatch(ggspec_export(spec, meta, state, width, height, dpi, fmt),
-                   error = function(e) e)
+    rf <- tryCatch({
+      if (is_code) ggspec_export_code(code, spec, state, width, height, dpi, fmt)
+      else ggspec_export(spec, meta, state, width, height, dpi, fmt)
+    }, error = function(e) e)
     if (inherits(rf, "error")) stop("图形导出失败：", conditionMessage(rf))
     dst <- file.path(bdir, paste0("figure.", fmt))
     file.copy(rf$path, dst, overwrite = TRUE)
@@ -62,7 +73,14 @@ ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
     if (!requireNamespace(p, quietly = TRUE)) return(NULL)
     sprintf("%s %s", p, as.character(packageVersion(p)))
   }
-  pkgs <- unique(c("ggplot2", sub("^library\\((.*)\\)$", "\\1", gen$packages %||% character(0))))
+  # 依赖包清单：spec 路径用生成器给的；代码图路径从代码里的 library() 解析
+  if (is_code) {
+    hits <- regmatches(code, gregexpr("library\\(\\s*[\"']?([A-Za-z0-9._]+)", code, perl = TRUE))[[1]]
+    code_pkgs <- sub("library\\(\\s*[\"']?", "", hits)
+    pkgs <- unique(c("ggplot2", code_pkgs))
+  } else {
+    pkgs <- unique(c("ggplot2", sub("^library\\((.*)\\)$", "\\1", gen$packages %||% character(0))))
+  }
   ver_line <- paste(Filter(Negate(is.null), vapply(pkgs, pkg_ver, "")), collapse = " · ")
   caption <- c(
     sprintf("# %s", (spec$labs %||% list())$title %||% "Glyph figure"),

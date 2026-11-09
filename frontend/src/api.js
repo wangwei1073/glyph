@@ -129,8 +129,9 @@ export const formatCode = (code) => post('/api/code/format', { code })
 export const rawRender = (code, spec, { width = 800, height = 500, dpi = 150 } = {}) =>
   post('/api/rawrender', { code, spec, width, height, dpi }, T_HEAVY)
 
-export const exportPlot = async (spec, { width = 1600, height = 1000, dpi = 300, format = 'png' } = {}) => {
-  const res = await post('/api/export', { spec, width, height, dpi, format }, T_HEAVY)
+// code 非空时按代码导出（代码图）；否则按 spec 导出
+export const exportPlot = async (spec, { width = 1600, height = 1000, dpi = 300, format = 'png', code = '' } = {}) => {
+  const res = await post('/api/export', { spec, width, height, dpi, format, code }, T_HEAVY)
   if (!res.ok || !res.url) throw new Error(res.error || '导出失败')
   const r = await fetch(res.url)
   if (!r.ok) throw new Error(`下载导出文件失败: HTTP ${r.status}`)
@@ -139,14 +140,14 @@ export const exportPlot = async (spec, { width = 1600, height = 1000, dpi = 300,
 }
 
 // 导出前检查（白底 / 尺寸 / dpi / 矢量 / 字体 / 字号；可选期刊模板）
-export const checkExport = (spec, { width = 1600, height = 1000, dpi = 300, format = 'png', journal = '' } = {}) =>
-  post('/api/export/check', { spec, width, height, dpi, format, journal }, T_HEAVY)
+export const checkExport = (spec, { width = 1600, height = 1000, dpi = 300, format = 'png', journal = '', code = '' } = {}) =>
+  post('/api/export/check', { spec, width, height, dpi, format, journal, code }, T_HEAVY)
 
 export const getJournalTemplates = () => api('/api/journal/templates')
 
 // 可复现包：图 + 数据 + 代码 + sessionInfo + 图注 + 项目文件（zip）
-export const bundlePlot = (spec, { width = 1600, height = 1000, dpi = 300, journal = '', projectId = '' } = {}) =>
-  post('/api/bundle', { spec, width, height, dpi, journal, projectId }, T_HEAVY)
+export const bundlePlot = (spec, { width = 1600, height = 1000, dpi = 300, journal = '', projectId = '', code = '' } = {}) =>
+  post('/api/bundle', { spec, width, height, dpi, journal, projectId, code }, T_HEAVY)
 
 export const getPlotly = (spec, { width = 800, height = 500 } = {}) =>
   post('/api/plotly', { spec, width, height }, T_HEAVY)

@@ -214,6 +214,20 @@ ggspec_export <- function(spec, meta, state, width, height, dpi, format) {
   rf
 }
 
+# 从「代码图」导出：直接渲染这段代码，而不是按 spec 渲染。
+# 代码图是由代码绘制的，spec 里可能没有任何图层 —— 之前用户点导出会得到一张空白图，
+# 而且不报错（静默错误），比直接失败更糟。
+ggspec_export_code <- function(code, spec, state, width, height, dpi, format) {
+  format <- match.arg(format, c("png", "svg", "pdf"))
+  if (!nzchar(code %||% "")) stop("没有可导出的代码")
+  # 代码里通常用 df 引用数据，这里按 spec 的数据源解析后注入求值环境
+  data_df <- tryCatch(ggspec_resolve_data(spec %||% list(), state), error = function(e) NULL)
+  rf <- ggspec_render_file(code, data_df, width = width, height = height,
+                           dpi = dpi, format = format)
+  rf$code <- code
+  rf
+}
+
 # ---- 导出前检查（P0：白底 / 尺寸 / dpi / 矢量 / 字体 / 字号）----------------
 .ggspec_is_whiteish <- function(col) {
   rgb <- tryCatch(grDevices::col2rgb(col), error = function(e) NULL)
@@ -222,7 +236,7 @@ ggspec_export <- function(spec, meta, state, width, height, dpi, format) {
 }
 
 ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
-                                dpi = 300, format = "png", journal = NULL) {
+                                dpi = 300, format = "png", journal = NULL, code = NULL) {
   format <- match.arg(format, c("png", "svg", "pdf"))
   tpl <- journal_get(journal)
   issues <- list()
@@ -237,19 +251,30 @@ ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
                journal = if (is.null(tpl)) NULL else tpl$id,
                journalLabel = if (is.null(tpl)) NULL else tpl$label)
 
-  has_layers <- length(spec$layers %||% list()) > 0 || isTRUE((spec$combine %||% list())$active)
+  is_code <- is.character(code) && length(code) == 1L && nzchar(code)
+  # 代码图没有图层，也要能检查 —— 否则会误报「画布为空」
+  has_layers <- is_code || length(spec$layers %||% list()) > 0 ||
+    isTRUE((spec$combine %||% list())$active)
   if (!has_layers) {
     add("layers", "fail", "画布为空", "还没有任何图层，导出会得到空白图。")
     return(list(ok = FALSE, issues = issues, info = info))
   }
 
-  # 构建图对象（与渲染/导出一致）
+  # 构建图对象（与渲染/导出一致）；代码图按代码构建
   plot <- tryCatch({
-    gen <- ggspec_pipeline(spec, meta, state)
-    env <- .ggspec_eval_env(gen$env_list)
-    ev <- .ggspec_eval(gen$eval_code, env)
-    if (!is.null(ev$error)) stop(ev$error)
-    .ggspec_pick_plot(ev$result, env)
+    if (is_code) {
+      data_df <- tryCatch(ggspec_resolve_data(spec %||% list(), state), error = function(e) NULL)
+      env <- .ggspec_eval_env(data_df)
+      ev <- .ggspec_eval(code, env)
+      if (!is.null(ev$error)) stop(ev$error)
+      .ggspec_pick_plot(ev$result, env)
+    } else {
+      gen <- ggspec_pipeline(spec, meta, state)
+      env <- .ggspec_eval_env(gen$env_list)
+      ev <- .ggspec_eval(gen$eval_code, env)
+      if (!is.null(ev$error)) stop(ev$error)
+      .ggspec_pick_plot(ev$result, env)
+    }
   }, error = function(e) e)
   if (inherits(plot, "error") || is.null(plot)) {
     add("render", "fail", "图形无法生成", conditionMessage(plot))
