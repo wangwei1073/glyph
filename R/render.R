@@ -60,13 +60,39 @@ ggspec_render_file <- function(code, data_df, width = 800, height = 500, dpi = 1
                                format = c("png", "svg", "pdf")) {
   format <- match.arg(format)
   env <- .ggspec_eval_env(data_df)
+  # 求值阶段先挂一个临时图形设备。
+  # 用户代码里常见 print(p) / plot(p)，此时若没有设备，R 会打开默认 pdf 设备：
+  #   · 在 Windows + UTF-8 locale 下，中文会被判为无法转换，
+  #     刷出大量 "conversion failure ... in 'mbcsToSbcs'" 警告；
+  #   · 还会在进程工作目录留下一个 Rplots.pdf。
+  # 用 ragg 临时设备兜住（UTF-8 友好，输出到临时文件后丢弃）。
+  dummy <- tempfile(fileext = ".png")
+  dummy_open <- FALSE
+  tryCatch({
+    if (requireNamespace("ragg", quietly = TRUE)) {
+      ragg::agg_png(dummy, width = 200, height = 200, units = "px", res = 72, background = "white")
+      dummy_open <- TRUE
+    }
+  }, error = function(e) NULL)
+  on.exit({
+    if (dummy_open) tryCatch(grDevices::dev.off(), error = function(e) NULL)
+    unlink(dummy)
+  }, add = TRUE)
+
   ev <- .ggspec_eval(code, env)
+  # 求值结束、拿到图对象后立刻关掉临时设备，后面正式渲染会另开一个
+  if (dummy_open) {
+    tryCatch(grDevices::dev.off(), error = function(e) NULL)
+    dummy_open <- FALSE
+  }
   if (!is.null(ev$error)) {
     stop(structure(class = "ggplot_error", list(message = ev$error,
                                                 warnings = ev$warnings)))
   }
   plot_obj <- .ggspec_pick_plot(ev$result, env)
   if (is.null(plot_obj)) stop("代码没有产生 ggplot 对象（最后表达式或变量 p）")
+  # 中文兜底：手写代码通常不会自己指定中文字体
+  plot_obj <- .ggspec_apply_cjk_family(plot_obj, code)
 
   ext <- switch(format, png = "png", svg = "svg", pdf = "pdf")
   path <- tempfile(fileext = paste0(".", ext))
@@ -212,6 +238,24 @@ ggspec_export <- function(spec, meta, state, width, height, dpi, format) {
                            dpi = dpi, format = format)
   rf$code <- gen$code
   rf
+}
+
+# 原始代码路径的中文字体兜底。
+# 背景：ragg 默认 sans 在 Windows 上是 Arial，没有中文字形，
+# 于是中文标签会渲染成缺字/乱码，并伴随大量
+# "conversion failure ... in 'mbcsToSbcs'" 警告。
+# spec 生成路径已有 .ggspec_cjk_font_line() 注入主题字体，
+# 但「高级 / 代码图」是用户手写代码，没人替他补这一层。
+# 处理：代码里出现中文、且用户没显式指定 family 时，补一条 theme(text = ...)。
+.ggspec_apply_cjk_family <- function(plot_obj, code) {
+  if (!inherits(plot_obj, "ggplot")) return(plot_obj)
+  if (!isTRUE(.ggspec_has_cjk(code))) return(plot_obj)
+  fam <- .ggspec_cjk_family()
+  if (is.null(fam)) return(plot_obj)
+  # 用户已显式设置字体 → 尊重其选择
+  cur <- tryCatch(plot_obj$theme$text$family, error = function(e) NULL)
+  if (!is.null(cur) && length(cur) && nzchar(as.character(cur)[1])) return(plot_obj)
+  plot_obj + ggplot2::theme(text = ggplot2::element_text(family = fam))
 }
 
 # 从「代码图」导出：直接渲染这段代码，而不是按 spec 渲染。
