@@ -7,7 +7,7 @@ import { useDataStore } from './stores/data'
 import { useSpecStore } from './stores/spec'
 import { usePinStore } from './stores/pins'
 import { useUiStore } from './stores/ui'
-import { downloadBlob, snapshotData, getEdits, importEdits, pasteData, rawRender, setWorkspace } from './api'
+import { downloadBlob, snapshotData, getEdits, importEdits, pasteData, rawRender, setWorkspace, takePendingCode } from './api'
 import DataPanel from './components/DataPanel.vue'
 import Canvas from './components/Canvas.vue'
 import EditorTabs from './components/EditorTabs.vue'
@@ -154,12 +154,41 @@ onMounted(async () => {
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('beforeunload', onBeforeUnload)
   await boot()
+  startCodePoll()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('beforeunload', onBeforeUnload)
   clearTimeout(draftTimer)
+  clearInterval(codePollTimer)
 })
+
+// ---- 外部代码推送轮询 ----
+// IDE / AI 等外部进程 POST /api/code/push 后，这里取走并填进「高级」页编辑器。
+// 之所以用轮询而不是 WebSocket：后端 httpuv 单线程、无长连接机制，
+// 1.5s 一次的空请求开销可以忽略，实现却简单得多。
+let codePollTimer = null
+let codePolling = false
+function startCodePoll() {
+  if (codePollTimer) return
+  codePollTimer = setInterval(async () => {
+    if (codePolling) return
+    codePolling = true
+    try {
+      const res = await takePendingCode()
+      if (res && res.ok && res.code) {
+        // 走既有的 pendingCode 通道：AdvancedPanel 会把它填进编辑器
+        spec.pendingCodeRun = !!res.run
+        spec.pendingCode = res.code
+        ui.setTab('adv')
+        ElMessage.success(res.run
+          ? '已接收外部推送的代码并运行'
+          : '已接收外部推送的代码，可在「高级」页查看并运行')
+      }
+    } catch { /* 服务重启等瞬时错误忽略，下次再试 */ }
+    finally { codePolling = false }
+  }, 1500)
+}
 
 function toggleDark() {
   spec.dark = !spec.dark

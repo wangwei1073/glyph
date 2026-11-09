@@ -41,6 +41,8 @@ export const getMeta = () => api('/api/meta')
 // 工作区（项目目录）：读取 / 切换
 export const getWorkspace = () => api('/api/workspace')
 export const setWorkspace = (dir) => post('/api/workspace', { dir })
+// 外部推送到编辑器的代码（IDE / AI 调用 /api/code/push 写入，前端轮询取走）
+export const takePendingCode = () => api('/api/code/pending')
 // 扩展管理
 export const getExtensions = () => api('/api/extensions')
 export const toggleExtension = (id, enabled) =>

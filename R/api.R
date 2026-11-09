@@ -218,6 +218,35 @@ ggspec_api_app <- function(state) {
                                 workspace = state$workspace)))
     }
 
+    ## ---- 代码推送（外部 → 编辑器）----
+    ## 供 IDE / AI 等外部进程把一段 R 代码送进「高级」页的编辑器。
+    ##   POST /api/code/push   { code, run? }  → 暂存待取
+    ##   GET  /api/code/pending               → 取走（取走即清空，避免重复注入）
+    ## 例：curl -X POST localhost:4321/api/code/push \
+    ##       -H 'Content-Type: application/json' \
+    ##       -d '{"code":"ggplot(mtcars,aes(wt,mpg))+geom_point()","run":true}'
+    ## 默认 run=false（只填进编辑器，由用户确认后再运行）；
+    ## run=true 时前端会在填入后立即运行一次。
+    if (path == "/api/code/push" && method == "POST") {
+      code <- as.character(unlist(body$code %||% ""))
+      code <- if (length(code)) code[1] else ""
+      if (!nzchar(trimws(code))) return(json_error("缺少 code", 400))
+      state$code_seq <- as.integer(state$code_seq %||% 0L) + 1L
+      state$pending_code <- list(seq = state$code_seq, code = code,
+                                 run = isTRUE(body$run),
+                                 at = as.numeric(Sys.time()))
+      cat(sprintf("[code-push] seq=%d run=%s len=%d\n", state$code_seq,
+                  isTRUE(body$run), nchar(code)), file = stderr())
+      return(json_response(list(ok = TRUE, seq = state$code_seq)))
+    }
+    if (path == "/api/code/pending" && method == "GET") {
+      pc <- state$pending_code
+      if (is.null(pc)) return(json_response(list(ok = TRUE, seq = 0L, code = NULL)))
+      state$pending_code <- NULL
+      return(json_response(list(ok = TRUE, seq = pc$seq, code = pc$code,
+                                run = isTRUE(pc$run))))
+    }
+
     ## ---- 工作区 ----
     ## GET  返回当前工作区；POST { dir } 运行时切换（重新绑定各 store）
     ## 传 dir = "" 表示退回安装目录。

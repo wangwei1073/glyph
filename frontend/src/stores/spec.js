@@ -58,6 +58,8 @@ export const useSpecStore = defineStore('spec', {
     // pngUrl: /api/plot/xxx.png（后端落盘）；png: base64 备用
     last: { pngUrl: null, png: null, code: '', warnings: [], messages: [], error: null, elapsed: 0, ok: false },
     pendingCode: '',
+    // 外部推送的代码是否要在填入编辑器后立即运行（/api/code/push 的 run 标记）
+    pendingCodeRun: false,
     // 画布内容来自哪个图库条目（打开 spec 图后记下）。
     // 用于「存入图库」时决定是覆盖更新那条、还是另存为新条目。
     sourcePinId: '',

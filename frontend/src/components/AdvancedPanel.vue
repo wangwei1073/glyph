@@ -67,6 +67,12 @@ watch(() => spec.pendingCode, (code) => {
   if (!code) return
   rawCode.value = code
   spec.pendingCode = ''
+  // 外部推送可带 run=true：填进编辑器后立即运行一次。
+  // 默认不自动运行 —— 执行任意代码应当由用户显式确认。
+  if (spec.pendingCodeRun) {
+    spec.pendingCodeRun = false
+    runRaw()
+  }
 })
 
 function packagesFromCode(code) {
