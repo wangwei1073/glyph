@@ -21,13 +21,16 @@ const ui = useUiStore()
 
 // ---- 右侧栏宽度拖拽（持久化） ----
 const rightWidth = ref(Number(localStorage.getItem('gg-right-w')) || 400)
+const rightResizing = ref(false)
 function startResize() {
+  rightResizing.value = true
   document.body.style.cursor = 'col-resize'
   const move = (ev) => {
     const max = Math.round(window.innerWidth * 0.65)
     rightWidth.value = Math.min(max, Math.max(300, window.innerWidth - ev.clientX))
   }
   const up = () => {
+    rightResizing.value = false
     document.body.style.cursor = ''
     localStorage.setItem('gg-right-w', String(rightWidth.value))
     window.removeEventListener('mousemove', move)
@@ -307,7 +310,7 @@ function onProjectCmd(cmd) {
         @click="ui.toggleRight()">
         <el-icon><ArrowLeft /></el-icon>
       </button>
-      <div v-show="ui.rightOpen" class="gg-resizer" title="拖拽调整宽度" @mousedown.prevent="startResize" />
+      <div v-show="ui.rightOpen" class="gg-resizer" :class="{ active: rightResizing }" title="拖动调整宽度" @mousedown.prevent="startResize"><span class="gg-rbar" /></div>
       <div v-show="ui.rightOpen" class="gg-right" :style="{ width: rightWidth + 'px' }"><EditorTabs /></div>
     </div>
   </div>
