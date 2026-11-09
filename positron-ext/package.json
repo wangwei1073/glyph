@@ -1,0 +1,66 @@
+{
+  "name": "glyph-positron",
+  "displayName": "Glyph",
+  "description": "在 Positron 里打开 Glyph 图形界面（最小验证原型）",
+  "version": "0.0.1",
+  "publisher": "glyph",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Glyph",
+      "properties": {
+        "glyph.projectPath": {
+          "type": "string",
+          "default": "",
+          "description": "Glyph 项目目录（含 run.R 与 dist/）。留空则在当前工作区及其父级中自动查找。"
+        },
+        "glyph.rscriptPath": {
+          "type": "string",
+          "default": "",
+          "description": "Rscript 可执行文件路径。留空则使用 PATH 中的 Rscript。"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "glyph.open",
+        "title": "打开 Glyph 界面",
+        "category": "Glyph"
+      },
+      {
+        "command": "glyph.stop",
+        "title": "停止 Glyph 服务",
+        "category": "Glyph"
+      },
+      {
+        "command": "glyph.status",
+        "title": "查看 Glyph 服务状态",
+        "category": "Glyph"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@posit-dev/positron": "^0.2.14"
+  }
+}
