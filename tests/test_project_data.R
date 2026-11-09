@@ -58,7 +58,8 @@ id <- DataStore$add(d, "测试数据")
 ok("数据 id 形如 uN", grepl("^u[0-9]+$", id))
 ok("meta.json 存在", file.exists(file.path(dir, "meta.json")))
 ok("数据 rds 存在", file.exists(file.path(dir, paste0(id, ".rds"))))
-ok("rds 内容一致", identical(readRDS(file.path(dir, paste0(id, ".rds"))), d))
+ok("rds 内容一致", identical(
+  readRDS(file.path(dir, paste0(id, ".rds")))[, setdiff(names(d), ".gg_rid"), drop = FALSE], d))
 
 # 模拟重启：清空内存后重新 bind
 DataStore$remove(id)
@@ -66,7 +67,8 @@ DataStore$bind(dir)
 ok("重新 bind 后 rds 文件已随 remove 删除", !file.exists(file.path(dir, paste0(id, ".rds"))))
 id2 <- DataStore$add(d, "测试数据2")
 DataStore$bind(dir)
-ok("重新 bind 后数据可读", identical(DataStore$get(id2), d))
+ok("重新 bind 后数据可读", identical(
+  DataStore$get(id2)[, setdiff(names(d), ".gg_rid"), drop = FALSE], d))
 ok("重新 bind 后 id 递增不复用", id2 != id)
 
 # ---- 2. 快照 ---------------------------------------------------------------

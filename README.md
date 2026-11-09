@@ -24,12 +24,16 @@
 
 ### 数据
 - 40+ 内置数据集（ggplot2 的 mpg / diamonds / economics… 与 base R 数据集）
-- **统一导入向导弹层**：文件 / 剪贴板 / SQLite 数据库，先配置（分隔符、编码、表头、跳过行）
+- **导入数据弹层（v2）**：顶部标签「文件 / SQLite / 远程数据库 / 剪贴板」，无步骤条，切换标签保留现场；文件先配置（分隔符、编码、表头、跳过行）
   再预览前 50 行，确认后导入；预览带列类型徽标
 - 文件：CSV / TSV / TXT / XLSX / XLS / RDS / JSON / RData；SQLite：选择 .db 文件后浏览表、预览 100 行再导入
+- **远程数据库（P1）**：PostgreSQL / MySQL / MariaDB / ODBC，测试连接 → 表列表 → 只读预览 →
+  自定义 SELECT（单语句、只读）→ 导入快照；密码只存会话内存
 - 导入后记录来源（文件 / 库表），随项目保存，供图注与可复现包使用
 - 粘贴表格文本（自动识别逗号/制表符分隔）
-- 数据加工：行筛选（R 表达式）、新增列、随机抽样 + 种子
+- 数据准备：行筛选（R 表达式）、新增列、随机抽样 + 种子（原始数据不变，可随时重置）
+- 左栏「我的数据」以卡片列出已导入数据集（来源 + 维度），点击卡片切换活动数据集；
+  内置数据集保留在下方的可搜索下拉中
 - 列面板带类型徽标（numeric / character / factor / date…）与唯一值预览
 
 ### 图层（graph 类型全覆盖）
@@ -134,6 +138,7 @@ Rscript tests/test_bundle.R         # 可复现包：图 + 数据 + 代码 + 图
 Rscript tests/test_export_check.R   # 导出前检查：白底 / dpi / 尺寸 / 字号 / 可渲染性
 Rscript tests/test_ext_install.R    # 扩展一键安装：白名单 / 并发保护 / 状态机
 Rscript tests/test_import.R         # 数据导入：文件预览/提交/来源记录/SQLite
+Rscript tests/test_db_p1.R          # 远程数据库：SQL 守卫/标识符/驱动/错误脱敏
 
 # 重新生成 geom 示意图（改了默认主题/映射后跑一次，产物在 frontend/public/geom-thumbs）
 Rscript tools/make_geom_thumbs.R
@@ -145,7 +150,7 @@ Rscript tools/make_geom_thumbs.R
 - **首次启动较慢**：元数据注册表需枚举全部 geom/scale（约 1–10 秒）。
 - **端口冲突**：`run_app.bat` 或手动 `Rscript run.R --port 4322`。
 - **大图渲染慢**：后端是单线程 httpuv，一次重渲染会阻塞其它请求（包括取图）；
-  渲染已在前端串行化并给到 300s 超时，数据量大时建议先抽样（数据 → 加工 → 抽样）。
+  渲染已在前端串行化并给到 300s 超时，数据量大时建议先抽样（数据 → 数据准备 → 抽样）。
 - **上传体积**：单文件上限 35MB（请求体 base64 后约 47MB，受后端 50MB 限制）。
 - **选 Prism guide 后出现 S3 弃用警告**：ggprism 的 guide 仍基于 ggplot2 旧 S3 机制
   （ggplot2 4.0 已弃用但兼容），功能正常；标度与主题不受影响。

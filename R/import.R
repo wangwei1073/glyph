@@ -7,7 +7,8 @@
 IMPORT_STATE <- new.env(parent = emptyenv())
 IMPORT_STATE$sessions <- list()
 
-DATA_DRIVER_PKGS <- c("RSQLite", "readxl", "haven", "arrow")
+DATA_DRIVER_PKGS <- c("RSQLite", "readxl", "haven", "arrow",
+                      "RPostgres", "RMariaDB", "odbc")
 
 .import_token <- function() {
   paste0("imp-", sprintf("%08x", as.integer(stats::runif(1, 1, 2^31 - 1))),
@@ -206,6 +207,7 @@ import_commit_file <- function(token, opts = list(), label = NULL) {
   s <- import_session(token)
   df <- import_parse_file(s, opts, n_max = NULL)
   df <- .import_apply_types(df, opts$colTypes)
+  df <- ggspec_with_rid(df)
   origin <- list(kind = "file", file = s$name, ext = s$ext,
                  importedAt = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ"))
   id <- DataStore$add(df, label %||% tools::file_path_sans_ext(s$name), origin = origin)
@@ -254,6 +256,7 @@ import_commit_sqlite <- function(token, table, label = NULL, limit = 1000000L) {
   if (!tb %in% DBI::dbListTables(con)) stop(sprintf("表不存在：%s", tb))
   df <- DBI::dbGetQuery(con, sprintf('SELECT * FROM "%s" LIMIT %d',
                                      gsub('"', '""', tb), as.integer(limit)))
+  df <- ggspec_with_rid(df)
   origin <- list(kind = "sqlite", file = s$name, table = tb,
                  importedAt = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ"))
   id <- DataStore$add(df, label %||% tb, origin = origin)

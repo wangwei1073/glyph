@@ -1,12 +1,11 @@
 <script setup>
 // 数据面板：数据源管理 / 列交互（快速映射·详情·插入表达式）/ 加工对话框 / 预览
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
 import { useMetaStore } from '../stores/meta'
-import { setExprEl } from '../exprInsert'
 import DataPreviewDialog from './DataPreviewDialog.vue'
 import ColumnActions from './ColumnActions.vue'
 import ActionBar from './ActionBar.vue'
@@ -28,6 +27,7 @@ const fileInput = ref(null)
 const filterInput = ref(null)      // el-input 实例（含内部 textarea）
 const mutateRefs = ref([])
 const activeExpr = ref(null)       // 'filter' | {type:'mutate', idx}
+watch(prepVisible, (v) => { if (!v) activeExpr.value = null })
 const dragging = ref(false)
 const pvdVisible = ref(false)
 const pvdFocus = ref('')
@@ -47,19 +47,28 @@ const groupedSources = computed(() => {
   if (us.length) out.push({ label: '我的数据', options: us })
   return out.filter(g => g.options.length)
 })
-function onSelect(key) {
-  data.select(key)
+async function onSelect(key) {
+  await data.select(key)
+  nextTick(() => {
+    const el = srcCardsEl.value?.querySelector('.src-card.on')
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' })
+  })
   const src = data.current
   if (src) {
     spec.setSource(src.type === 'dataset' ? { type: 'dataset', name: src.name }
       : src.type === 'user' ? { type: 'user', id: src.name } : { type: 'none' })
   }
 }
+
+async function prepareSource(u) {
+  await onSelect(`user:${u.name}`)
+  prepVisible.value = true
+}
 async function onImported(src) {
   await data.load()
   if (src && src.id) onSelect(`user:${src.id}`)
   importVisible.value = false
-  if (src) ElMessage.success(`已导入：${src.label}（${src.nrow}×${src.ncol}）`)
+  if (src) ElMessage.success(`已导入：${src.label}（${src.nrow}×${src.ncol}），可在「数据准备」中清洗与转换`)
 }
 async function onFile(e) {
   const f = e.target.files ? e.target.files[0] : e.dataTransfer ? e.dataTransfer.files[0] : null
@@ -92,6 +101,24 @@ async function doPaste() {
   }
 }
 const userItems = computed(() => data.sources.filter(s => s.type === 'user'))
+const datasetSources = computed(() => data.sources.filter(s => s.type === 'dataset'))
+const datasetKey = computed(() => (data.srcKey || '').startsWith('dataset:') ? data.srcKey : '')
+const srcCardsEl = ref(null)
+
+function originLabel(s) {
+  const o = s.origin || {}
+  if (o.kind === 'db') return (o.driver ? o.driver : '数据库') + (o.table ? ` · ${o.table}` : '')
+  if (o.kind === 'sqlite') return 'SQLite' + (o.table ? ` · ${o.table}` : '')
+  if (o.kind === 'file') return '文件'
+  if (o.kind === 'clip') return '剪贴板'
+  return '数据'
+}
+function originIcon(s) {
+  const k = s.origin?.kind
+  if (k === 'db' || k === 'sqlite') return 'Coin'
+  if (k === 'file') return 'Document'
+  return 'DocumentCopy'
+}
 async function removeUser(id) {
   try {
     await data.remove(id)
@@ -118,7 +145,7 @@ function rmMutate(i) {
   spec.pushHistory()
   spec.spec.data.mutate.splice(i, 1)
 }
-async function prepChanged() { await data.refreshPreview() }
+async function prepChanged() { await data.refresh() }
 function resetPrep() {
   spec.pushHistory()
   spec.spec.data.filter = ''
@@ -148,9 +175,23 @@ const TYPE_ABBR = {
 function typeAbbr(c) { return TYPE_ABBR[c.type] || String(c.type || '').slice(0, 3) }
 
 // 列插入：共享模块（弹窗列菜单同样可用）
+// 插入列名：直接写入当前聚焦的表达式（默认行筛选），不依赖 DOM 焦点
 function insertName(name) {
-  const r = insertExpr(name)
-  if (!r.ok) ElMessage.info(r.msg)
+  if (!prepVisible.value) {
+    ElMessage.info('先打开「数据准备」对话框，再点击列名插入')
+    return
+  }
+  const t = activeExpr.value
+  if (t && typeof t === 'object' && t.type === 'mutate') {
+    const m = spec.spec.data.mutate[t.idx]
+    if (!m) return
+    const cur = m.expr || ''
+    m.expr = cur + (cur && !/\s$/.test(cur) ? ' ' : '') + name + ' '
+  } else {
+    const cur = spec.spec.data.filter || ''
+    spec.spec.data.filter = cur + (cur && !/\s$/.test(cur) ? ' ' : '') + name + ' '
+  }
+  prepChanged()
 }
 function openPreview(colName = '') {
   pvdFocus.value = colName
@@ -178,8 +219,8 @@ function openPreview(colName = '') {
       <el-button size="small" type="primary" :loading="uploading" @click="importVisible = true">
         <el-icon><Plus /></el-icon>导入数据
       </el-button>
-      <el-button size="small" :type="prepCount ? 'primary' : ''" plain @click="prepVisible = true">
-        <el-icon><Filter /></el-icon>加工
+      <el-button size="small" @click="prepVisible = true">
+        <el-icon><Filter /></el-icon>数据准备
         <span v-if="prepCount" class="prep-badge">{{ prepCount }}</span>
       </el-button>
       <el-button size="small" :disabled="!data.srcKey || data.srcKey === 'none'"
@@ -187,40 +228,45 @@ function openPreview(colName = '') {
         @click="openPreview()">
         <el-icon><DataBoard /></el-icon>预览
       </el-button>
-      <el-popover v-if="userItems.length" v-model:visible="manageVisible" placement="bottom-start"
-        :width="260" trigger="click">
-        <template #reference>
-          <el-button size="small" text :title="'管理我的数据'">
-            <el-icon><MoreFilled /></el-icon>
+    </div>
+
+    <!-- 我的数据：卡片列表，点击切换活动数据集 -->
+    <div v-if="userItems.length" ref="srcCardsEl" class="dp-src-cards">
+      <div class="dp-subhead">我的数据</div>
+      <div v-for="u in userItems" :key="u.id" class="src-card"
+        :class="{ on: data.srcKey === `user:${u.name}` }" @click="onSelect(`user:${u.name}`)">
+        <span class="sc-ic"><el-icon><component :is="originIcon(u)" /></el-icon></span>
+        <span class="sc-main">
+          <span class="sc-name">{{ u.label }}</span>
+          <span class="sc-meta">{{ originLabel(u) }} · {{ u.nrow }}×{{ u.ncol }}</span>
+        </span>
+        <el-tooltip content="数据准备：筛选 / 新增列 / 抽样" placement="top">
+          <el-button class="sc-act" text size="small" @click.stop="prepareSource(u)">
+            <el-icon><Setting /></el-icon>
           </el-button>
-        </template>
-        <div v-for="u in userItems" :key="u.id" class="pin-row">
-          <span class="pin-badge gg-mono">{{ u.id }}</span>
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">
-            {{ u.label }}（{{ u.nrow }}×{{ u.ncol }}）
-          </span>
-          <el-popconfirm :title="`删除 ${u.label}？`" width="190" @confirm="removeUser(u.id)">
-            <template #reference>
-              <el-button size="small" text type="danger"><el-icon><Delete /></el-icon></el-button>
-            </template>
-          </el-popconfirm>
-        </div>
-      </el-popover>
+        </el-tooltip>
+        <el-popconfirm :title="`删除 ${u.label}？`" width="190" @confirm="removeUser(u.name)">
+          <template #reference>
+            <el-button class="sc-del" text size="small" type="danger" @click.stop>
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </template>
+        </el-popconfirm>
+      </div>
     </div>
 
     <div style="padding: 6px 10px 2px">
-      <el-select :model-value="data.srcKey" class="src-select" filterable placeholder="选择数据源"
+      <div class="dp-subhead" style="padding-left:0">内置数据集</div>
+      <el-select :model-value="datasetKey" class="src-select" filterable placeholder="选择内置数据集"
         style="width:100%" @change="onSelect">
-        <el-option-group v-for="g in groupedSources" :key="g.label" :label="g.label">
-          <el-option v-for="s in g.options" :key="`${s.type}:${s.name}`" :value="`${s.type}:${s.name}`"
-            :label="`${s.label}（${s.nrow}×${s.ncol}）`" />
-        </el-option-group>
+        <el-option v-for="s in datasetSources" :key="`dataset:${s.name}`" :value="`dataset:${s.name}`"
+          :label="`${s.label}（${s.nrow}×${s.ncol}）`" />
       </el-select>
     </div>
 
     <!-- 列 -->
     <div class="dp-sechead" :class="{ fold: collapsed.cols }" @click="collapsed.cols = !collapsed.cols"
-      :title="`加工后 ${data.preview.nrow || 0} 行 · ${data.columns.length} 列`">
+      :title="`处理后 ${data.preview.nrow || 0} 行 · ${data.columns.length} 列`">
       <el-icon><component :is="collapsed.cols ? 'ArrowRight' : 'ArrowDown'" /></el-icon>
       列（{{ data.columns.length }}）
       <span style="flex:1" />
@@ -246,7 +292,7 @@ function openPreview(colName = '') {
           </el-button>
         </div>
         <div v-if="expandedCol === c.name" class="col-expand">
-          <ColumnActions :col="c" compact />
+          <ColumnActions :col="c" compact :insert="insertName" />
         </div>
       </div>
       <div v-if="!data.columns.length" style="padding:12px;color:var(--el-text-color-secondary);font-size:12px">
@@ -261,11 +307,11 @@ function openPreview(colName = '') {
     <ActionBar @project="(c) => emit('project', c)" />
 
     <!-- 加工对话框 -->
-    <el-dialog v-model="prepVisible" title="数据加工" width="640" append-to-body>
+    <el-dialog v-model="prepVisible" title="数据准备" width="640" append-to-body>
       <div class="gg-subhead" style="padding-top:0">行筛选（R 逻辑表达式；可点击下方列名插入）</div>
       <el-input ref="filterInput" v-model="spec.spec.data.filter" type="textarea" :rows="2" class="gg-mono"
         placeholder="如: hwy > 20 & class == 'suv'"
-        @focus="activeExpr = 'filter'; setExprEl(filterInput)" @change="prepChanged" />
+        @focus="activeExpr = 'filter'" @change="prepChanged" />
 
       <div class="gg-subhead">常用列（点击插入）</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -278,7 +324,7 @@ function openPreview(colName = '') {
         <el-input v-model="m.name" size="small" placeholder="列名" style="width:120px" @change="prepChanged" />
         <el-input :ref="(el) => { mutateRefs[i] = el; }" v-model="m.expr" size="small" class="gg-mono"
           placeholder="R 表达式，如 hwy / displ"
-          @focus="activeExpr = { type: 'mutate', idx: i }; setExprEl(mutateRefs[i])" @change="prepChanged" />
+          @focus="activeExpr = { type: 'mutate', idx: i }" @change="prepChanged" />
         <el-button size="small" text type="danger" @click="() => { rmMutate(i); prepChanged() }">
           <el-icon><Delete /></el-icon>
         </el-button>
@@ -294,7 +340,7 @@ function openPreview(colName = '') {
           controls-position="right" style="width:130px" @change="prepChanged" />
         <span style="font-size:12px;color:var(--el-text-color-secondary)">种子</span>
         <span style="flex:1" />
-        <el-button size="small" text @click="resetPrep"><el-icon><RefreshLeft /></el-icon>重置加工</el-button>
+        <el-button size="small" text @click="resetPrep"><el-icon><RefreshLeft /></el-icon>重置准备</el-button>
       </div>
 
       <el-alert v-if="data.preview.error" type="error" :title="data.preview.error" :closable="false" style="margin-top:10px" />
@@ -358,12 +404,34 @@ function openPreview(colName = '') {
 .dp-panel :deep(.act-bar) { margin-top: auto; }
 .dp-panel.dragging { outline: 2px dashed var(--gg-accent); outline-offset: -6px; }
 .dp-srcrow {
-  display: flex; align-items: center; gap: 6px; padding: 8px 10px 0; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px 0; flex-wrap: nowrap;
+}
+.dp-srcrow > .el-button {
+  flex: 1 1 0; min-width: 0; margin-left: 0 !important;
+  padding-left: 4px; padding-right: 4px; justify-content: center;
 }
 .prep-badge {
   background: #fff; color: var(--gg-accent); border-radius: 999px;
   font-size: 11px; padding: 0 5px; margin-left: 5px; font-weight: 600;
 }
+.dp-src-cards {
+  padding: 6px 10px 2px; display: flex; flex-direction: column; gap: 4px;
+  max-height: 220px; overflow: auto;
+}
+.src-card {
+  display: flex; align-items: center; gap: 8px; border: 1px solid var(--gg-border);
+  border-radius: 6px; padding: 6px 8px; cursor: pointer; background: #fff;
+}
+.src-card:hover { border-color: var(--gg-brand); }
+.src-card.on { border-color: var(--gg-brand); background: var(--gg-brand-2, #eaf1fb); }
+.sc-ic { color: var(--gg-brand); display: flex; flex-shrink: 0; }
+.sc-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.sc-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-meta { font-size: 10.5px; color: var(--gg-text-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-del, .sc-act { opacity: 0; flex-shrink: 0; }
+.src-card:hover .sc-del, .src-card.on .sc-del,
+.src-card:hover .sc-act, .src-card.on .sc-act { opacity: 1; }
+
 .dp-sechead {
   display: flex; align-items: center; gap: 6px;
   padding: 10px 12px 6px; font-size: 12px; font-weight: 600;

@@ -35,6 +35,7 @@ DataStore <- local({
       if (!nzchar(id) || !file.exists(.item_file(id))) next
       d <- tryCatch(readRDS(.item_file(id)), error = function(e) NULL)
       if (is.null(d)) next
+      if (!".gg_rid" %in% names(d)) d <- ggspec_with_rid(d)
       .items[[id]] <<- list(df = d, label = as.character(m$label %||% id), id = id,
                             nrow = nrow(d), ncol = ncol(d), origin = m$origin)
       n <- suppressWarnings(as.integer(sub("^u", "", id)))
@@ -51,6 +52,7 @@ DataStore <- local({
     },
     dir = function() .dir,
     add = function(df, label, origin = NULL) {
+      if (!".gg_rid" %in% names(df)) df <- ggspec_with_rid(df)
       .counter <<- .counter + 1L
       id <- sprintf("u%d", .counter)
       .items[[id]] <<- list(df = df, label = label, id = id,

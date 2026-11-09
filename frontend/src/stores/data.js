@@ -50,9 +50,26 @@ export const useDataStore = defineStore('data', {
         return
       }
       try {
-        const { columns } = await getColumns(`${c.type}:${c.name}`)
+        const sd = useSpecStore().spec.data
+        const prep = {
+          filter: sd.filter || '', mutate: sd.mutate || [],
+          sample: sd.sample, seed: sd.seed
+        }
+        const source = c.type === 'dataset'
+          ? { type: 'dataset', name: c.name }
+          : { type: 'user', id: c.name }
+        const { columns } = await getColumns(source, prep)
         this.columns = columns
-      } catch { this.columns = [] }
+      } catch {
+        // 加工表达式暂时不合法时回退到原始列，避免列面板突然清空
+        try {
+          const src = c.type === 'dataset'
+            ? { type: 'dataset', name: c.name }
+            : { type: 'user', id: c.name }
+          const { columns } = await getColumns(src)
+          this.columns = columns
+        } catch { this.columns = [] }
+      }
       await this.refreshPreview()
       // 换了数据源后，清掉指向旧列的 aes 映射，避免渲染报「找不到对象」
       try { useSpecStore().pruneMappings(this.colNames) } catch { /* 循环依赖兜底 */ }

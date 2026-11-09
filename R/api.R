@@ -170,6 +170,48 @@ ggspec_api_app <- function(state) {
                                 extensions = ext_catalog())))
     }
 
+    ## ---- 远程数据库（P1）----
+    if (path == "/api/db/drivers" && method == "GET") {
+      return(json_response(list(ok = TRUE, drivers = db_driver_catalog())))
+    }
+    if (path == "/api/db/test" && method == "POST") {
+      res <- tryCatch(db_test_connection(body %||% list()), error = function(e) e)
+      if (inherits(res, "error")) return(json_response(list(ok = FALSE, error = conditionMessage(res))))
+      return(json_response(list(ok = TRUE, result = res)))
+    }
+    if (path == "/api/db/connect" && method == "POST") {
+      res <- tryCatch(db_connect(body %||% list()), error = function(e) e)
+      if (inherits(res, "error")) return(json_response(list(ok = FALSE, error = conditionMessage(res))))
+      return(json_response(list(ok = TRUE, connection = res,
+                                connections = db_connections())))
+    }
+    if (path == "/api/db/tables" && method == "GET") {
+      conn <- .query_param(req, "conn") %||% ""
+      res <- tryCatch(db_tables(conn), error = function(e) e)
+      if (inherits(res, "error")) return(json_response(list(ok = FALSE, error = conditionMessage(res))))
+      return(json_response(list(ok = TRUE, tables = res)))
+    }
+    if (path == "/api/db/preview" && method == "POST") {
+      res <- tryCatch(db_preview(body$conn %||% "", body$schema %||% "", body$table %||% "",
+                                 body$sql %||% "", body$limit %||% 100), error = function(e) e)
+      if (inherits(res, "error")) return(json_response(list(ok = FALSE, error = conditionMessage(res))))
+      return(json_response(list(ok = TRUE, preview = res)))
+    }
+    if (path == "/api/db/import" && method == "POST") {
+      res <- tryCatch(db_import(body$conn %||% "", body$schema %||% "", body$table %||% "",
+                                body$sql %||% "", body$label %||% NULL, body$limit %||% 1000000L),
+                      error = function(e) e)
+      if (inherits(res, "error")) return(json_response(list(ok = FALSE, error = conditionMessage(res))))
+      return(json_response(list(ok = TRUE, source = res$info, columns = res$columns)))
+    }
+    if (path == "/api/db/disconnect" && method == "POST") {
+      db_disconnect(body$conn %||% "")
+      return(json_response(list(ok = TRUE, connections = db_connections())))
+    }
+    if (path == "/api/db/connections" && method == "GET") {
+      return(json_response(list(ok = TRUE, connections = db_connections())))
+    }
+
     ## ---- 元数据 ----
     if (path == "/api/meta" && method == "GET") {
       return(json_response(list(ok = TRUE, meta = state$meta)))
@@ -264,6 +306,18 @@ ggspec_api_app <- function(state) {
       key <- .keyof(src)
       d <- apply_data_edits(d, state$edit_store$get(key))
       list(d = d, key = key)
+    }
+
+    # 列清单（加工后）：POST 带 prep，返回筛选 / 新增列 / 抽样后的列
+    if (path == "/api/columns" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      d <- pv$d
+      if (is.null(d) || !nrow(d)) return(json_response(list(ok = TRUE, columns = list())))
+      d <- d[, setdiff(names(d), ".gg_rid"), drop = FALSE]
+      return(json_response(list(ok = TRUE, columns = column_info(d))))
     }
 
     if (path == "/api/data/preview" && method == "POST") {

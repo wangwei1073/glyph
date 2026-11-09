@@ -9,7 +9,8 @@ import { insertExpr } from '../exprInsert'
 
 const props = defineProps({
   col: { type: Object, required: true },
-  compact: { type: Boolean, default: false }
+  compact: { type: Boolean, default: false },
+  insert: { type: Function, default: null }
 })
 
 const meta = useMetaStore()
@@ -58,6 +59,10 @@ function mapTo(aesName) {
 }
 
 function doInsert() {
+  if (typeof props.insert === 'function') {
+    props.insert(props.col.name)
+    return
+  }
   const r = insertExpr(props.col.name)
   if (!r.ok) ElMessage.info(r.msg)
 }

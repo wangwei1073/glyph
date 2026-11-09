@@ -61,7 +61,20 @@ export const sqlitePreview = (token, table, limit = 100) =>
   post('/api/import/sqlite/preview', { token, table, limit }, T_HEAVY)
 export const sqliteCommit = (token, table, label = '') =>
   post('/api/import/sqlite/commit', { token, table, label }, T_HEAVY)
-export const getColumns = (src) => api(`/api/columns?src=${encodeURIComponent(src)}`)
+
+// ---- 远程数据库（P1）----
+export const getDbDrivers = () => api('/api/db/drivers')
+export const dbTest = (opts) => post('/api/db/test', opts, T_HEAVY)
+export const dbConnect = (opts) => post('/api/db/connect', opts, T_HEAVY)
+export const dbTables = (conn) => api(`/api/db/tables?conn=${encodeURIComponent(conn)}`)
+export const dbPreview = (opts) => post('/api/db/preview', opts, T_HEAVY)
+export const dbImport = (opts) => post('/api/db/import', opts, T_HEAVY)
+export const dbDisconnect = (conn) => post('/api/db/disconnect', { conn })
+export const getColumns = (source, prep = null) => {
+  if (prep) return post('/api/columns', { source, prep })
+  const key = typeof source === 'string' ? source : `${source.type}:${source.name || source.id}`
+  return api(`/api/columns?src=${encodeURIComponent(key)}`)
+}
 export const deleteData = (id) => post('/api/data/delete', { id })
 export const previewData = (source, prep, opts = {}) => {
   const body = { source, prep }
