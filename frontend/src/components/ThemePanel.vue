@@ -58,9 +58,21 @@ const filteredGroups = computed(() => {
   return res
 })
 const totalShown = computed(() => filteredGroups.value.reduce((n, g) => n + g.elements.length, 0))
+const totalElements = computed(() => meta.themeElements.length)
 
 function elementState(name) {
   return spec.spec.theme.elements[name] ?? null
+}
+// 元素显示名：优先中文标签；没有中文标签时直接显示 R 元素名
+// （此前一律只显示 legend.key.spacing.y 这种裸名字，扫读很费劲）
+function dispLabel(e) {
+  const l = (e.label || '').trim()
+  return (!l || l === e.name) ? e.name : l
+}
+// 有中文标签时，把英文元素名作为次要信息跟在后面
+function hasAltName(e) {
+  const l = (e.label || '').trim()
+  return !!l && l !== e.name
 }
 function setElement(name, val) {
   const els = { ...spec.spec.theme.elements }
@@ -142,6 +154,16 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
         <ParamControl v-if="p.widget === 'number'" :schema="p"
           :model-value="spec.spec.theme.args[p.name] ?? null"
           @update:model-value="setArg(p.name, $event)" />
+        <!-- 开关：官方文档里就是 TRUE/FALSE 的参数 -->
+        <el-switch v-else-if="p.widget === 'bool'" size="small"
+          :model-value="!!spec.spec.theme.args[p.name]"
+          @update:model-value="setArg(p.name, $event)" />
+        <!-- 下拉：字形、字体、调色板、图例位置、线型等有限取值 -->
+        <el-select v-else-if="p.widget === 'select'"
+          :model-value="String(spec.spec.theme.args[p.name] ?? '')" size="small" filterable
+          clearable style="width:100%" @update:model-value="setArg(p.name, $event || null)">
+          <el-option v-for="o in (p.options || [])" :key="o" :value="o" :label="o" />
+        </el-select>
         <el-select v-else-if="p.widget === 'color' || p.name === 'base_family'"
           :model-value="String(spec.spec.theme.args[p.name] ?? '')" size="small" filterable
           clearable style="width:100%" @update:model-value="setArg(p.name, $event || null)">
@@ -168,19 +190,29 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
       元素编辑（已设置 {{ setElements.length }} / 显示 {{ totalShown }}）
     </div>
 
-    <el-collapse v-model="openGroups">
+    <el-collapse v-model="openGroups" class="theme-groups">
       <el-collapse-item v-for="g in filteredGroups" :key="g.key" :name="g.key">
-        <template #title><span style="font-size: 13px">{{ g.label }}（{{ g.elements.length }}）</span></template>
-        <div v-for="e in g.elements" :key="e.name" class="el-box">
+        <template #title>
+          <span class="grp-title">{{ g.label }}</span>
+          <span class="grp-count">{{ g.elements.length }}</span>
+        </template>
+        <div v-for="e in g.elements" :key="e.name" class="el-box"
+          :class="{ set: !!elementState(e.name), blanked: isBlank(e.name) }">
           <div class="el-head">
-            <el-checkbox size="small" :model-value="isBlank(e.name)"
-              @update:model-value="toggleBlank(e.name, $event)">blank</el-checkbox>
-            <span class="el-name gg-mono" :title="e.name">{{ e.name }}</span>
-            <span class="el-type">{{ e.type }}</span>
-            <el-button v-if="elementState(e.name)" size="small" text type="danger"
-              @click="setElement(e.name, null)">
-              <el-icon><Delete /></el-icon>
-            </el-button>
+            <span class="el-dot" :class="'t-' + e.type" :title="'类型：' + e.type" />
+            <span class="el-label" :class="{ 'gg-mono': !hasAltName(e) }" :title="e.name">{{ dispLabel(e) }}</span>
+            <span v-if="hasAltName(e)" class="el-name gg-mono" :title="e.name">{{ e.name }}</span>
+            <el-tooltip content="不显示该元素（element_blank）" placement="left">
+              <button class="el-icon-btn" :class="{ on: isBlank(e.name) }"
+                @click.stop="toggleBlank(e.name, !isBlank(e.name))">
+                <el-icon><component :is="isBlank(e.name) ? 'Hide' : 'View'" /></el-icon>
+              </button>
+            </el-tooltip>
+            <el-tooltip v-if="elementState(e.name)" content="清除该元素的设置" placement="left">
+              <button class="el-icon-btn danger" @click.stop="setElement(e.name, null)">
+                <el-icon><Delete /></el-icon>
+              </button>
+            </el-tooltip>
           </div>
 
           <!-- value 型 -->
@@ -252,6 +284,18 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
         </div>
       </el-collapse-item>
     </el-collapse>
+
+    <!-- 空状态：默认只列「已设置」的元素，没有设置过时给出明确指引，
+         否则会看到一片空白 + 「显示 0」，不知道是没设置还是加载失败 -->
+    <div v-if="!filteredGroups.length" class="th-empty">
+      <template v-if="search.trim()">
+        没有匹配「{{ search }}」的主题元素
+      </template>
+      <template v-else>
+        还没有自定义的主题元素<br>
+        <span class="th-empty-sub">勾选上方「显示全部」可浏览全部 {{ totalElements }} 项</span>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -259,14 +303,77 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
 .theme-toolbar {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px 4px;
 }
-.el-box { border-top: 1px dashed var(--gg-border); padding: 5px 12px 7px; }
-.el-head { display: flex; align-items: center; gap: 8px; }
-.el-name { font-size: 12px; }
-.el-type { font-size: 11px; color: var(--el-text-color-secondary); border: 1px solid var(--gg-border); border-radius: 4px; padding: 0 4px; }
-.el-props { padding: 4px 0 0 26px; }
+
+/* ---- 分组标题 ---- */
+.theme-groups { border-top: 0; }
+.theme-groups :deep(.el-collapse-item__header) {
+  height: 34px; line-height: 34px; padding-left: 12px; gap: 6px;
+  font-size: 12.5px; font-weight: 600; color: var(--gg-text-2);
+  border-bottom: 1px solid var(--gg-border);
+}
+.theme-groups :deep(.el-collapse-item__header:hover) { background: rgba(128,128,128,.05); }
+.theme-groups :deep(.el-collapse-item__wrap) { border-bottom: 0; }
+.theme-groups :deep(.el-collapse-item__content) { padding-bottom: 6px; }
+.theme-groups :deep(.el-collapse) { border: 0; }
+.grp-title { flex-shrink: 0; }
+/* 计数做成小胶囊，比「坐标轴 axis（58）」的括号读起来清爽 */
+.grp-count {
+  flex-shrink: 0; min-width: 20px; height: 16px; padding: 0 5px;
+  border-radius: 8px; background: rgba(128,128,128,.12); color: var(--gg-text-3);
+  font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center;
+}
+
+/* ---- 元素行 ---- */
+.el-box {
+  position: relative; margin: 2px 8px; padding: 6px 8px 7px 10px;
+  border-radius: 4px; border: 1px solid transparent;
+}
+.el-box:hover { background: rgba(128,128,128,.055); border-color: var(--gg-border); }
+/* 已设置的元素：左侧竖条 + 轻微底色，方便一眼找出改过哪些 */
+.el-box.set { background: rgba(47,111,191,.055); border-color: rgba(47,111,191,.16); }
+.el-box.set::before {
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 7px; width: 2px;
+  border-radius: 0 2px 2px 0; background: var(--gg-brand);
+}
+.el-box.blanked .el-label { color: var(--gg-text-4); text-decoration: line-through; }
+
+.el-head { display: flex; align-items: center; gap: 6px; }
+/* 类型圆点：替代原来英文小方块徽标，颜色区分 value/text/line/rect */
+.el-dot { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--gg-text-4); }
+.el-dot.t-value { background: #2f6fbf; }
+.el-dot.t-text { background: #8a5cd6; }
+.el-dot.t-line { background: #2fa06a; }
+.el-dot.t-rect { background: #d08a1a; }
+.el-label {
+  flex-shrink: 0; max-width: 45%; font-size: 12px; font-weight: 500; color: var(--gg-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.el-name {
+  flex: 1; min-width: 0; font-size: 10.5px; color: var(--gg-text-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 图标按钮：平时弱化，hover 提亮；blank 生效时高亮为橙 */
+.el-icon-btn {
+  flex-shrink: 0; width: 18px; height: 18px; padding: 0; border: 0; background: none;
+  color: var(--gg-text-4); cursor: pointer; border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+  opacity: .45; transition: opacity .12s, color .12s, background .12s;
+}
+.el-box:hover .el-icon-btn { opacity: 1; }
+.el-icon-btn:hover { color: var(--gg-brand); background: rgba(47,111,191,.10); }
+.el-icon-btn.danger:hover { color: #c0392b; background: rgba(192,57,43,.08); }
+.el-icon-btn.on { opacity: 1; color: #c98a1a; background: rgba(201,138,26,.12); }
+
+.el-props { padding: 5px 0 0 12px; }
 .ep-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
 .ep-row > label { width: 84px; font-size: 12px; color: var(--el-text-color-secondary); flex-shrink: 0; }
-.el-addhint { padding-left: 26px; }
+.el-addhint { padding-left: 12px; padding-top: 3px; }
 .margin-item { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .margin-inline { display: flex; gap: 4px; }
+
+/* 空状态提示 */
+.th-empty {
+  padding: 26px 18px; text-align: center; font-size: 12px; color: var(--gg-text-3); line-height: 1.9;
+}
+.th-empty-sub { font-size: 11px; color: var(--gg-text-4); }
 </style>

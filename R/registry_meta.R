@@ -668,11 +668,22 @@ ELEMENT_PROP_SCHEMA <- list(
   )
 )
 # value 型主题项的专用控件
+# 原则：官方文档里取值是有限集合的，一律给下拉（select），不要让用户手填字符串。
+# 取值已用 ggplot2 逐项实测（tools/probe_theme_values.R）。
 THEME_VALUE_WIDGETS <- list(
   legend.position      = pv("legend.position", "select", "图例位置", c("right", "left", "top", "bottom", "inside", "none")),
   legend.position.inside = pv("legend.position.inside", "text", "内部位置 c(x,y)", exprOk = TRUE),
-  legend.justification = pv("legend.justification", "text", "图例对齐", exprOk = TRUE),
-  legend.justification.top = pv("legend.justification.top", "text", "顶部对齐", exprOk = TRUE),
+  legend.location      = pv("legend.location", "select", "图例定位基准", c("panel", "plot")),
+  legend.direction     = pv("legend.direction", "select", "图例排列方向", c("horizontal", "vertical")),
+  legend.byrow         = pv("legend.byrow", "bool", "图例按行填充"),
+  legend.justification = pv("legend.justification", "select", "图例对齐", c("center", "left", "right", "top", "bottom")),
+  legend.justification.top    = pv("legend.justification.top", "select", "顶部图例对齐", c("center", "left", "right")),
+  legend.justification.bottom = pv("legend.justification.bottom", "select", "底部图例对齐", c("center", "left", "right")),
+  legend.justification.left   = pv("legend.justification.left", "select", "左图例对齐", c("center", "top", "bottom")),
+  legend.justification.right  = pv("legend.justification.right", "select", "右图例对齐", c("center", "top", "bottom")),
+  legend.text.position  = pv("legend.text.position", "select", "图例文字位置", c("top", "right", "bottom", "left")),
+  legend.title.position = pv("legend.title.position", "select", "图例标题位置", c("top", "right", "bottom", "left")),
+  legend.key.justification = pv("legend.key.justification", "select", "图例键对齐", c("center", "left", "right", "top", "bottom")),
   legend.box           = pv("legend.box", "select", "图例排列", c("vertical", "horizontal")),
   legend.box.just      = pv("legend.box.just", "select", "图例组对齐", c("top", "bottom", "left", "right", "center")),
   legend.margin        = pv("legend.margin", "margins", "图例边距"),
@@ -684,6 +695,12 @@ THEME_VALUE_WIDGETS <- list(
   plot.subtitle        = pv("plot.subtitle", "text", NULL),
   plot.caption         = pv("plot.caption", "text", NULL),
   plot.tag             = pv("plot.tag", "text", NULL),
+  plot.title.position   = pv("plot.title.position", "select", "标题对齐基准", c("panel", "plot")),
+  plot.caption.position = pv("plot.caption.position", "select", "注释对齐基准", c("panel", "plot")),
+  plot.tag.location     = pv("plot.tag.location", "select", "角标定位基准", c("panel", "plot", "margin")),
+  plot.tag.position     = pv("plot.tag.position", "select", "角标位置",
+                             c("topleft", "top", "topright", "left", "center",
+                               "right", "bottomleft", "bottom", "bottomright")),
   panel.spacing        = pv("panel.spacing", "unit", "面板间距"),
   panel.spacing.x      = pv("panel.spacing.x", "unit", "水平间距"),
   panel.spacing.y      = pv("panel.spacing.y", "unit", "垂直间距"),
@@ -700,15 +717,54 @@ THEME_VALUE_WIDGETS <- list(
   prism.ticks.length.y.left = pv("prism.ticks.length.y.left", "unit", "Prism y 刻度长度(左)"),
   prism.ticks.length.y.right = pv("prism.ticks.length.y.right", "unit", "Prism y 刻度长度(右)"),
   strip.placement      = pv("strip.placement", "select", "条带位置", c("outside", "inside")),
+  strip.placement.x    = pv("strip.placement.x", "select", "x 条带位置", c("outside", "inside")),
+  strip.placement.y    = pv("strip.placement.y", "select", "y 条带位置", c("outside", "inside")),
+  strip.switch.pad.grid = pv("strip.switch.pad.grid", "unit", "条带切换间距(grid)"),
+  strip.switch.pad.wrap = pv("strip.switch.pad.wrap", "unit", "条带切换间距(wrap)"),
   strip.text           = pv("strip.text", "text", NULL),
   strip.background     = pv("strip.background", "rect", NULL),
   strip.clip           = pv("strip.clip", "select", "条带裁剪", c("on", "off")),
   complete             = pv("complete", "bool", "完整主题标记"),
-  validate             = pv("validate", "bool", "校验主题")
+  validate             = pv("validate", "bool", "校验主题"),
+  # 数值型：给数字输入框，不要让用户手打
+  aspect.ratio         = pv("aspect.ratio", "number", "纵横比", min = 0.05, max = 20, step = 0.05),
+  ggside.panel.scale   = pv("ggside.panel.scale", "number", "侧面板缩放", min = 0.05, max = 2, step = 0.05),
+  ggside.panel.scale.x = pv("ggside.panel.scale.x", "number", "侧面板 x 缩放", min = 0.05, max = 2, step = 0.05),
+  ggside.panel.scale.y = pv("ggside.panel.scale.y", "number", "侧面板 y 缩放", min = 0.05, max = 2, step = 0.05)
 )
 SHAPE_OPTIONS  <- as.character(0:25)
 LINETYPE_OPTIONS <- c("blank", "solid", "dashed", "dotted", "dotdash", "longdash", "twodash")
 UNIT_OPTIONS   <- c("pt", "mm", "cm", "inch", "lines")
+
+# ---- 主题函数参数的枚举取值（用于把自由文本改成下拉） ------------------------
+# 字体族：西文字体 + 常用中文字体（含中文名，便于识别）
+FONT_OPTIONS <- c("sans", "serif", "mono", "Microsoft YaHei 微软雅黑", "SimHei 黑体",
+                  "SimSun 宋体", "KaiTi 楷体", "DengXian 等线")
+# 字重/字形：ggplot2 官方允许的四种
+FACEFACE_OPTIONS <- c("plain", "bold", "italic", "bold.italic")
+# 图例位置（theme_pubr / hrbrthemes 的 legend / lp 参数）
+LEGEND_POS_OPTIONS <- c("top", "bottom", "left", "right", "none")
+# ggprism 调色板（取自 ggprism::ggprism_data$colour_palettes，共 65 个）
+PRISM_PALETTES <- c(
+  "colors", "black_and_white", "autumn_leaves", "beer_and_ales", "blueprint",
+  "blueprint2", "blueprint3", "candy_bright", "candy_soft", "colorblind_safe",
+  "diazo", "earth_tones", "evergreen", "fir", "fir2", "fir3", "flames", "flames2",
+  "floral", "floral2", "greenwash", "inferno", "magma", "mustard_field",
+  "mustard_field2", "muted_rainbow", "neon", "ocean", "ocean2", "ocean3", "office",
+  "pastels", "pearl", "pearl2", "plasma", "prism_dark", "prism_dark2",
+  "prism_light", "prism_light2", "purple_passion", "quiet", "quiet2",
+  "shades_of_gray", "spring", "spring2", "stained_glass", "stained_glass2",
+  "starry", "starry2", "summer", "sunny_garden", "sunny_garden2", "sunny_garden3",
+  "the_blues", "viridis", "warm_and_sunny", "warm_pastels", "warm_pastels2",
+  "waves", "waves2", "winter_bright", "winter_soft", "wool_muffler",
+  "wool_muffler2", "wool_muffler3"
+)
+# ggthemes 的 scheme 参数（theme_foundation 系）
+GGTHEMES_SCHEMES <- c("s2color", "s2cerulean", "s2emerald", "s2green", "s2mono",
+                      "s2orange", "s2purple", "s2red", "s2sand", "s2sierra", "s2stata",
+                      "s2excel", "s2gdocs", "s2economist", "s2theeconomist",
+                      "s2wsj", "s2hc", "s2pander", "s2calc", "s2solarized",
+                      "s2solarized2")
 
 # ---- 主题元素中文标签（未命中的用元素名本身） --------------------------------
 THEME_ELEMENT_LABELS <- list(

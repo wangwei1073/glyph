@@ -62,10 +62,59 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
   as.character(formals(f)$stat %||% "identity")
 }
 
+# 参数控件推断：覆盖表优先 → 名字模式 → 默认值类型 → text
+# 目标：官方文档里取值有限/布尔/颜色的参数都给对应控件，不要一律自由文本。
+# 判定依据已用 ggplot2 4.0.3 的 formals 默认值实测（见 tools/probe_param_types.R）。
+.ggspec_ipw <- function(nm, default_value = NULL) {
+  w <- PARAM_WIDGETS[[nm]]
+  if (!is.null(w)) return(w)
+
+  # 1) 名字模式：box.colour / whisker.color / arrow.fill 等
+  if (grepl("\\.(colour|color)$", nm) || identical(nm, "arrow.fill")) {
+    return(pv(nm, "color", "颜色"))
+  }
+  if (grepl("\\.linetype$", nm)) return(pv(nm, "linetype", "线型"))
+  if (grepl("\\.linewidth$", nm)) return(pv(nm, "number", "线宽", min = 0, step = 0.1))
+  if (grepl("\\.size$", nm)) return(pv(nm, "number", "大小", min = 0, step = 0.1))
+
+  # 2) 少量按名字就能确定语义的
+  fixed <- list(
+    # 开关
+    parse          = pv("parse", "bool", "解析为表达式（plotmath）"),
+    check_overlap  = pv("check_overlap", "bool", "检查标签重叠"),
+    interpolate    = pv("interpolate", "bool", "插值平滑"),
+    stackgroups    = pv("stackgroups", "bool", "跨组堆叠"),
+    right          = pv("right", "bool", "靠右放置"),
+    # 枚举
+    contour_var    = pv("contour_var", "select", "轮廓变量", c("density", "ndensity", "count")),
+    outline.type   = pv("outline.type", "select", "轮廓类型", c("both", "upper", "lower", "full")),
+    binaxis        = pv("binaxis", "select", "分箱轴", c("x", "y")),
+    binpositions   = pv("binpositions", "select", "分箱方式", c("bygroup", "all")),
+    stackdir       = pv("stackdir", "select", "堆叠方向",
+                        c("up", "down", "center", "centerwhole")),
+    size.unit      = pv("size.unit", "select", "尺寸单位", c("mm", "cm", "inches", "pt")),
+    rule           = pv("rule", "select", "填充规则", c("evenodd", "winding")),
+    # 数值（默认值是 NULL，无法从默认值推断，故显式列出）
+    label.padding  = pv("label.padding", "number", "标签内边距", min = 0, step = 0.5),
+    dotsize        = pv("dotsize", "number", "点大小", min = 0, step = 0.1),
+    stackratio     = pv("stackratio", "number", "堆叠比例", min = 0, step = 0.05),
+    fatten         = pv("fatten", "number", "加粗系数", min = 1, max = 5, step = 0.5),
+    slope          = pv("slope", "number", "斜率"),
+    intercept      = pv("intercept", "number", "截距"),
+    yintercept     = pv("yintercept", "number", "y 截距")
+  )
+  if (!is.null(fixed[[nm]])) return(fixed[[nm]])
+
+  # 3) 默认值是逻辑量 → 一定是开关
+  if (is.logical(default_value) && length(default_value) == 1) {
+    return(pv(nm, "bool", nm))
+  }
+  pv(nm, "text")
+}
+
 # 参数 schema：覆盖表优先，缺省为 text
 .ggspec_param_schema <- function(name, default_value = NULL) {
-  w <- PARAM_WIDGETS[[name]]
-  if (is.null(w)) w <- pv(name, "text")
+  w <- .ggspec_ipw(name, default_value)
   out <- w
   if (is.null(out$default) && !is.null(default_value) &&
       (is.character(default_value) || is.numeric(default_value) || is.logical(default_value))) {
@@ -152,8 +201,13 @@ SCALE_AES_PREFIXES <- c("x", "y", "colour", "color", "fill", "alpha", "size",
     if (type == "value") {
       w <- THEME_VALUE_WIDGETS[[nm]]
       if (is.null(w)) {
+        # 兜底：按名字猜控件类型
+        # 尺寸类（length / spacing / size / width / height）本质上都是「数值 + 单位」，
+        # 之前只匹配「以 length|spacing 结尾」，导致 legend.key.size、
+        # axis.ticks.length.x.top 这类被当成自由文本，用户得手打 "5pt"。
         w <- if (grepl("margin", nm)) pv(nm, "margins")
-             else if (grepl("(length|spacing)$", nm)) pv(nm, "unit")
+             else if (grepl("(^|\\.)(length|spacing)(\\.|$)", nm)) pv(nm, "unit")
+             else if (grepl("\\.(size|width|height)$", nm)) pv(nm, "unit")
              else pv(nm, "text")
       }
       item$widget <- w
@@ -167,18 +221,64 @@ SCALE_AES_PREFIXES <- c("x", "y", "colour", "color", "fill", "alpha", "size",
   f <- get(fn, envir = if (identical(pkg, "ggplot2")) .ggspec_ns() else asNamespace(pkg))
   fm <- formals(f)
   out <- list()
+  # 布尔型开关（官方文档里就是 TRUE/FALSE）：给 checkbox 而不是让人手打 TRUE
+  bool_names <- c("border", "boxes", "dkpanel", "fill", "flip", "gm", "gM",
+                  "gray_bg", "grid", "horizontal", "light", "margin", "nomargin",
+                  "rotate", "ticks", "axis.line", "frame", "axis", "legend.frame")
+  # 用 list 而非 named vector：向量取不存在的名字 [[ 会报「下标出界」，list 返回 NULL
+  bool_labels <- list(border = "显示边框", boxes = "绘制边框", dkpanel = "深色面板",
+                      fill = "填充", flip = "翻转", gm = "主网格线", gM = "次网格线",
+                      gray_bg = "灰色背景", grid = "显示网格", horizontal = "水平排列",
+                      light = "浅色", margin = "留边距", nomargin = "去掉边距",
+                      rotate = "旋转", ticks = "显示刻度", frame = "显示外框",
+                      axis = "显示轴线")
   for (nm in names(fm)) {
     if (nm == "...") next
+    # 默认值类型：能强烈提示控件类型（logical→开关、numeric→数字）
+    dv <- tryCatch(eval(fm[[nm]]), error = function(e) NULL)
+    is_bool <- (is.logical(dv) && length(dv) == 1) || nm %in% bool_names
+    is_num  <- is.numeric(dv) && length(dv) == 1
     w <- switch(nm,
       base_size = pv(nm, "number", "基础字号", min = 4, max = 48, step = 1),
-      base_family = pv(nm, "text", "基础字体"),
-      header_family = pv(nm, "text", "标题字体"),
+      base_family = pv(nm, "select", "基础字体", FONT_OPTIONS),
+      header_family = pv(nm, "select", "标题字体", FONT_OPTIONS),
+      palette = pv(nm, "select", "调色板", PRISM_PALETTES),
+      scheme = pv(nm, "select", "配色方案", GGTHEMES_SCHEMES),
+      style = pv(nm, "select", "样式", c("default", "darkunica")),
+      legend = pv(nm, "select", "图例位置", LEGEND_POS_OPTIONS),
+      lp = pv(nm, "select", "图例位置", LEGEND_POS_OPTIONS),
+      gl = pv(nm, "select", "网格线型", LINETYPE_OPTIONS),
+      axis_text_angle = pv(nm, "number", "轴文字角度", min = 0, max = 360, step = 5),
+      x.text.angle = pv(nm, "number", "x 文字角度", min = 0, max = 360, step = 5),
+      axis_text_size = pv(nm, "number", "轴文字字号", min = 4, max = 40, step = 1),
+      axis_title_size = pv(nm, "number", "轴标题字号", min = 4, max = 40, step = 1),
+      plot_title_size = pv(nm, "number", "主标题字号", min = 4, max = 48, step = 1),
+      subtitle_size = pv(nm, "number", "副标题字号", min = 4, max = 48, step = 1),
+      caption_size = pv(nm, "number", "注释字号", min = 4, max = 40, step = 1),
+      strip_text_size = pv(nm, "number", "条带字号", min = 4, max = 40, step = 1),
+      font_size = pv(nm, "number", "字号", min = 4, max = 48, step = 1),
+      line_size = pv(nm, "number", "线宽", min = 0, step = 0.1),
       base_line_size = pv(nm, "number", "基础线宽", min = 0, step = 0.1),
       base_rect_size = pv(nm, "number", "基础边框宽", min = 0, step = 0.1),
+      panel_spacing = pv(nm, "number", "面板间距", min = 0, step = 0.5),
+      plot_margin = pv(nm, "margins", "绘图边距"),
       ink = pv(nm, "color", "墨色（前景）"),
       paper = pv(nm, "color", "纸色（背景）"),
       accent = pv(nm, "color", "强调色"),
-      pv(nm, "text")
+      # 其余按名字归类
+      if (grepl("face", nm)) {
+        pv(nm, "select", "字形（字重/斜体）", FACEFACE_OPTIONS)
+      } else if (grepl("family|^ff$|^fs$", nm)) {
+        pv(nm, "select", "字体族", FONT_OPTIONS)
+      } else if (grepl("(col|color)$|^bc$|^fc$|^gc$|^pc$|bgcolor|grid_col|axis_col", nm)) {
+        pv(nm, "color", "颜色")
+      } else if (is_bool) {
+        pv(nm, "bool", (bool_labels[[nm]] %||% nm))
+      } else if (is_num || grepl("(angle|size|margin|spacing)$", nm)) {
+        pv(nm, "number", nm, min = 0, step = 0.1)
+      } else {
+        pv(nm, "text", nm)
+      }
     )
     out[[length(out) + 1]] <- w
   }
@@ -237,8 +337,7 @@ GGTHEMES_THEME_LABELS <- list(
     fm <- formals(get(fn, envir = asNamespace(pkg)))
     pnames <- setdiff(names(fm), c("...", "aesthetics"))
     params <- lapply(setNames(pnames, pnames), function(nm) {
-      w <- PARAM_WIDGETS[[nm]]
-      (w %||% pv(nm, "text"))
+      .ggspec_ipw(nm)
     })
     out[[length(out) + 1]] <- list(
       fn = fn, aes = parsed$aes, type = type, label = label,
@@ -303,9 +402,10 @@ GGTHEMES_THEME_LABELS <- list(
     } else if (identical(nm, "base_size")) {
       args[[i]] <- pv("base_size", "number", "基础字号", min = 4, max = 48, step = 1)
     } else if (nm %in% c("base_line_size", "base_rect_size")) {
-      args[[i]] <- pv(nm, "number", "基础线宽", min = 0, step = 0.1)
+      lbl <- if (identical(nm, "base_line_size")) "基础线宽" else "基础边框宽"
+      args[[i]] <- pv(nm, "number", lbl, min = 0, step = 0.1)
     } else if (identical(nm, "base_family")) {
-      args[[i]] <- pv("base_family", "text", "基础字体")
+      args[[i]] <- pv("base_family", "select", "基础字体", FONT_OPTIONS)
     }
   }
   args
@@ -428,7 +528,7 @@ ggspec_build_meta <- function() {
       g$aes <- aes_info
       g$params <- lapply(setdiff(names(formals(f)), c("mapping", "data", "stat", "position", "...",
                                                       "show.legend", "inherit.aes")),
-                         function(nm) PARAM_WIDGETS[[nm]] %||% pv(nm, "text"))
+                         function(nm) .ggspec_ipw(nm))
       g$statParams <- list()
       g$defaultStat <- if (!is.null(layer)) class(layer$stat)[1] else "identity"
       if (g$defaultStat %in% c("Stat", "StatIdentity", "ggproto", "gg")) g$defaultStat <- "identity"
@@ -552,8 +652,15 @@ ggspec_build_meta <- function() {
     fm <- formals(get(fn, envir = ns))
     pnames <- setdiff(names(fm), c("...", "aesthetics"))
     params <- lapply(setNames(pnames, pnames), function(nm) {
-      w <- PARAM_WIDGETS[[nm]]
-      (w %||% pv(nm, "text", exprOk = nm %in% c("values", "palette", "type", "breaks", "labels", "limits", "high", "low", "mid", "midpoint", "colours", "colors", "endpoint", "rescaler")))
+      w <- .ggspec_ipw(nm)
+      # 标度里这些参数接受 R 表达式（向量/函数名），给文本框并标注可写表达式
+      if (identical(w$widget, "text") &&
+          nm %in% c("values", "palette", "type", "breaks", "labels", "limits",
+                    "high", "low", "mid", "midpoint", "colours", "colors",
+                    "endpoint", "rescaler")) {
+        w$exprOk <- TRUE
+      }
+      w
     })
     scales[[length(scales) + 1]] <- list(
       fn = fn, aes = parsed$aes, type = parsed$type, package = "ggplot2",
@@ -593,15 +700,12 @@ ggspec_build_meta <- function() {
       } else {
         paste0(key, " (", pkg, ")")
       }
-      args <- (function() {
-        fm <- tryCatch(formals(get(fn, envir = tns)), error = function(e) NULL)
-        if (is.null(fm)) return(list())
-        lapply(setdiff(names(fm), "..."), function(nm) {
-          PARAM_WIDGETS[[nm]] %||% pv(nm, "text")
-        })
-      })()
-      # ggprism 的 theme_prism 需要专用控件（palette 65 选 1、字号/边框等），
-      # 否则会退化成纯文本输入（历史回归，见 test_extension_prism）
+      # 统一走 .ggspec_theme_args：它会按「参数名 + 默认值类型」推断控件，
+      # 把字形/字体/调色板/图例位置等有限取值变成下拉、TRUE/FALSE 变成开关。
+      # 此前这里用的是 PARAM_WIDGETS[[nm]] %||% pv(nm, "text")，
+      # 导致扩展主题的参数几乎全是自由文本框（palette、border 也要手打）。
+      args <- .ggspec_theme_args(fn, pkg)
+      # ggprism 的 theme_prism 另有中文标签与动态调色板清单，覆盖一层更贴近原意
       if (identical(pkg, "ggprism") && identical(key, "prism")) {
         args <- .ggprism_theme_args(args)
       }

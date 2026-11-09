@@ -91,8 +91,12 @@ const linetypeOpts = ['blank', 'solid', 'dashed', 'dotted', 'dotdash', 'longdash
         :precision="schema.step && schema.step < 1 ? 2 : undefined" controls-position="right"
         style="width:100%" />
       <el-switch v-else-if="schema.widget === 'bool'" v-model="boolModel" size="small" />
+      <!-- allow-create：枚举下拉也允许手填。少数参数在不同 geom 下含义不同
+           （例如 orientation 在柱状图是 x/y，在 geom_sf 是数值），
+           允许自定义可避免下拉把合法取值挡在外面。 -->
       <el-select v-else-if="schema.widget === 'select'" :model-value="selectModel" size="small"
-        filterable clearable style="width:100%" @update:model-value="set($event || null)">
+        filterable clearable allow-create default-first-option style="width:100%"
+        @update:model-value="set($event || null)">
         <el-option v-for="o in schema.options || []" :key="o"
           :value="typeof o === 'object' ? o.v : o" :label="typeof o === 'object' ? o.l : o" />
       </el-select>
