@@ -290,6 +290,7 @@ html.dark .col-type.date { background: #4f2611; color: #e89a6b; }
   flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
   padding: var(--gg-sp-4); overflow: auto;
   background: var(--gg-canvas);
+  position: relative;   /* 「正在显示代码图」状态条按此定位 */
 }
 html.dark .gg-canvas-wrap { background: var(--gg-canvas); }
 .gg-canvas-img {

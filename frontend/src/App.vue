@@ -41,23 +41,25 @@ function startResize() {
 }
 
 // ---- 自动渲染（深度 watch spec + 渲染设置，550ms 防抖） ----
+// 两种情况要区分开：
+//   A) 只改了「画幅 / 尺寸」→ 当前代码图应保持代码、按新尺寸重渲染
+//   B) 改动了「绘图规格（图层/映射）」→ 用户回到了正常绘图流程，代码图应让位给 spec
 let debounceTimer = null
-function scheduleRender() {
+function scheduleRender(fromSpec = false) {
   if (!spec.autoRender) return
-  // 仅在「画布当前展示的是代码图」时跳过自动渲染：那种情况下 spec 是空的，
-  // 自动渲染会用空白 spec 把代码图覆盖掉。
-  // 注意：不能用「无图层 + last.code 有值」判断——拼图组合的 spec 天然没有图层，
-  // 那样会把拼图的自动渲染一并拦掉。用 renderedFromCode 精确识别代码图。
-  if (!spec.spec.layers.length && spec.last && spec.last.renderedFromCode) return
   clearTimeout(debounceTimer)
   spec.renderQueued = true
   debounceTimer = setTimeout(() => {
     spec.renderQueued = false
+    // 用户改动了图层/映射 → 退出「代码图」状态，按 spec 渲染
+    if (fromSpec && spec.last && spec.last.renderedFromCode) {
+      spec.last = { ...spec.last, renderedFromCode: false }
+    }
     spec.renderNow()
   }, 550)
 }
-watch(() => spec.spec, scheduleRender, { deep: true })
-watch(() => spec.renderOpts, scheduleRender, { deep: true })
+watch(() => spec.spec, () => scheduleRender(true), { deep: true })
+watch(() => spec.renderOpts, () => scheduleRender(false), { deep: true })
 
 // ---- 草稿自动保存（崩溃 / 误关恢复）----
 let draftTimer = null

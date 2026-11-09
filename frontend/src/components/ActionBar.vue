@@ -84,7 +84,7 @@ async function quitApp() {
       </el-tooltip>
       <el-dropdown trigger="click" @command="cmd">
         <el-button size="small" text class="act-btn">
-          <el-icon><FolderOpened /></el-icon><span class="act-label">项目</span><el-icon><ArrowDown /></el-icon>
+          <el-icon><FolderOpened /></el-icon><span class="act-label">项目</span><el-icon class="act-caret"><ArrowDown /></el-icon>
         </el-button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -143,4 +143,6 @@ async function quitApp() {
 .act-bar.mini .act-actions { flex-direction: column; gap: 4px; }
 .act-bar.mini .act-btn { width: 30px; height: 28px; justify-content: center; padding: 0; }
 .act-bar.mini .act-label { display: none; }
+/* 窄栏只剩图标：下拉箭头也隐掉，否则会留一个孤立的小三角 */
+.act-bar.mini .act-caret { display: none; }
 </style>

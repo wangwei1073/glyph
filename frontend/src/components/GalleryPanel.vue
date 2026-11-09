@@ -52,10 +52,11 @@ async function openCode(p) {
     spec.last = { ...(spec.last || {}), ok: true, pngUrl: res.pngUrl || null, png: null,
       code: res.code, warnings: [], messages: [], error: null, elapsed: 0,
       renderedFromCode: true }
-    if (res.renderOpts && res.renderOpts.width) {
-      spec.renderOpts = { ...spec.renderOpts, ...res.renderOpts }
-    }
     // 不再写 spec.pendingCode —— 避免自动填进高级页编辑器
+    // 尺寸交给画布自适应：不覆盖 renderOpts，否则会把画幅钉死成存档时的值，
+    // 导致后续拖窗口/改尺寸时图不跟着变（自适应失效）。
+    // 先显示存档的预览图（立刻有反馈），再按当前画布尺寸重渲染一次（保证清晰度匹配）。
+    spec.renderNow()
     if (!res.pngUrl) {
       ElMessage.warning('该条目没有预览图，可在「代码」视图点「载入编辑器」后重新运行')
     } else {

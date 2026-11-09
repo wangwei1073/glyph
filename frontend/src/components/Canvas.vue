@@ -1,6 +1,6 @@
 <script setup>
 // 画布：图表预览 / 代码视图 / 渲染与导出设置 / 状态行
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
@@ -18,6 +18,13 @@ const pins = usePinStore()
 const ui = useUiStore()
 const view = ref('plot')
 const zoom100 = ref(false)
+// 「自适应画布」：按容器实际尺寸 × devicePixelRatio 渲染，让大屏也能看到清晰的图。
+// 图仍按 1:1 像素显示（不插值放大），所以清晰度不损失。
+// 用户手动改画幅时自动关闭，避免设置被窗口尺寸覆盖。
+const fitToCanvas = ref(localStorage.getItem('gg-fit-canvas') !== '0')
+const canvasWrapEl = ref(null)
+let fitTimer = null
+let ro = null          // ResizeObserver：容器尺寸变化（窗口缩放 / 拖动左右面板）
 const exporting = ref(false)
 const sizePopover = ref(false)
 const plotlyVisible = ref(false)
@@ -68,9 +75,13 @@ const PRESETS = [
   { label: '双栏 170', mm: 170 },
   { label: 'Nature 89', mm: 89 }
 ]
-const sizeLabel = computed(() => sizeMode.value === 'mm'
-  ? `${renderMm.value.w}×${renderMm.value.h} mm · ${spec.renderOpts.dpi}dpi`
-  : `${spec.renderOpts.width}×${spec.renderOpts.height} · ${spec.renderOpts.dpi}dpi`)
+const sizeLabel = computed(() => {
+  const base = sizeMode.value === 'mm'
+    ? `${renderMm.value.w}×${renderMm.value.h} mm · ${spec.renderOpts.dpi}dpi`
+    : `${spec.renderOpts.width}×${spec.renderOpts.height} · ${spec.renderOpts.dpi}dpi`
+  // 自适应开启时加个标记，让用户知道这个数字会随窗口变化
+  return fitToCanvas.value ? `${base} · 自适应` : base
+})
 const sizeHint = computed(() => {
   const d = spec.renderOpts.dpi || 150
   const ed = exportOpts.value.dpi || 300
@@ -79,6 +90,69 @@ const sizeHint = computed(() => {
     + ` · 导出 ${pxToMm(exportOpts.value.width, ed)}×${pxToMm(exportOpts.value.height, ed)} mm`
     + `。字号按 pt 输出、与 dpi 无关；当前主题基础字号 ${base}pt。`
 })
+
+// 从「代码图」回到「自己的 spec 图」
+// 清掉来源标记后按 spec 重渲染；有未保存改动不受影响（spec 一直在内存里）
+function backToSpec() {
+  if (!spec.spec.layers.length && !spec.composeActive) {
+    return ElMessage.warning('画布没有图层，无法返回；先添加图层或载入项目')
+  }
+  spec.last = { ...spec.last, renderedFromCode: false }
+  spec.renderNow()
+}
+
+// 计算「画布实际的渲染像素尺寸」：容器内容区尺寸 × DPR
+// 说明：减去 padding 是因为 .gg-canvas-wrap 有 16px 内边距，图片可用的就是内容区。
+const DPR = Math.min(window.devicePixelRatio || 1, 2)   // 上限 2，避免 3x/4x 屏渲染过慢
+function computeFitSize() {
+  const el = canvasWrapEl.value
+  if (!el) return null
+  // 容器隐藏时（切到「代码」页签）尺寸为 0，此时不更新画幅，避免误渲染成最小值
+  if (el.clientWidth < 80 || el.clientHeight < 80) return null
+  const cs = getComputedStyle(el)
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+  const w = Math.max(200, Math.round((el.clientWidth - padX) * DPR))
+  const h = Math.max(150, Math.round((el.clientHeight - padY) * DPR))
+  return { width: Math.min(w, 4000), height: Math.min(h, 4000) }
+}
+
+// 应用自适应尺寸：仅在值真的变化时更新，避免无谓重渲染
+function applyFitSize() {
+  if (!fitToCanvas.value) return
+  const s = computeFitSize()
+  if (!s) return
+  if (s.width === spec.renderOpts.width && s.height === spec.renderOpts.height) return
+  spec.renderOpts.width = s.width
+  spec.renderOpts.height = s.height
+  if (sizeMode.value === 'mm') {
+    renderMm.value = {
+      w: pxToMm(s.width, spec.renderOpts.dpi),
+      h: pxToMm(s.height, spec.renderOpts.dpi)
+    }
+  }
+  // 直接重渲染（App.vue 的 renderOpts watch 也会触发，但这里更即时且不会误判来源）
+  // renderNow 内部会判断当前画面是「代码图」还是「普通图」
+  scheduleRender()
+}
+
+function scheduleRender() {
+  clearTimeout(fitTimer)
+  fitTimer = setTimeout(() => { fitTimer = null; spec.renderNow() }, 320)
+}
+
+function toggleFit() {
+  fitToCanvas.value = !fitToCanvas.value
+  try { localStorage.setItem('gg-fit-canvas', fitToCanvas.value ? '1' : '0') } catch { /* 忽略 */ }
+  if (fitToCanvas.value) applyFitSize()
+}
+
+// 用户手动改画幅 → 关闭自适应（否则设置会被窗口尺寸覆盖，造成困惑）
+function markManualSize() {
+  if (!fitToCanvas.value) return
+  fitToCanvas.value = false
+  try { localStorage.setItem('gg-fit-canvas', '0') } catch { /* 忽略 */ }
+}
 
 function setSizeMode(mode) {
   sizeMode.value = mode
@@ -101,12 +175,20 @@ function applyRenderMm() {
 }
 function setRenderMm(k, v) {
   if (!v) return
+  markManualSize()
   renderMm.value[k] = v
   applyRenderMm()
 }
 function setRenderDpi(v) {
+  markManualSize()
   spec.renderOpts.dpi = v
   if (sizeMode.value === 'mm') applyRenderMm()
+}
+// 像素模式下手动改宽高：同样视为「用户接管尺寸」，关闭自适应
+function setRenderPx(k, v) {
+  if (!v) return
+  markManualSize()
+  spec.renderOpts[k] = v
 }
 function applyExportMm() {
   const d = exportOpts.value.dpi || 300
@@ -127,6 +209,7 @@ function applyPreset(which, mm) {
   const ratio = (cur.h / cur.w) || 0.66
   const next = { w: mm, h: Math.max(20, Math.round(mm * ratio)) }
   if (which === 'render') {
+    markManualSize()
     renderMm.value = next
     applyRenderMm()
   } else {
@@ -150,6 +233,38 @@ onMounted(async () => {
     const r = await getJournalTemplates()
     journals.value = r.templates || []
   } catch { /* 模板不可用不影响导出 */ }
+
+  // 自适应画布：首次挂载后按容器实际尺寸定一次画幅
+  await nextTick()
+  applyFitSize()
+
+  // 用 ResizeObserver 监听画布容器本身：
+  // 窗口缩放、拖动左右面板、折叠侧栏都会改变容器尺寸，而只有前者会触发 window.resize。
+  // 只监听 window.resize 会导致「拖面板后画布不对齐、且不重新渲染」。
+  if (typeof ResizeObserver !== 'undefined' && canvasWrapEl.value) {
+    ro = new ResizeObserver(() => {
+      if (!fitToCanvas.value) return
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => { resizeTimer = null; applyFitSize() }, 260)
+    })
+    ro.observe(canvasWrapEl.value)
+  }
+  window.addEventListener('resize', onWinResize)
+})
+
+// 窗口/面板宽度变化 → 重新按容器尺寸渲染（防抖，避免拖动时反复请求）
+let resizeTimer = null
+function onWinResize() {
+  if (!fitToCanvas.value) return
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => { resizeTimer = null; applyFitSize() }, 260)
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onWinResize)
+  if (ro) { ro.disconnect(); ro = null }
+  clearTimeout(resizeTimer)
+  clearTimeout(fitTimer)
 })
 function setJournal(id) {
   journalId.value = id || ''
@@ -384,6 +499,21 @@ async function drawPlotly() {
       </el-tooltip>
     </div>
 
+    <!-- 代码图状态：放在顶栏而不是浮在画布上，避免遮挡图表 -->
+    <template v-if="spec.last.renderedFromCode">
+      <span class="ch-sep" />
+      <div class="ch-group">
+        <el-tooltip content="当前画布显示的是从图库打开的代码图" placement="bottom">
+          <span class="head-code-tag"><el-icon><Tickets /></el-icon>代码图</span>
+        </el-tooltip>
+        <el-tooltip v-if="spec.hasContent" content="切回按当前图层设置生成的图" placement="bottom">
+          <el-button size="small" text type="primary" @click="backToSpec">
+            <el-icon class="el-icon--left"><Back /></el-icon><span class="btn-label">返回我的图</span>
+          </el-button>
+        </el-tooltip>
+      </div>
+    </template>
+
     <span class="ch-sep" />
 
     <!-- 组 3：尺寸 -->
@@ -403,6 +533,13 @@ async function drawPlotly() {
         <span class="gg-hint">{{ sizeMode === 'mm' ? '按最终印刷尺寸设置' : '按屏幕像素设置' }}</span>
       </div>
 
+      <!-- 自适应画布：按窗口实际大小渲染，大屏也能看清；手动改画幅会自动关闭 -->
+      <div class="fit-row">
+        <el-switch :model-value="fitToCanvas" size="small" @update:model-value="toggleFit" />
+        <span class="fit-label">自适应画布</span>
+        <span class="gg-hint">按窗口尺寸渲染，拖动窗口自动重算</span>
+      </div>
+
       <div class="gg-subhead" style="padding:10px 0 4px">预览</div>
       <div class="size-row">
         <template v-if="sizeMode === 'mm'">
@@ -414,11 +551,11 @@ async function drawPlotly() {
           <span class="unit">mm</span>
         </template>
         <template v-else>
-          <el-input-number v-model="spec.renderOpts.width" :min="200" :max="4000" :step="20" size="small"
-            controls-position="right" style="width:84px" />
+          <el-input-number :model-value="spec.renderOpts.width" :min="200" :max="4000" :step="20" size="small"
+            controls-position="right" style="width:84px" @update:model-value="setRenderPx('width', $event)" />
           <span class="unit">×</span>
-          <el-input-number v-model="spec.renderOpts.height" :min="150" :max="4000" :step="20" size="small"
-            controls-position="right" style="width:84px" />
+          <el-input-number :model-value="spec.renderOpts.height" :min="150" :max="4000" :step="20" size="small"
+            controls-position="right" style="width:84px" @update:model-value="setRenderPx('height', $event)" />
           <span class="unit">px</span>
         </template>
         <el-select :model-value="spec.renderOpts.dpi" size="small" style="width:78px"
@@ -482,7 +619,7 @@ async function drawPlotly() {
     </div>
   </div>
 
-  <div v-show="view === 'plot'" class="gg-canvas-wrap">
+  <div v-show="view === 'plot'" ref="canvasWrapEl" class="gg-canvas-wrap">
     <!--
       显示条件用 hasContent（有图层/拼图槽位），而不是 hasPlot：
       - 空画布时后端也会渲染一张空白图并写进 last，若只看 hasPlot 就会显示这块白板，
@@ -490,6 +627,9 @@ async function drawPlotly() {
       - 「原始代码模式」只产出图、没有图层的情况，由 codeMode 兜住
         （该模式下 spec.layers 为空但确实要显示渲染结果）。
     -->
+    <!-- 只用 zoom100 控制缩放；渲染中不做透明度变化。
+         浏览器在新 src 加载完成前会继续显示旧的帧，所以不会闪白，
+         渲染进展由右上角转圈提示。 -->
     <img v-if="imgSrc && (spec.hasContent || spec.last.renderedFromCode)"
       :src="imgSrc" class="gg-canvas-img" :class="{ zoom100 }" alt="plot" />
     <div v-else-if="!spec.last.error" class="gg-empty-hint">
@@ -721,8 +861,21 @@ async function drawPlotly() {
 .gg-empty-hint .t { font-size: 14px; font-weight: 600; color: var(--gg-text-2); margin-bottom: 12px; }
 .gg-empty-hint .sub { margin-top: 10px; font-size: 12px; color: var(--gg-text-3); }
 
+/* 顶栏里的「代码图」状态标签：橙色调，与图库卡片的代码图徽标呼应 */
+.head-code-tag {
+  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+  height: 20px; padding: 0 6px; border-radius: var(--gg-r-sm);
+  font-size: var(--gg-fs-xs); font-weight: 500;
+  background: #fff5e6; color: #a4700f; border: 1px solid #f0d9b5;
+  white-space: nowrap;
+}
+html.dark .head-code-tag { background: #3a2f18; color: #ddb26a; border-color: #5a4a25; }
+
 /* 尺寸设置 */
 .size-mode { display: flex; align-items: center; gap: 8px; }
+.fit-row { display: flex; align-items: center; gap: 6px; padding: 8px 0 2px; }
+.fit-row .fit-label { font-size: var(--gg-fs-sm); color: var(--gg-text-2); }
+.fit-row .gg-hint { font-size: var(--gg-fs-xs); color: var(--gg-text-4); }
 .size-row { display: flex; align-items: center; gap: 4px; }
 .size-row .unit { font-size: 11px; color: var(--gg-text-4); }
 .size-presets { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px; }

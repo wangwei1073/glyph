@@ -1,6 +1,6 @@
 // Glyph - 绘图规格 store：spec 是唯一的绘图事实来源
 import { defineStore } from 'pinia'
-import { renderPlot } from '../api'
+import { renderPlot, rawRender } from '../api'
 import { useDataStore } from './data'
 
 export function defaultSpec() {
@@ -471,19 +471,33 @@ export const useSpecStore = defineStore('spec', {
     // ---- 渲染 ----
     // 串行化：同一时刻只发一个渲染请求（后端 httpuv 单线程，排队只会让所有请求一起变慢）；
     // 渲染期间的新请求合并成「结束后再来一次」。
+    //
+    // 关键：当前画面可能来自「原始代码模式」（last.renderedFromCode）。
+    // 此时不能按 spec 渲染 —— spec 是空的（或停在用户旧的图层配置），
+    // 渲染出来会顶掉代码图。正确做法是用同一段代码按新尺寸重渲染。
+    // 这同时解决两个问题：
+    //   1) 自适应/改画幅时，代码图能跟着重渲染，而不是被 spec 覆盖
+    //   2) 项目里有自己图层映射时，拖窗口不会把代码图顶掉
     async renderNow() {
       if (this.rendering) { this.renderQueued = true; return }
       const token = ++this.renderToken
       this.rendering = true
       this.renderQueued = false
       try {
-        const res = await renderPlot(this.spec, this.renderOpts)
+        const asCode = !!(this.last && this.last.renderedFromCode && this.last.code)
+        const res = asCode
+          ? await rawRender(this.last.code, this.spec, this.renderOpts)
+          : await renderPlot(this.spec, this.renderOpts)
         if (token !== this.renderToken) return
         if (res.ok) {
           this.last = {
-            ok: true, pngUrl: res.pngUrl || null, png: res.png || null, code: res.code,
+            ok: true, pngUrl: res.pngUrl || null, png: res.png || null,
+            // 代码模式：沿用当前编辑器里的代码；spec 模式：用后端回传的生成代码
+            code: asCode ? this.last.code : res.code,
             warnings: res.warnings || [], messages: res.messages || [],
-            error: null, elapsed: res.elapsedMs || 0
+            error: null, elapsed: res.elapsedMs || 0,
+            // 保持来源标记，否则下一次 resize 又会走 spec 分支
+            ...(asCode ? { renderedFromCode: true } : {})
           }
         } else {
           this.last = { ...this.last, ok: false, error: res.error, warnings: res.warnings || [] }
