@@ -31,7 +31,7 @@ async function initEditor() {
 
 let initPromise = null
 async function buildEditor() {
-  const [{ EditorState }, { EditorView: EV, keymap, lineNumbers, highlightActiveLine }, { StreamLanguage }, { r }, { oneDark: od }, { defaultKeymap, history, historyKeymap, indentWithTab }] = await Promise.all([
+  const [{ EditorState }, { EditorView: EV, keymap, lineNumbers, highlightActiveLine }, { StreamLanguage }, { r }, { oneDark: od }, { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo, toggleComment }] = await Promise.all([
     import('@codemirror/state'),
     import('@codemirror/view'),
     import('@codemirror/language'),
@@ -50,7 +50,9 @@ async function buildEditor() {
         lineNumbers(),
         highlightActiveLine(),
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab,
+          { key: 'Mod-/', run: (v) => { toggleCommentLines(v); return true } },
+          { key: 'Mod-Shift-f', run: () => { formatNow(); return true } }]),
         StreamLanguage.define(r),
         EditorView.lineWrapping,
         oneDark,
@@ -150,17 +152,17 @@ async function loadFromSpec() {
   editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: code } })
 }
 
-async function runRaw() {
-  if (!rawCode.value.trim()) {
+async function runCode(code, successMsg = '渲染成功') {
+  if (!code.trim()) {
     ElMessage.warning('代码为空：先「载入当前图形的生成代码」或直接输入 R 代码')
     return
   }
   rawRunning.value = true
   try {
-    const res = await rawRender(rawCode.value, spec.spec, spec.renderOpts)
+    const res = await rawRender(code, spec.spec, spec.renderOpts)
     if (res.ok) {
-      spec.last = { ok: true, pngUrl: res.pngUrl || null, png: res.png || null, code: rawCode.value, warnings: res.warnings || [], messages: [], error: null, elapsed: res.elapsedMs || 0 }
-      ElMessage.success(`渲染成功 (${res.elapsedMs}ms)`)
+      spec.last = { ok: true, pngUrl: res.pngUrl || null, png: res.png || null, code, warnings: res.warnings || [], messages: [], error: null, elapsed: res.elapsedMs || 0 }
+      ElMessage.success(`${successMsg} (${res.elapsedMs}ms)`)
     } else {
       ElMessage.error(String(res.error).slice(0, 300))
     }
@@ -170,6 +172,38 @@ async function runRaw() {
     rawRunning.value = false
   }
 }
+
+function runRaw() { return runCode(rawCode.value) }
+
+function runSelection() {
+  const sel = editor && editor.state.selection.main
+  const text = sel ? editor.state.sliceDoc(sel.from, sel.to) : ''
+  if (!text.trim()) return ElMessage.warning('先在编辑器里选中要运行的代码')
+  runCode(text, '选中代码渲染成功')
+}
+
+function doUndo() { if (editor) undo(editor) }
+function doRedo() { if (editor) redo(editor) }
+
+function toggleCommentLines(view) {
+  if (!view) return
+  const sel = view.state.selection.main
+  const first = view.state.doc.lineAt(sel.from)
+  const last = view.state.doc.lineAt(sel.to)
+  const lines = []
+  for (let n = first.number; n <= last.number; n++) lines.push(view.state.doc.line(n))
+  const allCommented = lines.every(l => /^\s*#/.test(l.text))
+  view.dispatch({
+    changes: lines.map(l => ({
+      from: l.from,
+      to: l.to,
+      insert: allCommented
+        ? l.text.replace(/^(\s*)#\s?/, '$1')
+        : l.text.replace(/^(\s*)/, '$1# ')
+    }))
+  })
+}
+function doComment() { toggleCommentLines(editor) }
 
 // 扩展清单：来自后端 /api/meta 的 extensionCatalog（含安装/启用状态与说明）
 // 开关只对「已安装」的扩展可用；关闭后后端会重建注册表，其组件从各面板消失
@@ -258,6 +292,10 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
       <el-button size="small" type="primary" :loading="rawRunning" @click="runRaw">
         <el-icon><VideoPlay /></el-icon>运行代码 (Ctrl+Enter)
       </el-button>
+      <el-button size="small" @click="runSelection" title="运行选中的代码">运行选中</el-button>
+      <el-button size="small" text @click="doUndo" title="撤销">撤销</el-button>
+      <el-button size="small" text @click="doRedo" title="重做">重做</el-button>
+      <el-button size="small" text @click="doComment" title="注释 / 取消注释 (Ctrl+/)">注释</el-button>
       <el-button size="small" @click="copyCode">复制</el-button>
       <el-button size="small" @click="formatNow">格式化</el-button>
       <el-button size="small" @click="downloadCode">下载 .R</el-button>
@@ -297,7 +335,8 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 </template>
 
 <style scoped>
-.adv-pad { padding: 0 12px; }
+.adv-pad { padding: 0 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.adv-pad .el-button { margin-left: 0; }
 .cm-editor-box {
   margin: 8px 12px; border: 1px solid var(--gg-border); border-radius: var(--gg-r-ctl);
   overflow: hidden; flex: 1 1 auto; min-height: 240px; font-size: 13px;
