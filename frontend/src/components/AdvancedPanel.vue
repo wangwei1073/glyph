@@ -173,7 +173,7 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 </script>
 
 <template>
-  <div class="gg-tab-scroll">
+  <div class="gg-tab-scroll adv-root">
     <div class="gg-subhead">原始代码模式（完全自由，直接运行 R 代码；数据通过 df 变量使用）</div>
     <div class="adv-pad">
       <el-button size="small" @click="loadFromSpec">
@@ -200,21 +200,10 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
       </div>
     </div>
 
-    <el-collapse class="adv-meta">
-      <el-collapse-item title="渲染信息（只读）" name="meta">
-        <div class="p-row">
-          <label>预览尺寸</label>
-          <span class="gg-hint-md">
-            {{ spec.renderOpts.width }} × {{ spec.renderOpts.height }} @ {{ spec.renderOpts.dpi }} dpi
-            （在画布顶部工具栏调整）
-          </span>
-        </div>
-        <div class="p-row">
-          <label>数据行数</label>
-          <span class="gg-hint-md">当前 df 已应用数据准备的筛选/新增列/抽样</span>
-        </div>
-      </el-collapse-item>
-    </el-collapse>
+    <div class="adv-meta-line">
+      {{ spec.renderOpts.width }} × {{ spec.renderOpts.height }} @ {{ spec.renderOpts.dpi }} dpi
+      · 尺寸在画布顶部工具栏调整 · 当前 df 已应用数据准备
+    </div>
   </div>
 </template>
 
@@ -222,7 +211,7 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 .adv-pad { padding: 0 12px; }
 .cm-editor-box {
   margin: 8px 12px; border: 1px solid var(--gg-border); border-radius: var(--gg-r-ctl);
-  overflow: hidden; height: 46vh; min-height: 320px; font-size: 13px;
+  overflow: hidden; flex: 1 1 auto; min-height: 240px; font-size: 13px;
 }
 .cm-editor-box :deep(.cm-editor) { height: 100%; }
 .cm-editor-box :deep(.cm-scroller) { overflow: auto; }
@@ -245,4 +234,7 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 .adv-line.warn { color: #b7791f; }
 .adv-line.muted { color: var(--gg-text-4); font-family: inherit; }
 .adv-meta { margin: 4px 12px 8px; }
+.adv-root { display: flex; flex-direction: column; height: 100%; }
+.adv-root .cm-editor-box { margin-bottom: 4px; }
+.adv-meta-line { margin: 0 12px 8px; font-size: 11px; color: var(--gg-text-4); }
 </style>
