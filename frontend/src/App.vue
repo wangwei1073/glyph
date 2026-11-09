@@ -44,8 +44,11 @@ function startResize() {
 let debounceTimer = null
 function scheduleRender() {
   if (!spec.autoRender) return
-  // 代码图打开后画布由 spec.last 承载；空白 spec 的自动渲染会把图覆盖掉
-  if (!spec.spec.layers.length && spec.last && spec.last.code && spec.last.pngUrl) return
+  // 仅在「画布当前展示的是代码图」时跳过自动渲染：那种情况下 spec 是空的，
+  // 自动渲染会用空白 spec 把代码图覆盖掉。
+  // 注意：不能用「无图层 + last.code 有值」判断——拼图组合的 spec 天然没有图层，
+  // 那样会把拼图的自动渲染一并拦掉。用 renderedFromCode 精确识别代码图。
+  if (!spec.spec.layers.length && spec.last && spec.last.renderedFromCode) return
   clearTimeout(debounceTimer)
   spec.renderQueued = true
   debounceTimer = setTimeout(() => {

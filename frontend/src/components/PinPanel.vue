@@ -157,24 +157,28 @@ async function openCode(p) {
       </el-select>
     </div>
     <div class="pin-grid">
-      <div v-for="p in filteredPins" :key="p.id" class="pin-card" :class="{ code: p.type === 'code' }">
+      <div v-for="p in filteredPins" :key="p.id" class="pin-card"
+        :class="{ code: p.type === 'code', clickable: p.type === 'code' }"
+        :title="p.type === 'code' ? `${p.label}（点击打开代码图）` : p.label"
+        @click="p.type === 'code' && openCode(p)">
         <div class="pc-thumb">
           <img :src="thumbUrl(p)" loading="lazy" alt="" />
-          <el-tag v-if="p.type === 'code'" size="small" type="warning" class="pc-badge">代码</el-tag>
+          <span v-if="p.type === 'code'" class="pc-badge">代码</span>
         </div>
-        <div class="pc-name" :title="p.label">{{ p.label }}</div>
+        <div class="pc-line">
+          <span class="pc-name">{{ p.label }}</span>
+          <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
+            <template #reference>
+              <button class="pc-del" title="从图库删除" @click.stop>
+                <el-icon><Delete /></el-icon>
+              </button>
+            </template>
+          </el-popconfirm>
+        </div>
         <div class="pc-meta">
           {{ p.type === 'code' ? '代码图' : (p.layers + ' 层') }}
           <template v-if="p.srcType === 'dataset'"> · {{ p.src }}</template>
           <template v-else-if="p.srcType === 'user'"> · 自有数据</template>
-        </div>
-        <div class="pc-actions">
-          <el-button v-if="p.type === 'code'" size="small" text type="primary" @click="openCode(p)">打开</el-button>
-          <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
-            <template #reference>
-              <el-button size="small" text type="danger"><el-icon><Delete /></el-icon></el-button>
-            </template>
-          </el-popconfirm>
         </div>
       </div>
     </div>
@@ -298,7 +302,8 @@ async function openCode(p) {
       </el-select>
     </div>
 
-  <el-dialog v-model="pickerVisible" title="从图库选择（按选择顺序入槽）" width="560" append-to-body>
+  <el-dialog v-model="pickerVisible" title="从图库选择（按选择顺序入槽）"
+    width="min(1100px, 82vw)" top="6vh" append-to-body class="pick-dialog">
     <div class="pick-grid">
       <div v-for="p in pins.items" :key="p.id" class="pick-card"
         :class="{ on: pickerSel.includes(p.id) }" @click="togglePick(p.id)">
@@ -342,20 +347,65 @@ async function openCode(p) {
 }
 .op { font-size: 13px; color: var(--el-text-color-secondary); }
 .pin-tools { display: flex; gap: 6px; padding: 0 12px 8px; }
-.pin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 8px; }
-.pin-card { border: 1px solid var(--gg-border); border-radius: 6px; overflow: hidden; background: #fff; }
+/* 图库卡片：紧凑两层（缩略图 + 名称/元信息），删除按钮内联在名称行 */
+/* 自适应列数：卡片保持约 150px 的稳定尺寸，右栏变宽时自动增加列数，
+   而不是把两张卡片撑大（否则缩略图会被拉伸、信息密度反而下降） */
+.pin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 6px; padding: 0 12px 8px;
+}
+.pin-card {
+  border: 1px solid var(--gg-border); border-radius: 6px; overflow: hidden;
+  background: #fff; min-width: 0;
+}
 .pin-card.code { border-color: #f0d9b5; }
-.pc-thumb { position: relative; height: 84px; background: #f6f8fb; display: flex; align-items: center; justify-content: center; }
-.pc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pc-badge { position: absolute; top: 4px; left: 4px; }
-.pc-name { font-size: 12px; font-weight: 600; padding: 4px 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pc-meta { font-size: 10.5px; color: var(--gg-text-4); padding: 1px 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pc-actions { display: flex; justify-content: flex-end; padding: 2px 4px 4px; }
-.pick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 420px; overflow: auto; }
+.pin-card.clickable { cursor: pointer; }
+.pin-card.clickable:hover { border-color: var(--gg-brand); box-shadow: 0 1px 4px rgba(47,111,191,.12); }
+/* 缩略图用 4:3 比例而不是固定高度：卡片变宽时图跟着变高，
+   避免出现「宽而扁」的挤压缩略图（列数固定后卡片宽度基本稳定，此处只兜底） */
+.pc-thumb {
+  position: relative; aspect-ratio: 4 / 3; max-height: 108px;
+  background: #f6f8fb;
+  display: flex; align-items: center; justify-content: center;
+  border-bottom: 1px solid var(--gg-border);
+}
+/* contain：科研图以完整可见为准，不裁掉坐标轴与图例 */
+.pc-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* 徽标改为小色块，比 el-tag 省空间 */
+.pc-badge {
+  position: absolute; top: 3px; left: 3px;
+  font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 3px;
+  background: #fff5e6; color: #a4700f; border: 1px solid #f0d9b5;
+}
+/* 名称行：名称 + 删除按钮，单行不换行 */
+.pc-line { display: flex; align-items: center; gap: 2px; padding: 3px 4px 0 6px; }
+.pc-name {
+  flex: 1; min-width: 0; font-size: 12px; font-weight: 600; color: var(--gg-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pc-del {
+  flex-shrink: 0; width: 18px; height: 18px; padding: 0; border: 0; background: none;
+  color: var(--gg-text-4); cursor: pointer; border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+}
+.pc-del:hover { color: #c0392b; background: rgba(192,57,43,.08); }
+.pc-meta {
+  font-size: 10.5px; color: var(--gg-text-4); padding: 0 6px 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 选择器弹窗：弹窗已放大，卡片最小宽度同步提高，避免出现过小的碎图 */
+.pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 10px; max-height: 62vh; overflow: auto; align-content: start;
+}
 .pick-card { border: 1px solid var(--gg-border); border-radius: 6px; overflow: hidden; cursor: pointer; background: #fff; }
+.pick-card:hover { border-color: var(--gg-brand-weak); }
 .pick-card.on { border-color: var(--gg-brand); box-shadow: 0 0 0 1px var(--gg-brand) inset; }
-.pick-thumb { position: relative; height: 88px; background: #f6f8fb; }
-.pick-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* contain：与图库卡片一致，保证坐标轴/图例完整可见 */
+.pick-thumb { position: relative; aspect-ratio: 4 / 3; max-height: 150px; background: #f6f8fb; display: flex; align-items: center; justify-content: center; }
+.pick-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .pick-no { position: absolute; top: 4px; right: 4px; min-width: 18px; height: 18px; border-radius: 9px;
   background: var(--gg-brand); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
 .pick-name { font-size: 12px; padding: 4px 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
