@@ -38,6 +38,9 @@ function post(path, body, timeoutMs = T_NORMAL) {
 }
 
 export const getMeta = () => api('/api/meta')
+// 工作区（项目目录）：读取 / 切换
+export const getWorkspace = () => api('/api/workspace')
+export const setWorkspace = (dir) => post('/api/workspace', { dir })
 // 扩展管理
 export const getExtensions = () => api('/api/extensions')
 export const toggleExtension = (id, enabled) =>

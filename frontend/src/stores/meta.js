@@ -9,6 +9,8 @@ export const useMetaStore = defineStore('meta', {
   state: () => ({
     loaded: false,
     error: null,
+    // 当前工作区（项目目录）：{ root, id, explicit, appRoot }
+    workspace: null,
     version: '',
     ggplot2Version: '',
     geoms: [],
@@ -51,8 +53,9 @@ export const useMetaStore = defineStore('meta', {
     // 强制重载：切换扩展开关后注册表会变化，需要重新拉取并重建分组
     async reload() {
       try {
-        const { meta } = await getMeta()
+        const { meta, workspace } = await getMeta()
         this.applyMeta(meta)
+        this.workspace = workspace || null
         this.loaded = true
       } catch (e) {
         this.error = e.message

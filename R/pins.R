@@ -27,7 +27,12 @@ Pins <- local({
   list(
     bind = function(file) {
       .file <<- file
+      # 先清空内存：切换到另一个（可能为空的）工作区时，
+      # .load() 在文件不存在时会直接返回，不清空就会残留上一个工作区的条目。
+      .pins <<- list()
       dir.create(dirname(file), showWarnings = FALSE, recursive = TRUE)
+      # 缩略图/快照子目录（见 data_path / thumb_path）
+      dir.create(file.path(dirname(file), "pins"), showWarnings = FALSE, recursive = TRUE)
       .load()
     },
     add = function(spec_json, label = NULL, project = NULL) {
@@ -92,8 +97,10 @@ Pins <- local({
       .save()
       id
     },
-    data_path = function(id) file.path(dirname(.file), paste0(id, ".rds")),
-    thumb_path = function(id) file.path(dirname(.file), paste0(id, ".png")),
+    # 缩略图与数据快照放在 pins/ 子目录：工作区根目录只留 pins.json，
+    # 整个目录可以直接纳入版本库或打包带走，不会被一堆 P*.png 铺满。
+    data_path = function(id) file.path(dirname(.file), "pins", paste0(id, ".rds")),
+    thumb_path = function(id) file.path(dirname(.file), "pins", paste0(id, ".png")),
     get = function(id) {
       .pins[[id]]$specJson %||% NULL
     },

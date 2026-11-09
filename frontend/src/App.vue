@@ -7,7 +7,7 @@ import { useDataStore } from './stores/data'
 import { useSpecStore } from './stores/spec'
 import { usePinStore } from './stores/pins'
 import { useUiStore } from './stores/ui'
-import { downloadBlob, snapshotData, getEdits, importEdits, pasteData, rawRender } from './api'
+import { downloadBlob, snapshotData, getEdits, importEdits, pasteData, rawRender, setWorkspace } from './api'
 import DataPanel from './components/DataPanel.vue'
 import Canvas from './components/Canvas.vue'
 import EditorTabs from './components/EditorTabs.vue'
@@ -137,6 +137,8 @@ async function boot() {
   }
   try {
     await retry(() => meta.load())
+    // 工作区存在时，项目标识由目录派生，保证「一个目录 = 一个项目」
+    if (meta.workspace && meta.workspace.id) spec.setProjectId(meta.workspace.id)
     await retry(() => data.load())
     spec.ensureDefaultTheme()
     spec.renderNow()
@@ -287,6 +289,39 @@ function onProjectCmd(cmd) {
   if (cmd === 'save') saveProject()
   else if (cmd === 'load') loadProjectClick()
   else if (cmd === 'clear') clearCanvas()
+  else if (cmd === 'workspace') switchWorkspace()
+}
+
+// 切换工作区（项目目录）：图库、上传数据、编辑记录都跟着目录走
+async function switchWorkspace() {
+  const cur = meta.workspace?.root || ''
+  let dir
+  try {
+    const r = await ElMessageBox.prompt(
+      '输入项目目录的绝对路径。图库、上传的数据与编辑记录都会存放在该目录下。\n留空表示退回 Glyph 安装目录。',
+      '切换工作目录',
+      {
+        confirmButtonText: '切换', cancelButtonText: '取消',
+        inputValue: cur, inputPlaceholder: 'C:\\my-project 或 /home/me/project',
+        inputValidator: () => true
+      }
+    )
+    dir = r.value
+  } catch { return }
+  if (dir === undefined || dir === null) return
+  try {
+    const res = await setWorkspace(String(dir).trim())
+    if (!res.ok) throw new Error(res.error || '切换失败')
+    meta.workspace = res.workspace
+    // projectId 跟随工作区：同一目录在任何浏览器上都对应同一份图库视图
+    if (res.workspace?.id) spec.setProjectId(res.workspace.id)
+    pins.all = res.pins || []
+    await data.load()
+    // 目录变了，画布上引用旧数据源的图需要用户重新选择，这里只提示不自动改
+    ElMessage.success(`工作区已切换到：${res.workspace.root}`)
+  } catch (e) {
+    ElMessage.error('切换工作区失败：' + e.message)
+  }
 }
 </script>
 

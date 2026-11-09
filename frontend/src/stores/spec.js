@@ -40,6 +40,9 @@ function currentProjectId() {
   try { localStorage.setItem(PROJECT_ID_KEY, id) } catch { /* 忽略 */ }
   return id
 }
+// 工作区存在时，projectId 由目录派生（见 R/workspace.R 的 id_of），
+// 这样「一个目录 = 一个项目」，换浏览器或换机器打开同一目录看到的是同一份图库。
+// 没有工作区时退回 localStorage 里的随机 UUID（与旧版行为一致）。
 
 // 未保存草稿（崩溃/误关恢复）：只存 spec，数据本身由服务端 userdata/ 持久化
 const DRAFT_KEY = 'Glyph-draft-v1'
@@ -415,6 +418,14 @@ export const useSpecStore = defineStore('spec', {
     },
 
     // ---- 项目 ----
+    // 设置项目标识（工作区建立/切换时调用）。持久化到 localStorage，
+    // 这样同一浏览器下次打开仍是同一个项目；换机器则由图库条目的 project 字段决定可见性。
+    setProjectId(id) {
+      const v = String(id || '').trim()
+      if (!v || v === this.projectId) return
+      this.projectId = v
+      try { localStorage.setItem(PROJECT_ID_KEY, v) } catch { /* 忽略 */ }
+    },
     loadProject(obj) {
       this.pushHistory()
       const base = defaultSpec()

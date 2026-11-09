@@ -47,6 +47,9 @@ DataStore <- local({
   list(
     bind = function(dir) {
       .dir <<- dir
+      # 先清空内存（.load 在 meta 文件缺失时会直接返回，否则切工作区后旧数据仍在）
+      .items <<- list()
+      .counter <<- 0L
       dir.create(dir, showWarnings = FALSE, recursive = TRUE)
       .load()
     },
@@ -475,6 +478,8 @@ EditStore <- local({
   list(
     bind = function(file) {
       .file <<- file
+      # 先清空内存（否则切到没有 edits.json 的工作区时，旧编辑记录仍生效）
+      .edits <<- list()
       dir.create(dirname(file), showWarnings = FALSE, recursive = TRUE)
       if (file.exists(file)) {
         obj <- tryCatch(jsonlite::fromJSON(file, simplifyVector = FALSE), error = function(e) NULL)

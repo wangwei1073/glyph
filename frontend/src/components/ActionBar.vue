@@ -90,6 +90,9 @@ async function quitApp() {
           <el-dropdown-menu>
             <el-dropdown-item command="save"><el-icon><FolderAdd /></el-icon>保存项目 (JSON)</el-dropdown-item>
             <el-dropdown-item command="load"><el-icon><FolderOpened /></el-icon>载入项目</el-dropdown-item>
+            <el-dropdown-item command="workspace" divided>
+              <el-icon><FolderOpened /></el-icon>切换工作目录…
+            </el-dropdown-item>
             <el-dropdown-item command="clear" divided><el-icon><Delete /></el-icon>清空画布</el-dropdown-item>
           </el-dropdown-menu>
         </template>

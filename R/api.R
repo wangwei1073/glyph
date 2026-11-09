@@ -214,7 +214,49 @@ ggspec_api_app <- function(state) {
 
     ## ---- 元数据 ----
     if (path == "/api/meta" && method == "GET") {
-      return(json_response(list(ok = TRUE, meta = state$meta)))
+      return(json_response(list(ok = TRUE, meta = state$meta,
+                                workspace = state$workspace)))
+    }
+
+    ## ---- 工作区 ----
+    ## GET  返回当前工作区；POST { dir } 运行时切换（重新绑定各 store）
+    ## 传 dir = "" 表示退回安装目录。
+    if (path == "/api/workspace" && method == "GET") {
+      return(json_response(list(ok = TRUE, workspace = state$workspace)))
+    }
+    if (path == "/api/workspace" && method == "POST") {
+      # 只取第一个标量：防御性处理（不同客户端可能把 dir 传成数组或带尾部空白）
+      want <- trimws(as.character(unlist(body$dir %||% "")))
+      want <- if (length(want)) want[1] else ""
+      if (!nzchar(want)) {
+        # 退回安装目录
+        target <- state$workspace$appRoot
+        explicit <- FALSE
+      } else {
+        target <- WORKSPACE$normalize(want)
+        if (is.null(target)) {
+          return(json_error(sprintf("目录不可用：%s", want), 400))
+        }
+        explicit <- TRUE
+      }
+      # 切目录不影响正在运行的渲染缓存（在 tempdir 里），只重绑持久化数据
+      lay <- tryCatch(bind_workspace(state, target),
+                      error = function(e) e)
+      if (inherits(lay, "error")) {
+        return(json_error(sprintf("切换工作区失败：%s", conditionMessage(lay)), 500))
+      }
+      state$workspace <- list(
+        root = lay$root,
+        id = WORKSPACE$id_for(lay$root),
+        explicit = explicit,
+        appRoot = state$workspace$appRoot
+      )
+      return(json_response(list(
+        ok = TRUE,
+        workspace = state$workspace,
+        pins = state$pin_store$list(),
+        sources = data_sources()
+      )))
     }
 
     ## ---- 代码补全词表 ----
@@ -1020,7 +1062,13 @@ ggspec_api_app <- function(state) {
           return(json_error(paste0("请求体解析失败: ", parse_err), 400))
         }
         tryCatch(route(req, body),
-                 error = function(e) json_error(paste0("服务器内部错误: ", conditionMessage(e)), 500))
+                 error = function(e) {
+                   # 把出错调用打到 stderr，便于定位（用户只看到简短消息）
+                   called <- tryCatch(paste(deparse(conditionCall(e)), collapse = " "),
+                                      error = function(e2) "")
+                   if (nzchar(called)) cat("[api-error]", req$PATH_INFO, "::", called, "\n", file = stderr())
+                   json_error(paste0("服务器内部错误: ", conditionMessage(e)), 500)
+                 })
       } else {
         .static_file(state$dist_dir, req$PATH_INFO)
       }

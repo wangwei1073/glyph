@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 # Glyph 启动入口
-# 用法: Rscript run.R [--port 4321] [--host 127.0.0.1] [--dist <dir>] [--no-browser]
+# 用法: Rscript run.R [--port 4321] [--host 127.0.0.1] [--dist <dir>]
+#                     [--data-dir <项目目录>] [--no-browser]
 
 # ---- 编码自举（必须最先执行，纯 ASCII） ----
 if (.Platform$OS.type == "windows") {
@@ -19,6 +20,11 @@ PORT <- as.integer(.getarg("--port", "4321"))
 HOST <- .getarg("--host", "127.0.0.1")
 argsfile <- grep("^--file=", commandArgs(FALSE), value = TRUE)
 scriptdir <- if (length(argsfile)) dirname(sub("^--file=", "", argsfile[1])) else getwd()
+# 归一化为绝对路径：插件/IDE 可能以任意 CWD 启动本进程，相对路径会解析错
+scriptdir <- normalizePath(scriptdir, winslash = "/", mustWork = FALSE)
+# --data-dir：把数据/图库/编辑记录落到指定项目目录（DSH 插件会传工作区路径）
+# 不传则退回安装目录，与旧版行为一致
+DATA_DIR <- .getarg("--data-dir", "")
 DIST <- normalizePath(file.path(scriptdir, "dist"), mustWork = FALSE)
 if (!dir.exists(DIST)) DIST <- "dist"
 
@@ -48,8 +54,15 @@ root <- scriptdir
 for (f in sort(list.files(file.path(root, "R"), pattern = "\\.R$", full.names = TRUE))) {
   source(f, encoding = "UTF-8", local = FALSE)
 }
-# 上传/粘贴的数据落盘，重启后仍能打开引用它的项目
-DataStore$bind(file.path(root, "userdata"))
+
+# 工作区：决定数据/图库/编辑记录写到哪里。
+# APP_ROOT（root）= 安装目录，只放代码与前端资源；WS_ROOT = 项目目录。
+ws_layout <- WORKSPACE$init(DATA_DIR, root)
+if (!nzchar(DATA_DIR %||% "")) {
+  cat(sprintf("工作区: %s（未指定 --data-dir，使用安装目录）\n", ws_layout$root))
+} else {
+  cat(sprintf("工作区: %s\n", ws_layout$root))
+}
 
 t0 <- Sys.time()
 STATE <- list(
@@ -61,7 +74,14 @@ STATE <- list(
   dist_dir = DIST,
   raw_data = NULL,
   plot_dir = file.path(tempdir(), "ggplotgui-plots"),
-  pin_file = file.path(root, "pins.json"),
+  pin_file = ws_layout$pins_file,
+  # 工作区信息（供 /api/meta 返回，前端据此显示当前项目目录）
+  workspace = list(
+    root = ws_layout$root,
+    id = WORKSPACE$id(),
+    explicit = WORKSPACE$is_explicit(),
+    appRoot = root
+  ),
   # 请求来源校验：只接受本机回环地址访问（--host 指定具体地址时一并加入）
   allowed_hosts = unique(c("127.0.0.1", "localhost", "::1", HOST)),
   allow_any_host = identical(HOST, "0.0.0.0")
@@ -70,10 +90,8 @@ STATE <- list(
 # 只会改局部副本，导致「安装扩展 / 启停扩展」后 /api/meta 仍返回旧注册表。
 STATE <- list2env(STATE, parent = emptyenv())
 dir.create(STATE$plot_dir, showWarnings = FALSE, recursive = TRUE)
-Pins$bind(STATE$pin_file)
-EditStore$bind(file.path(root, "edits.json"))
-# 扩展开关状态（只记录被关闭的扩展；文件不存在则全部启用）
-ext_state_bind(file.path(root, "extensions.json"))
+# 三个 store 统一绑到工作区（并把旧的 P*.png 从根目录迁进 pins/）
+bind_workspace(STATE, ws_layout$root)
 cat("构建元数据注册表 ...\n")
 STATE$meta <- meta_build_lookup(ggspec_build_meta())
 cat(sprintf("注册表就绪: %d geoms / %d stats / %d scales / %d coords / %d 主题元素  (%.1fs)\n",
