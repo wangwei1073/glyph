@@ -312,14 +312,14 @@ function onProjectCmd(cmd) {
       <div v-show="ui.leftOpen" class="gg-left">
         <DataPanel @project="onProjectCmd" />
       </div>
-      <button v-show="!ui.leftOpen" class="gg-side-strip" title="展开数据面板"
-        @click="ui.toggleLeft()">
-        <el-icon><ArrowRight /></el-icon>
-      </button>
-
-      <!-- 左栏收起时：工具区浮在左下角，保证渲染/项目仍可操作 -->
-      <ActionBar v-if="!ui.leftOpen" compact class="gg-float-tools"
-        @project="onProjectCmd" />
+      <div v-show="!ui.leftOpen" class="gg-left-mini">
+        <button class="gg-mini-toggle" title="展开数据面板" @click="ui.toggleLeft()">
+          <el-icon><ArrowRight /></el-icon>
+        </button>
+        <div class="gg-mini-spacer" />
+        <!-- 左栏收起时：工具区停靠在窄栏底部，图标纵向排列 -->
+        <ActionBar mini @project="onProjectCmd" />
+      </div>
 
       <div class="gg-center"><Canvas /></div>
 

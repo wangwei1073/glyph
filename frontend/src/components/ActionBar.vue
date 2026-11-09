@@ -8,7 +8,8 @@ import { useSpecStore } from '../stores/spec'
 import { shutdownServer } from '../api'
 
 const props = defineProps({
-  compact: { type: Boolean, default: false }   // 侧边浮层模式：只放核心按钮
+  compact: { type: Boolean, default: false },  // 侧边浮层模式：只放核心按钮
+  mini: { type: Boolean, default: false }     // 左窄栏模式：图标纵向排列
 })
 const emit = defineEmits(['project'])
 
@@ -60,11 +61,11 @@ async function quitApp() {
 </script>
 
 <template>
-  <div class="act-bar" :class="{ compact }">
+  <div class="act-bar" :class="{ compact, mini }">
     <!-- 左：项目保存状态 -->
     <el-tooltip :content="saveHint" placement="top">
       <span class="gg-save-state" :class="{ dirty: spec.dirty, empty: !hasCanvas }">
-        <i class="dot" />{{ saveLabel }}
+        <i class="dot" /><span class="save-txt">{{ saveLabel }}</span>
       </span>
     </el-tooltip>
     <span class="act-spacer" />
@@ -133,4 +134,13 @@ async function quitApp() {
 .gg-save-state.dirty { color: #c07f18; }
 .gg-save-state.dirty .dot { background: #f0b45a; }
 .gg-save-state.empty .dot { background: #9aa5b1; }
+.act-bar.mini {
+  height: auto; flex-direction: column; align-items: center; gap: 4px;
+  padding: 0; border: 0; background: transparent; overflow: visible;
+}
+.act-bar.mini .save-txt { display: none; }
+.act-bar.mini .gg-save-state { justify-content: center; padding: 2px 0; }
+.act-bar.mini .act-actions { flex-direction: column; gap: 4px; }
+.act-bar.mini .act-btn { width: 30px; height: 28px; justify-content: center; padding: 0; }
+.act-bar.mini .act-label { display: none; }
 </style>

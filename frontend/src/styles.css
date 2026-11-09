@@ -140,7 +140,17 @@ body {
   display: flex; flex-direction: column; overflow: hidden;
 }
 /* 折叠后的窄条：点一下展开 */
-.gg-side-strip {
+.gg-left-mini {
+  width: 40px; flex-shrink: 0; border-right: 1px solid var(--gg-border);
+  background: var(--gg-panel); display: flex; flex-direction: column;
+  align-items: center; padding: 10px 0 8px; gap: 6px; overflow: hidden;
+}
+.gg-mini-toggle {
+  width: 30px; height: 28px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--gg-text-4); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.gg-mini-toggle:hover { color: var(--gg-brand); background: var(--gg-panel-2); }
+.gg-mini-spacer { flex: 1; }.gg-side-strip {
   width: 24px; flex-shrink: 0; border: 0; border-inline-end: 1px solid var(--gg-border);
   padding: 12px 0 0; cursor: pointer; background: var(--gg-panel); color: var(--gg-text-4);
   display: flex; justify-content: center; align-items: flex-start;
