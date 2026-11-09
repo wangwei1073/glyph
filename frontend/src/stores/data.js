@@ -53,7 +53,8 @@ export const useDataStore = defineStore('data', {
         const sd = useSpecStore().spec.data
         const prep = {
           filter: sd.filter || '', mutate: sd.mutate || [],
-          sample: sd.sample, seed: sd.seed
+          sample: sd.sample, seed: sd.seed,
+          filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled, types: sd.types || [], outliers: sd.outliers || [], dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled
         }
         const source = c.type === 'dataset'
           ? { type: 'dataset', name: c.name }
@@ -83,7 +84,7 @@ export const useDataStore = defineStore('data', {
           : { type: 'user', id: c.name }
         // 数据加工参数以 spec.data 为准（单一事实来源）
         const sd = useSpecStore().spec.data
-        const prep = { filter: sd.filter || '', mutate: sd.mutate || [], sample: sd.sample, seed: sd.seed }
+        const prep = { filter: sd.filter || '', mutate: sd.mutate || [], sample: sd.sample, seed: sd.seed, filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled, types: sd.types || [], outliers: sd.outliers || [], dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled }
         this.preview = await previewData(src, prep)
       } catch (e) {
         this.preview = { rows: [], nrow: 0, ncol: 0, error: e.message }

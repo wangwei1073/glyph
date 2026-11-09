@@ -75,6 +75,7 @@ export const getColumns = (source, prep = null) => {
   const key = typeof source === 'string' ? source : `${source.type}:${source.name || source.id}`
   return api(`/api/columns?src=${encodeURIComponent(key)}`)
 }
+export const getPrepSummary = (source, prep) => post('/api/prep/summary', { source, prep })
 export const deleteData = (id) => post('/api/data/delete', { id })
 export const previewData = (source, prep, opts = {}) => {
   const body = { source, prep }

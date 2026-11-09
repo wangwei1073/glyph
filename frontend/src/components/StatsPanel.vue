@@ -26,7 +26,7 @@ const hasSource = computed(() => !!data.current && data.current.type !== 'none')
 
 const prep = computed(() => {
   const d = spec.spec.data || {}
-  return { filter: d.filter || '', mutate: d.mutate || [], sample: d.sample, seed: d.seed }
+  return { filter: d.filter || '', mutate: d.mutate || [], sample: d.sample, seed: d.seed, filterDisabled: !!d.filterDisabled, sampleDisabled: !!d.sampleDisabled, types: d.types || [], outliers: d.outliers || [], dropnaCols: d.dropnaCols || [], dropnaHow: d.dropnaHow || 'any', dropnaDisabled: !!d.dropnaDisabled, dedupCols: d.dedupCols || [], dedupEnabled: !!d.dedupEnabled }
 })
 const source = computed(() => {
   const c = data.current

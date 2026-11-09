@@ -57,7 +57,8 @@ async function load() {
     const src = cur.type === 'dataset' ? { type: 'dataset', name: cur.name } : { type: 'user', id: cur.name }
     const d = await previewData(src, {
       filter: spec.spec.data.filter || '', mutate: spec.spec.data.mutate || [],
-      sample: spec.spec.data.sample, seed: spec.spec.data.seed
+      sample: spec.spec.data.sample, seed: spec.spec.data.seed,
+      filterDisabled: !!spec.spec.data.filterDisabled, sampleDisabled: !!spec.spec.data.sampleDisabled, types: spec.spec.data.types || [], outliers: spec.spec.data.outliers || [], dropnaCols: spec.spec.data.dropnaCols || [], dropnaHow: spec.spec.data.dropnaHow || 'any', dropnaDisabled: !!spec.spec.data.dropnaDisabled, dedupCols: spec.spec.data.dedupCols || [], dedupEnabled: !!spec.spec.data.dedupEnabled
     }, { start: (page.value - 1) * pageSize.value + 1, length: pageSize.value,
          sortCol: sortCol.value || null, asc: sortAsc.value })
     rows.value = d.rows || []
@@ -120,7 +121,8 @@ const srcObj = computed(() => {
 })
 const prepObj = computed(() => ({
   filter: spec.spec.data.filter || '', mutate: spec.spec.data.mutate || [],
-  sample: spec.spec.data.sample, seed: spec.spec.data.seed
+  sample: spec.spec.data.sample, seed: spec.spec.data.seed,
+  filterDisabled: !!spec.spec.data.filterDisabled, sampleDisabled: !!spec.spec.data.sampleDisabled, types: spec.spec.data.types || [], outliers: spec.spec.data.outliers || [], dropnaCols: spec.spec.data.dropnaCols || [], dropnaHow: spec.spec.data.dropnaHow || 'any', dropnaDisabled: !!spec.spec.data.dropnaDisabled, dedupCols: spec.spec.data.dedupCols || [], dedupEnabled: !!spec.spec.data.dedupEnabled
 }))
 
 function scheduleRender() {
@@ -222,7 +224,8 @@ async function doExport() {
     const src = c.type === 'dataset' ? { type: 'dataset', name: c.name } : { type: 'user', id: c.name }
     const { blob, filename } = await exportPreparedCSV(src, {
       filter: spec.spec.data.filter || '', mutate: spec.spec.data.mutate || [],
-      sample: spec.spec.data.sample, seed: spec.spec.data.seed
+      sample: spec.spec.data.sample, seed: spec.spec.data.seed,
+      filterDisabled: !!spec.spec.data.filterDisabled, sampleDisabled: !!spec.spec.data.sampleDisabled, types: spec.spec.data.types || [], outliers: spec.spec.data.outliers || [], dropnaCols: spec.spec.data.dropnaCols || [], dropnaHow: spec.spec.data.dropnaHow || 'any', dropnaDisabled: !!spec.spec.data.dropnaDisabled, dedupCols: spec.spec.data.dedupCols || [], dedupEnabled: !!spec.spec.data.dedupEnabled
     })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)

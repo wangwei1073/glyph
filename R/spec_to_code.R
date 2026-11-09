@@ -456,21 +456,76 @@
     lines <- c(lines, paste0(df_name, "$.gg_rid <- seq_len(nrow(", df_name, "))  # 编辑行锚"))
   }
   # 数据加工提示注释
+  for (tx in prep$text %||% list()) {
+    if (isTRUE(tx$disabled) || !has_val(tx$name)) next
+    nm <- tx$name
+    op <- as.character(tx$op %||% "trim")
+    line <- switch(op,
+      trim = sprintf("%s$%s <- trimws(%s$%s)  # 去空格", df_name, nm, df_name, nm),
+      upper = sprintf("%s$%s <- toupper(%s$%s)  # 转大写", df_name, nm, df_name, nm),
+      lower = sprintf("%s$%s <- tolower(%s$%s)  # 转小写", df_name, nm, df_name, nm),
+      replace = sprintf("%s$%s <- gsub(%s, %s, %s$%s, fixed = TRUE)  # 文本替换",
+                        df_name, nm, deparse(as.character(tx$from %||% "")),
+                        deparse(as.character(tx$to %||% "")), df_name, nm),
+      NULL)
+    if (!is.null(line)) lines <- c(lines, line)
+  }
+  for (o in prep$outliers %||% list()) {
+    if (isTRUE(o$disabled) || !has_val(o$name)) next
+    nm <- o$name; k <- as.numeric(o$k %||% if (identical(o$method, "z")) 3 else 1.5)
+    method <- as.character(o$method %||% "iqr"); action <- as.character(o$action %||% "flag")
+    bound <- if (identical(method, "z"))
+      sprintf("mean(%1$s, na.rm = TRUE) + c(-1, 1) * %2$s * sd(%1$s, na.rm = TRUE)", df_name, k)
+    else sprintf("quantile(%s, c(.25, .75), na.rm = TRUE) + c(-1, 1) * %s * IQR(%s, na.rm = TRUE)", df_name, k, df_name)
+    lines <- c(lines, sprintf("q <- %s", bound))
+    lines <- c(lines, switch(action,
+      flag = sprintf("%s$%s_outlier <- !is.na(%s$%s) & (%s$%s < q[1] | %s$%s > q[2])  # 异常值标记",
+                     df_name, nm, df_name, nm, df_name, nm, df_name, nm),
+      drop = sprintf("%s <- %s[!(%s$%s < q[1] | %s$%s > q[2]), , drop = FALSE]  # 异常值删除",
+                     df_name, df_name, df_name, nm, df_name, nm),
+      winsor = sprintf("%s$%s <- pmin(pmax(%s$%s, q[1]), q[2])  # 异常值缩尾",
+                       df_name, nm, df_name, nm)))
+  }
+  for (tt in prep$types %||% list()) {
+    if (isTRUE(tt$disabled) || !has_val(tt$name)) next
+    fn <- c(num = "as.numeric", chr = "as.character", fct = "as.factor",
+            lgl = "as.logical", date = "as.Date")[[as.character(tt$type %||% "")]]
+    if (is.null(fn)) next
+    lines <- c(lines, sprintf("%s$%s <- %s(%s$%s)  # 类型转换", df_name, tt$name, fn, df_name, tt$name))
+  }
   m <- prep$mutate %||% list()
   if (length(m)) {
     for (mm in m) {
+      if (isTRUE(mm$disabled)) next
       if (has_val(mm$name) && has_val(mm$expr)) {
         lines <- c(lines, sprintf("%s$%s <- with(%s, %s)  # 新增列 %s", df_name, mm$name, df_name, enc2utf8(as.character(mm$expr)), mm$name))
       }
     }
   }
+  if (!isTRUE(prep$dropnaDisabled)) {
+    cols <- as.character(unlist(prep$dropnaCols %||% list()))
+    if (length(cols)) {
+      lines <- c(lines, sprintf(
+        "%s <- %s[!apply(is.na(%s[, c(%s), drop = FALSE]), 1, %s), , drop = FALSE]  # 缺失值",
+        df_name, df_name, df_name, paste(sprintf('"%s"', cols), collapse = ", "),
+        if (identical(prep$dropnaHow, "all")) "all" else "any"))
+    }
+  }
   flt <- trimws(as.character(prep$filter %||% ""))
-  if (nzchar(flt)) {
+  if (!isTRUE(prep$filterDisabled) && nzchar(flt)) {
     # subset() 在数据框/ tibble 上都按列名求值，并自动丢弃条件为 NA 的行
     # （不能用 df[<表达式>, ]：base R 的 `[` 不做数据掩码求值）
     lines <- c(lines, sprintf("%s <- subset(%s, %s)  # 行筛选（NA 行自动剔除）", df_name, df_name, flt))
   }
-  if (!is.null(prep$sample) && is.numeric(prep$sample) && prep$sample > 0) {
+  if (isTRUE(prep$dedupEnabled)) {
+    cols <- as.character(unlist(prep$dedupCols %||% list()))
+    if (!length(cols)) cols <- NULL
+    lines <- c(lines, if (is.null(cols))
+      sprintf("%s <- %s[!duplicated(%s), , drop = FALSE]  # 去重", df_name, df_name, df_name)
+      else sprintf("%s <- %s[!duplicated(%s[, c(%s), drop = FALSE]), , drop = FALSE]  # 去重",
+                   df_name, df_name, df_name, paste(sprintf('"%s"', cols), collapse = ", ")))
+  }
+  if (!isTRUE(prep$sampleDisabled) && !is.null(prep$sample) && is.numeric(prep$sample) && prep$sample > 0) {
     sd <- prep$seed
     if (!is.null(sd) && is.numeric(sd)) lines <- c(lines, sprintf("set.seed(%d)", as.integer(sd)))
     lines <- c(lines, sprintf("%s <- %s[sample(nrow(%s), min(%d, nrow(%s))), , drop = FALSE]  # 抽样", df_name, df_name, df_name, as.integer(prep$sample), df_name))

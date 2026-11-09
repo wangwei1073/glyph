@@ -6,6 +6,7 @@ import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
 import { useMetaStore } from '../stores/meta'
+import { getPrepSummary } from '../api'
 import DataPreviewDialog from './DataPreviewDialog.vue'
 import ColumnActions from './ColumnActions.vue'
 import ActionBar from './ActionBar.vue'
@@ -104,6 +105,7 @@ const userItems = computed(() => data.sources.filter(s => s.type === 'user'))
 const datasetSources = computed(() => data.sources.filter(s => s.type === 'dataset'))
 const datasetKey = computed(() => (data.srcKey || '').startsWith('dataset:') ? data.srcKey : '')
 const srcCardsEl = ref(null)
+const numericColumns = computed(() => data.columns.filter(c => c.type === 'num'))
 
 function originLabel(s) {
   const o = s.origin || {}
@@ -129,14 +131,51 @@ async function removeUser(id) {
   }
 }
 
-// ---- 加工 ----
+// ---- 数据准备 ----
+const prepSummary = ref(null)
+const prepSummaryLoading = ref(false)
+let prepSummaryTimer = null
+
 const prepCount = computed(() => {
+  const sd = spec.spec.data
   let n = 0
-  if ((spec.spec.data.filter || '').trim()) n++
-  n += (spec.spec.data.mutate || []).filter(m => (m.name || '').trim() && (m.expr || '').trim()).length
-  if (spec.spec.data.sample) n++
+  if (!sd.filterDisabled && (sd.filter || '').trim()) n++
+  n += (sd.mutate || []).filter(m => !m.disabled && (m.name || '').trim() && (m.expr || '').trim()).length
+  if (!sd.sampleDisabled && sd.sample) n++
+  if (!sd.dropnaDisabled && (sd.dropnaCols || []).length) n++
+  if (sd.dedupEnabled) n++
+  n += (sd.types || []).filter(t => !t.disabled && t.name && t.type).length
+  n += (sd.text || []).filter(t => !t.disabled && t.name && t.op).length
+  n += (sd.outliers || []).filter(o => !o.disabled && o.name).length
   return n
 })
+function addOutlier() {
+  if (!Array.isArray(spec.spec.data.outliers)) spec.spec.data.outliers = []
+  spec.pushHistory()
+  spec.spec.data.outliers.push({ name: '', method: 'iqr', k: 1.5, action: 'flag', disabled: false })
+}
+function rmOutlier(i) {
+  spec.pushHistory()
+  spec.spec.data.outliers.splice(i, 1)
+}
+function addText() {
+  if (!Array.isArray(spec.spec.data.text)) spec.spec.data.text = []
+  spec.pushHistory()
+  spec.spec.data.text.push({ name: '', op: 'trim', from: '', to: '', disabled: false })
+}
+function rmText(i) {
+  spec.pushHistory()
+  spec.spec.data.text.splice(i, 1)
+}
+function addType() {
+  if (!Array.isArray(spec.spec.data.types)) spec.spec.data.types = []
+  spec.pushHistory()
+  spec.spec.data.types.push({ name: '', type: 'num', disabled: false })
+}
+function rmType(i) {
+  spec.pushHistory()
+  spec.spec.data.types.splice(i, 1)
+}
 function addMutate() {
   spec.pushHistory()
   spec.spec.data.mutate.push({ name: '', expr: '' })
@@ -146,11 +185,60 @@ function rmMutate(i) {
   spec.spec.data.mutate.splice(i, 1)
 }
 async function prepChanged() { await data.refresh() }
+
+async function loadPrepSummary() {
+  const c = data.current
+  if (!c || c.type === 'none') { prepSummary.value = null; return }
+  const source = c.type === 'dataset'
+    ? { type: 'dataset', name: c.name }
+    : { type: 'user', id: c.name }
+  const sd = spec.spec.data
+  const prep = { filter: sd.filter || '', mutate: sd.mutate || [], sample: sd.sample, seed: sd.seed, filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled, types: sd.types || [], outliers: sd.outliers || [], dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled }
+  prepSummaryLoading.value = true
+  try {
+    const res = await getPrepSummary(source, prep)
+    prepSummary.value = res
+  } catch { prepSummary.value = null } finally { prepSummaryLoading.value = false }
+}
+
+function schedulePrepSummary() {
+  if (!prepVisible.value) return
+  if (prepSummaryTimer) clearTimeout(prepSummaryTimer)
+  prepSummaryTimer = setTimeout(loadPrepSummary, 300)
+}
+
+watch(prepVisible, (v) => { if (v) loadPrepSummary() })
+watch(() => [spec.spec.data.filter, spec.spec.data.mutate,
+             spec.spec.data.sample, spec.spec.data.seed,
+             spec.spec.data.filterDisabled, spec.spec.data.sampleDisabled],
+      schedulePrepSummary, { deep: true })
+
+function prepStepLabel(s) {
+  if (s.error) return `失败：${s.error}`
+  if (s.type === 'type') return `类型 ${s.name}→${s.to}`
+  if (s.type === 'text') return `文本 ${s.name}`
+  if (s.type === 'outlier') return `异常值 ${s.name}${s.action === 'flag' ? ` · 标记 ${s.n}` : ''}`
+  if (s.type === 'mutate') return `新增 ${s.name}`
+  if (s.type === 'dropna') return `缺失值 −${s.removed} 行`
+  if (s.type === 'dedup') return `去重 −${s.removed} 行`
+  if (s.type === 'filter') return `筛选 −${s.removed} 行`
+  if (s.type === 'sample') return `抽样 ${s.n} 行`
+  return ''
+}
 function resetPrep() {
   spec.pushHistory()
   spec.spec.data.filter = ''
+  spec.spec.data.filterDisabled = false
+  spec.spec.data.types = []
+  spec.spec.data.text = []
+  spec.spec.data.outliers = []
+  spec.spec.data.dropnaCols = []
+  spec.spec.data.dropnaDisabled = false
+  spec.spec.data.dedupCols = []
+  spec.spec.data.dedupEnabled = false
   spec.spec.data.mutate = []
   spec.spec.data.sample = null
+  spec.spec.data.sampleDisabled = false
   spec.spec.data.seed = null
   prepChanged()
 }
@@ -307,40 +395,214 @@ function openPreview(colName = '') {
     <ActionBar @project="(c) => emit('project', c)" />
 
     <!-- 加工对话框 -->
-    <el-dialog v-model="prepVisible" title="数据准备" width="640" append-to-body>
-      <div class="gg-subhead" style="padding-top:0">行筛选（R 逻辑表达式；可点击下方列名插入）</div>
-      <el-input ref="filterInput" v-model="spec.spec.data.filter" type="textarea" :rows="2" class="gg-mono"
-        placeholder="如: hwy > 20 & class == 'suv'"
-        @focus="activeExpr = 'filter'" @change="prepChanged" />
+    <el-dialog v-model="prepVisible" title="数据准备" width="720" append-to-body class="prep-dialog">
+      <div v-if="prepSummary" class="prep-summary">
+        <span class="ps-raw">原始 {{ prepSummary.raw.nrow }}×{{ prepSummary.raw.ncol }}</span>
+        <span class="ps-arrow">→</span>
+        <span class="ps-final">当前 {{ prepSummary.final.nrow }}×{{ prepSummary.final.ncol }}</span>
+        <span class="ps-note">原始数据不会被修改，可随时重置</span>
+      </div>
+      <div v-if="prepSummary && prepSummary.steps.length" class="prep-steps">
+        <span v-for="(s, i) in prepSummary.steps" :key="i" class="pstep" :class="{ err: s.error }">
+          {{ prepStepLabel(s) }}
+        </span>
+      </div>
+      <el-collapse v-if="prepSummary && prepSummary.code" class="prep-code">
+        <el-collapse-item title="查看数据准备代码（R）" name="code">
+          <pre class="gg-mono">{{ prepSummary.code }}</pre>
+        </el-collapse-item>
+      </el-collapse>
 
-      <div class="gg-subhead">常用列（点击插入）</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <el-tag v-for="c in data.columns" :key="c.name" class="col-chip" :disable-transitions="true"
-          style="cursor:pointer" @click="insertName(c.name)">{{ c.name }}</el-tag>
+      <div class="gg-subhead" style="padding-top:0">步骤（按执行顺序；可单独停用）</div>
+
+      <!-- ① 新增列 -->
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">1</span><span class="ps-title">类型转换</span>
+          <span class="hint">先转换类型，再做筛选/派生</span>
+        </div>
+        <div v-for="(t, i) in spec.spec.data.types" :key="i" class="ps-line">
+          <el-select v-model="t.name" size="small" filterable placeholder="选择列" style="flex:1;min-width:0"
+            :disabled="!!t.disabled" @change="prepChanged">
+            <el-option v-for="c in data.columns" :key="c.name" :value="c.name" :label="c.name" />
+          </el-select>
+          <el-select v-model="t.type" size="small" style="width:110px" :disabled="!!t.disabled"
+            @change="prepChanged">
+            <el-option value="num" label="数值 num" />
+            <el-option value="chr" label="字符 chr" />
+            <el-option value="fct" label="因子 fct" />
+            <el-option value="lgl" label="逻辑 lgl" />
+            <el-option value="date" label="日期 date" />
+          </el-select>
+          <el-button size="small" text type="danger" @click="() => { rmType(i); prepChanged() }">
+            <el-icon><Delete /></el-icon>
+          </el-button>
+          <el-switch size="small" :model-value="!t.disabled" title="启用/停用此步"
+            @update:model-value="(v) => { t.disabled = !v; prepChanged() }" />
+        </div>
+        <el-button size="small" text @click="addType"><el-icon><Plus /></el-icon>类型转换</el-button>
       </div>
 
-      <div class="gg-subhead">新增列</div>
-      <div v-for="(m, i) in spec.spec.data.mutate" :key="i" style="display:flex;gap:5px;margin:0 0 5px">
-        <el-input v-model="m.name" size="small" placeholder="列名" style="width:120px" @change="prepChanged" />
-        <el-input :ref="(el) => { mutateRefs[i] = el; }" v-model="m.expr" size="small" class="gg-mono"
-          placeholder="R 表达式，如 hwy / displ"
-          @focus="activeExpr = { type: 'mutate', idx: i }" @change="prepChanged" />
-        <el-button size="small" text type="danger" @click="() => { rmMutate(i); prepChanged() }">
-          <el-icon><Delete /></el-icon>
-        </el-button>
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">2</span><span class="ps-title">文本清洗</span>
+          <span class="hint">去空格 / 大小写 / 替换</span>
+        </div>
+        <div v-for="(tx, i) in spec.spec.data.text" :key="i" class="ps-line">
+          <el-select v-model="tx.name" size="small" filterable placeholder="选择列" style="flex:1;min-width:0"
+            :disabled="!!tx.disabled" @change="prepChanged">
+            <el-option v-for="c in data.columns" :key="c.name" :value="c.name" :label="c.name" />
+          </el-select>
+          <el-select v-model="tx.op" size="small" style="width:110px" :disabled="!!tx.disabled"
+            @change="prepChanged">
+            <el-option value="trim" label="去空格" />
+            <el-option value="upper" label="转大写" />
+            <el-option value="lower" label="转小写" />
+            <el-option value="replace" label="替换" />
+          </el-select>
+          <template v-if="tx.op === 'replace'">
+            <el-input v-model="tx.from" size="small" placeholder="查找" style="width:80px"
+              :disabled="!!tx.disabled" @change="prepChanged" />
+            <el-input v-model="tx.to" size="small" placeholder="替换为" style="width:80px"
+              :disabled="!!tx.disabled" @change="prepChanged" />
+          </template>
+          <el-button size="small" text type="danger" @click="() => { rmText(i); prepChanged() }">
+            <el-icon><Delete /></el-icon>
+          </el-button>
+          <el-switch size="small" :model-value="!tx.disabled" title="启用/停用此步"
+            @update:model-value="(v) => { tx.disabled = !v; prepChanged() }" />
+        </div>
+        <el-button size="small" text @click="addText"><el-icon><Plus /></el-icon>文本清洗</el-button>
       </div>
-      <el-button size="small" text @click="addMutate"><el-icon><Plus /></el-icon>新增列</el-button>
 
-      <div class="gg-subhead">抽样 / 随机种子</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <el-input-number v-model="spec.spec.data.sample" :min="1" size="small" placeholder="行数"
-          controls-position="right" style="width:130px" @change="prepChanged" />
-        <span style="font-size:12px;color:var(--el-text-color-secondary)">行</span>
-        <el-input-number v-model="spec.spec.data.seed" :min="0" size="small" placeholder="种子"
-          controls-position="right" style="width:130px" @change="prepChanged" />
-        <span style="font-size:12px;color:var(--el-text-color-secondary)">种子</span>
-        <span style="flex:1" />
-        <el-button size="small" text @click="resetPrep"><el-icon><RefreshLeft /></el-icon>重置准备</el-button>
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">3</span><span class="ps-title">异常值</span>
+          <span class="hint">IQR / z-score · 默认标记，不删数据</span>
+        </div>
+        <div v-for="(o, i) in spec.spec.data.outliers" :key="i" class="ps-line">
+          <el-select v-model="o.name" size="small" filterable placeholder="数值列" style="flex:1;min-width:0"
+            :disabled="!!o.disabled" @change="prepChanged">
+            <el-option v-for="c in numericColumns" :key="c.name" :value="c.name" :label="c.name" />
+          </el-select>
+          <el-select v-model="o.method" size="small" style="width:100px" :disabled="!!o.disabled"
+            @change="prepChanged">
+            <el-option value="iqr" label="IQR" />
+            <el-option value="z" label="z-score" />
+          </el-select>
+          <el-input-number v-model="o.k" :min="0.1" :step="0.5" size="small" style="width:90px"
+            :disabled="!!o.disabled" @change="prepChanged" />
+          <el-select v-model="o.action" size="small" style="width:96px" :disabled="!!o.disabled"
+            @change="prepChanged">
+            <el-option value="flag" label="标记" />
+            <el-option value="drop" label="删除行" />
+            <el-option value="winsor" label="缩尾" />
+          </el-select>
+          <el-button size="small" text type="danger" @click="() => { rmOutlier(i); prepChanged() }">
+            <el-icon><Delete /></el-icon>
+          </el-button>
+          <el-switch size="small" :model-value="!o.disabled" title="启用/停用此步"
+            @update:model-value="(v) => { o.disabled = !v; prepChanged() }" />
+        </div>
+        <el-button size="small" text @click="addOutlier"><el-icon><Plus /></el-icon>异常值</el-button>
+      </div>
+
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">4</span><span class="ps-title">新增列</span>
+          <span class="hint">先执行，供筛选与绘图使用</span>
+        </div>
+        <div v-for="(m, i) in spec.spec.data.mutate" :key="i" class="ps-line">
+          <el-input v-model="m.name" size="small" placeholder="列名" style="width:110px"
+            :disabled="!!m.disabled" @change="prepChanged" />
+          <el-input v-model="m.expr" size="small" class="gg-mono" placeholder="R 表达式，如 hwy / displ"
+            style="flex:1;min-width:0" :disabled="!!m.disabled"
+            @focus="activeExpr = { type: 'mutate', idx: i }" @change="prepChanged" />
+          <el-button size="small" text type="danger" @click="() => { rmMutate(i); prepChanged() }">
+            <el-icon><Delete /></el-icon>
+          </el-button>
+          <el-switch size="small" :model-value="!m.disabled" title="启用/停用此步"
+            @update:model-value="(v) => { m.disabled = !v; prepChanged() }" />
+        </div>
+        <el-button size="small" text @click="addMutate"><el-icon><Plus /></el-icon>新增列</el-button>
+      </div>
+
+      <!-- ② 缺失值 -->
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">5</span><span class="ps-title">缺失值</span>
+          <span class="hint">按所选列删除缺失行</span>
+          <span style="flex:1" />
+          <el-switch size="small" :model-value="!spec.spec.data.dropnaDisabled"
+            @update:model-value="(v) => { spec.spec.data.dropnaDisabled = !v; prepChanged() }" />
+        </div>
+        <div class="ps-line">
+          <el-select v-model="spec.spec.data.dropnaCols" multiple collapse-tags size="small"
+            placeholder="选择列（可多选）" style="flex:1" :disabled="!!spec.spec.data.dropnaDisabled">
+            <el-option v-for="c in data.columns" :key="c.name" :value="c.name" :label="c.name" />
+          </el-select>
+          <el-select v-model="spec.spec.data.dropnaHow" size="small" style="width:110px"
+            :disabled="!!spec.spec.data.dropnaDisabled">
+            <el-option value="any" label="任一缺失" />
+            <el-option value="all" label="全部缺失" />
+          </el-select>
+        </div>
+      </div>
+
+      <!-- ③ 行筛选 -->
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">6</span><span class="ps-title">行筛选</span>
+          <span class="hint">R 逻辑表达式；点击下方列名插入</span>
+          <span style="flex:1" />
+          <el-switch size="small" :model-value="!spec.spec.data.filterDisabled"
+            @update:model-value="(v) => { spec.spec.data.filterDisabled = !v; prepChanged() }" />
+        </div>
+        <el-input ref="filterInput" v-model="spec.spec.data.filter" type="textarea" :rows="2" class="gg-mono"
+          placeholder="如: hwy > 20 & class == 'suv'" :disabled="!!spec.spec.data.filterDisabled"
+          @focus="activeExpr = 'filter'" @change="prepChanged" />
+        <div class="chips">
+          <el-tag v-for="c in data.columns" :key="c.name" class="col-chip" :disable-transitions="true"
+            style="cursor:pointer" @click="insertName(c.name)">{{ c.name }}</el-tag>
+        </div>
+      </div>
+
+      <!-- ④ 去重 -->
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">7</span><span class="ps-title">去重</span>
+          <span class="hint">按所选列去重；不选则按全部列</span>
+          <span style="flex:1" />
+          <el-switch size="small" :model-value="!!spec.spec.data.dedupEnabled"
+            @update:model-value="(v) => { spec.spec.data.dedupEnabled = v; prepChanged() }" />
+        </div>
+        <div class="ps-line">
+          <el-select v-model="spec.spec.data.dedupCols" multiple collapse-tags size="small"
+            placeholder="全部列（默认）" style="flex:1" :disabled="!spec.spec.data.dedupEnabled">
+            <el-option v-for="c in data.columns" :key="c.name" :value="c.name" :label="c.name" />
+          </el-select>
+        </div>
+      </div>
+
+      <!-- ⑤ 抽样 -->
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">8</span><span class="ps-title">抽样</span>
+          <span class="hint">按随机种子抽取固定行数</span>
+          <span style="flex:1" />
+          <el-switch size="small" :model-value="!spec.spec.data.sampleDisabled"
+            @update:model-value="(v) => { spec.spec.data.sampleDisabled = !v; prepChanged() }" />
+        </div>
+        <div class="ps-line">
+          <el-input-number v-model="spec.spec.data.sample" :min="1" size="small" placeholder="行数"
+            :disabled="!!spec.spec.data.sampleDisabled" controls-position="right" style="width:130px" @change="prepChanged" />
+          <span class="unit">行</span>
+          <el-input-number v-model="spec.spec.data.seed" :min="0" size="small" placeholder="种子"
+            :disabled="!!spec.spec.data.sampleDisabled" controls-position="right" style="width:130px" @change="prepChanged" />
+          <span class="unit">种子</span>
+          <span style="flex:1" />
+          <el-button size="small" text @click="resetPrep"><el-icon><RefreshLeft /></el-icon>重置准备</el-button>
+        </div>
       </div>
 
       <el-alert v-if="data.preview.error" type="error" :title="data.preview.error" :closable="false" style="margin-top:10px" />
@@ -432,6 +694,38 @@ function openPreview(colName = '') {
 .src-card:hover .sc-del, .src-card.on .sc-del,
 .src-card:hover .sc-act, .src-card.on .sc-act { opacity: 1; }
 
+.prep-summary { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; }
+.ps-raw { color: var(--gg-text-3); }
+.ps-arrow { color: var(--gg-text-4); }
+.ps-final { color: var(--gg-brand); font-weight: 600; }
+.ps-note { margin-left: auto; font-size: 11px; color: var(--gg-text-4); }
+.prep-steps { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.pstep { font-size: 11px; background: #eef2f7; color: var(--gg-text-2); border-radius: 3px; padding: 1px 6px; }
+.pstep.err { background: #fdeceb; color: #c0392b; }
+.prep-code { margin-bottom: 8px; }
+.prep-code pre {
+  margin: 0; background: #fbfcfe; border: 1px solid var(--gg-border); border-radius: 4px;
+  padding: 6px 8px; font-size: 11.5px; color: var(--gg-text-2); white-space: pre-wrap;
+}
+.prep-step {
+  border: 1px solid var(--gg-border); border-radius: 6px; padding: 8px 10px;
+  margin-bottom: 8px; background: #fcfdff;
+}
+.ps-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ps-idx {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--gg-brand-2, #eaf1fb);
+  color: var(--gg-brand); font-size: 11px; display: flex; align-items: center;
+  justify-content: center; font-weight: 600; flex-shrink: 0;
+}
+.ps-title { font-size: 12.5px; font-weight: 600; }
+.ps-line { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
+.ps-line .el-input, .ps-line .el-select { min-width: 0; }
+.prep-dialog .el-dialog__body { max-height: 64vh; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.prep-dialog .el-dialog__body::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.ps-line:last-child { margin-bottom: 0; }
+.ps-line .el-input { flex-shrink: 0; }
+.chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.unit { font-size: 12px; color: var(--gg-text-3); }
 .dp-sechead {
   display: flex; align-items: center; gap: 6px;
   padding: 10px 12px 6px; font-size: 12px; font-weight: 600;
@@ -504,4 +798,9 @@ function openPreview(colName = '') {
   background: rgba(47, 111, 191,.14); backdrop-filter: blur(1px);
   color: var(--gg-accent); font-size: 13px; pointer-events: none;
 }
+</style>
+
+<style>
+.prep-dialog .el-dialog__body { max-height: 64vh; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.prep-dialog .el-dialog__body::-webkit-scrollbar { width: 0; height: 0; display: none; }
 </style>

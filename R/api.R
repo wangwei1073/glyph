@@ -308,6 +308,26 @@ ggspec_api_app <- function(state) {
       list(d = d, key = key)
     }
 
+    # 数据准备摘要（步骤影响 + 代码），界面展示用
+    if (path == "/api/prep/summary" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      raw <- tryCatch(resolve_source_df(paste0((src$type %||% "none"), ":", src_id_of(src)), state),
+                      error = function(e) e)
+      if (inherits(raw, "error")) return(json_error(conditionMessage(raw), 400))
+      s <- data_prep_summary(raw, prep)
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      final <- if (inherits(pv, "error")) s else pv$d
+      return(json_response(list(
+        ok = TRUE,
+        raw = list(nrow = nrow(raw), ncol = ncol(raw) - as.integer(".gg_rid" %in% names(raw))),
+        final = list(nrow = nrow(final),
+                     ncol = ncol(final) - as.integer(".gg_rid" %in% names(final))),
+        steps = s$steps,
+        code = paste(s$code, collapse = "\n")
+      )))
+    }
+
     # 列清单（加工后）：POST 带 prep，返回筛选 / 新增列 / 抽样后的列
     if (path == "/api/columns" && method == "POST") {
       src <- body$source %||% list()
