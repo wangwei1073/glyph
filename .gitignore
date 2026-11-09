@@ -46,3 +46,6 @@ extensions.json
 
 # 测试脚本生成的图（可复现，不入库）
 /testdata/*.png
+
+# 手册生成过程中的诊断截图（非手册内容）
+/docs/manual/shots/3[0-9]-*.png

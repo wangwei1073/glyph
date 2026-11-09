@@ -1,0 +1,653 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Glyph 用户手册</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", -apple-system, sans-serif;
+    font-size: 10.5pt; line-height: 1.72; color: #1f2733; margin: 0;
+  }
+  h1 { font-size: 20pt; margin: 0 0 6mm; color: #1b3a63; page-break-before: always; padding-bottom: 3mm; border-bottom: 2.5px solid #2f6fbf; }
+  h1.first { page-break-before: avoid; }
+  h2 { font-size: 14pt; margin: 8mm 0 3mm; color: #1b3a63; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 6mm 0 2mm; color: #2f4a6d; page-break-after: avoid; }
+  p { margin: 0 0 3mm; }
+  ul, ol { margin: 0 0 3.5mm; padding-left: 6mm; }
+  li { margin-bottom: 1.2mm; }
+  code { font-family: Consolas, "Courier New", monospace; background: #eef2f8; padding: 0.5mm 1.4mm; border-radius: 2px; font-size: 9.5pt; color: #14427a; }
+  pre { font-family: Consolas, monospace; background: #f6f8fb; border: 1px solid #dde4ee; border-left: 3px solid #2f6fbf;
+        padding: 3mm 4mm; border-radius: 3px; font-size: 9pt; line-height: 1.5; overflow-x: auto; page-break-inside: avoid; }
+
+  /* 封面 */
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; page-break-after: always; }
+  .cover .logo { font-size: 34pt; font-weight: 700; color: #2f6fbf; letter-spacing: 1px; }
+  .cover .sub { font-size: 15pt; color: #44556b; margin-top: 4mm; }
+  .cover .line { width: 46mm; height: 3px; background: #2f6fbf; margin: 8mm 0; }
+  .cover .meta { font-size: 10pt; color: #6b7a8d; line-height: 2; }
+  .cover .feat { margin-top: 12mm; font-size: 10pt; color: #44556b; }
+
+  /* 目录 */
+  .toc { page-break-after: always; }
+  .toc h2 { margin-top: 0; border: none; }
+  .toc ol { list-style: none; padding-left: 0; counter-reset: sec; }
+  .toc > ol > li { font-size: 11pt; margin: 2.6mm 0; font-weight: 600; color: #1b3a63; }
+  .toc ul { list-style: none; padding-left: 6mm; margin: 1.2mm 0 0; }
+  .toc ul li { font-size: 9.5pt; font-weight: 400; color: #44556b; margin: 0.9mm 0; }
+
+  /* 图 */
+  figure { margin: 4mm 0 5mm; page-break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid #d7dee8; border-radius: 3px; }
+  figcaption { font-size: 8.8pt; color: #6b7a8d; margin-top: 1.8mm; text-align: center; }
+  figure.narrow img { max-width: 62%; }
+  figure.shot img { max-width: 100%; }
+
+  /* 步骤 */
+  .steps { counter-reset: st; list-style: none; padding-left: 0; margin: 3mm 0 4mm; }
+  .steps > li { counter-increment: st; position: relative; padding-left: 8mm; margin-bottom: 2.4mm; page-break-inside: avoid; }
+  .steps > li::before {
+    content: counter(st); position: absolute; left: 0; top: 0.2mm;
+    width: 5.4mm; height: 5.4mm; border-radius: 50%; background: #2f6fbf; color: #fff;
+    font-size: 8.5pt; font-weight: 700; text-align: center; line-height: 5.4mm;
+  }
+
+  /* 提示框 */
+  .box { border-radius: 4px; padding: 3mm 4mm; margin: 4mm 0; font-size: 9.6pt; page-break-inside: avoid; }
+  .tip { background: #f0f6ff; border-left: 3px solid #2f6fbf; }
+  .warn { background: #fff8ec; border-left: 3px solid #d99418; }
+  .box b { color: #1b3a63; }
+  .warn b { color: #8a5a00; }
+
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0 4mm; font-size: 9.4pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #dde4ee; padding: 2mm 2.6mm; text-align: left; vertical-align: top; }
+  th { background: #eef3fa; color: #1b3a63; font-weight: 600; }
+  tr:nth-child(even) td { background: #fafcfe; }
+
+  .kv { font-size: 9.6pt; }
+  .lead { font-size: 10.5pt; color: #44556b; margin-bottom: 5mm; }
+  .tag { display: inline-block; background: #e8f0fb; color: #1b5aa8; border-radius: 3px;
+         padding: 0.3mm 1.8mm; font-size: 8.6pt; margin-right: 1.2mm; }
+</style>
+</head>
+<body>
+
+<!-- 封面 -->
+<div class="cover">
+  <div class="logo">Glyph</div>
+  <div class="sub">ggplot2 图形化绘图工具 · 用户手册</div>
+  <div class="line"></div>
+  <div class="meta">
+    版本 1.0<br>
+    适用对象：需要快速产出出版级统计图形的科研与数据分析人员<br>
+    技术栈：R + ggplot2 生态 / Vue 3 界面
+  </div>
+  <div class="feat">
+    用图形界面完成 80% 的常规绘图，需要时无缝切到代码模式精修；
+    所有操作都可导出为可复现的 R 脚本。
+  </div>
+</div>
+
+<!-- 目录 -->
+<div class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li>认识界面
+      <ul>
+        <li>1.1 三大区域　1.2 顶部工具栏　1.3 底部状态栏　1.4 右侧控件页签分组</li>
+      </ul>
+    </li>
+    <li>准备数据
+      <ul>
+        <li>2.1 选择内置数据集　2.2 导入自己的数据　2.3 数据准备流水线</li>
+      </ul>
+    </li>
+    <li>画出第一张图
+      <ul>
+        <li>3.1 添加图层　3.2 图层管理　3.3 美学映射　3.4 参数调整</li>
+      </ul>
+    </li>
+    <li>图形设置
+      <ul>
+        <li>4.1 标度　4.2 坐标系与分面</li>
+      </ul>
+    </li>
+    <li>美化与标注
+      <ul>
+        <li>5.1 标签　5.2 注释　5.3 主题</li>
+      </ul>
+    </li>
+    <li>数据统计
+      <ul>
+        <li>6.1 描述统计　6.2 统计检验与回归　6.3 图表建议与图上标注　6.4 基线表</li>
+      </ul>
+    </li>
+    <li>导出图形
+      <ul>
+        <li>7.1 画幅与自适应　7.2 导出前检查　7.3 格式与期刊模板　7.4 可复现包</li>
+      </ul>
+    </li>
+    <li>图库
+      <ul>
+        <li>8.1 存入与更新　8.2 重命名与删除　8.3 打开并继续编辑</li>
+      </ul>
+    </li>
+    <li>拼图组合</li>
+    <li>代码视图与编辑器
+      <ul>
+        <li>10.1 代码视图　10.2 载入编辑器　10.3 智能补全</li>
+      </ul>
+    </li>
+    <li>项目、扩展与快捷键</li>
+  </ol>
+</div>
+
+<!-- 第 1 章 -->
+<h1 class="first">第 1 章　认识界面</h1>
+<p class="lead">Glyph 的界面按「数据 → 图形 → 产出」的顺序分成三大区域，配合顶部工具栏与底部状态栏，形成一个从左到右的绘图流水线。</p>
+
+<figure class="shot">
+  <img src="{{SHOT:01-overview.png}}" alt="主界面总览">
+  <figcaption>图 1-1　主界面总览：左侧数据、中间画布、右侧控件，顶部工具栏与底部状态栏</figcaption>
+</figure>
+
+<h2>1.1 三大区域</h2>
+<table>
+  <tr><th style="width:22%">区域</th><th style="width:26%">位置</th><th>作用</th></tr>
+  <tr><td><b>数据区</b></td><td>左侧</td><td>导入数据、选择内置数据集、查看列信息与数据预览、进入数据准备</td></tr>
+  <tr><td><b>画布区</b></td><td>中间</td><td>显示渲染结果；顶部可切换「图表 / 代码」两种视图；底部是可折叠的数据统计抽屉</td></tr>
+  <tr><td><b>控件区</b></td><td>右侧</td><td>12 个功能页签，从添加图层到导出设置的全套参数</td></tr>
+</table>
+
+<div class="box tip">
+  <b>左右侧栏都可以收起。</b>点左侧栏顶部的 <code>‹</code>、右侧栏顶部的 <code>›</code> 可以折叠，把屏幕留给画布；收起后底栏会出现对应的图标按钮，功能不变。
+</div>
+
+<h2>1.2 顶部工具栏</h2>
+<p>画布顶栏从左到右依次是：</p>
+<table>
+  <tr><th style="width:30%">控件</th><th>说明</th></tr>
+  <tr><td>撤销 / 重做</td><td>快捷键 <code>Ctrl+Z</code> / <code>Ctrl+Y</code></td></tr>
+  <tr><td>图表 / 代码</td><td>切换画布的两种视图。代码视图不参与渲染，只展示当前图形对应的 R 代码</td></tr>
+  <tr><td>缩放按钮</td><td>在「适合窗口」与「1:1 原始像素」之间切换</td></tr>
+  <tr><td>画幅标签</td><td>显示当前渲染尺寸与 dpi，点击可打开尺寸设置面板</td></tr>
+  <tr><td>自动渲染开关</td><td>开启时改动即出图；关闭后需手动点「渲染」，适合调参阶段减少等待</td></tr>
+  <tr><td>渲染按钮</td><td>立即重新渲染</td></tr>
+</table>
+
+<div class="box tip">
+  <b>自适应画布。</b>画幅标签里有一个「自适应画布」开关，默认开启：渲染分辨率会跟随画布窗口大小自动调整，
+  所以在大屏或拉宽侧栏后，图会自动变得更清晰，而不是被拉伸放大。手动修改画幅或 dpi 后会关闭自适应，避免设置被窗口尺寸覆盖。
+</div>
+
+<h2>1.3 底部状态栏</h2>
+<p>底栏左侧显示保存状态与当前数据源，中间显示画布状态，右侧集中了产出类动作：</p>
+<p><span class="tag">存入图库 / 更新图库</span><span class="tag">交互预览</span><span class="tag">导出检查</span><span class="tag">可复现包</span><span class="tag">导出</span></p>
+<p>最左侧还有暗色模式切换、退出服务与「项目」下拉菜单（保存 / 载入项目、清空画布）。</p>
+
+<h2>1.4 右侧控件页签分组</h2>
+<p>12 个页签按职责分成 5 组，组间有分隔线：</p>
+<table>
+  <tr><th style="width:20%">分组</th><th style="width:30%">页签</th><th>用途</th></tr>
+  <tr><td>绘图核心</td><td>图层 · 美学 · 参数</td><td>决定「画什么、映射什么、怎么细调」</td></tr>
+  <tr><td>图形设置</td><td>标度 · 坐标</td><td>改变图形本身的呈现规则</td></tr>
+  <tr><td>图上元素</td><td>标签 · 注释 · 主题</td><td>叠加在图上、影响外观的内容</td></tr>
+  <tr><td>产出</td><td>图库 · 拼图</td><td>把图存档、把多张图组合起来</td></tr>
+  <tr><td>系统</td><td>高级 · 扩展</td><td>代码模式与能力管理</td></tr>
+</table>
+
+<!-- 第 2 章 -->
+<h1>第 2 章　准备数据</h1>
+<p class="lead">Glyph 支持 ggplot2 内置数据集与你自己导入的数据。选好数据后，左侧会列出所有列及其类型与唯一值个数。</p>
+
+<h2>2.1 选择内置数据集</h2>
+<ol class="steps">
+  <li>在左侧「内置数据集」下拉框中选择一个数据集，例如「汽车油耗测试数据（234×11）」。</li>
+  <li>选择后，下方「列」面板会列出全部列：<code>chr</code> 表示字符型，<code>num</code> 表示数值型，右侧数字是唯一值个数。</li>
+  <li>点击列名可以展开预览，「预览」按钮会打开数据表视图。</li>
+</ol>
+
+<figure class="narrow">
+  <img src="{{SHOT:02-dataset.png}}" alt="选择数据集后的左侧面板">
+  <figcaption>图 2-1　选择数据集后，左侧列出 11 个列及其类型</figcaption>
+</figure>
+
+<h2>2.2 导入自己的数据</h2>
+<p>点左上角「导入数据」可以选择文件（CSV / Excel 等）导入；也可以在导入向导里直接粘贴表格数据。导入后的数据出现在「我的数据」分组下，可以像内置数据集一样使用。</p>
+
+<div class="box tip">
+  <b>数据是引用而不是副本。</b>图库条目与项目文件保存的是「数据源 + 加工步骤」，而不是数据本身。
+  因此如果你删除了导入的数据文件，引用它的图需要重新指定数据源。
+</div>
+
+<h2>2.3 数据准备流水线</h2>
+<p>点「数据准备」打开加工面板。这里的 7 个步骤是<b>按固定顺序执行</b>的，每一步都可以单独启用或停用：</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:18-data-prep.png}}" alt="数据准备面板">
+  <figcaption>图 2-2　数据准备的 7 个步骤，按执行顺序排列</figcaption>
+</figure>
+
+<table>
+  <tr><th style="width:8%">顺序</th><th style="width:22%">步骤</th><th>说明</th></tr>
+  <tr><td>1</td><td>类型转换</td><td>先转换类型，再做筛选或派生。例如把数值列转成因子用于分组</td></tr>
+  <tr><td>2</td><td>文本清洗</td><td>去空格、统一大小写、字符串替换</td></tr>
+  <tr><td>3</td><td>异常值</td><td>按 IQR 或 z-score 标记异常值。<b>默认只标记，不删除数据</b></td></tr>
+  <tr><td>4</td><td>新增列</td><td>先于筛选执行，供后续筛选与绘图使用</td></tr>
+  <tr><td>5</td><td>缺失值</td><td>按所选列删除含缺失的行，可选「任一缺失」或「全部缺失」</td></tr>
+  <tr><td>6</td><td>缺失值填充</td><td>用常数、均值、中位数或众数填充</td></tr>
+  <tr><td>7</td><td>行筛选</td><td>写 R 逻辑表达式；点击下方列名可直接插入</td></tr>
+</table>
+
+<div class="box warn">
+  <b>原始数据不会被修改。</b>所有步骤都只在渲染时应用，面板顶部会显示「原始 234×11 → 当前 234×11」这样的对比，随时可以重置。
+</div>
+
+<!-- 第 3 章 -->
+<h1>第 3 章　画出第一张图</h1>
+<p class="lead">一张图由一个或多个「图层」叠加而成。每个图层包含三部分：用哪种几何对象（geom）、把数据列映射到哪些视觉属性（aes）、以及各种参数。</p>
+
+<h2>3.1 添加图层</h2>
+<ol class="steps">
+  <li>画布为空时，中间的引导页有一个「添加第一个图层」按钮，点击即添加一个默认的散点图图层。</li>
+  <li>Glyph 会尝试自动猜测两列做映射。如果猜得不合适，到「美学」页签改成你需要的列。</li>
+  <li>修改后图会自动重新渲染（自动渲染开着的情况下），右下角状态栏会显示渲染耗时。</li>
+</ol>
+
+<figure class="shot">
+  <img src="{{SHOT:03-first-chart.png}}" alt="第一张散点图">
+  <figcaption>图 3-1　用汽车油耗数据画出的「排量 × 高速油耗」散点图</figcaption>
+</figure>
+
+<h2>3.2 图层管理</h2>
+<p>「图层」页签列出当前所有图层，从下到上对应绘制的先后顺序（后画的盖在上面）。每个图层右侧有几个图标按钮：</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:04-panel-layers.png}}" alt="图层页签">
+  <figcaption>图 3-2　图层列表与操作按钮</figcaption>
+</figure>
+
+<table>
+  <tr><th style="width:26%">操作</th><th>说明</th></tr>
+  <tr><td>点击图层条目</td><td>选中该图层，后面的「美学」「参数」页签都会针对它生效</td></tr>
+  <tr><td>眼睛图标</td><td>临时隐藏 / 显示该图层，用于对比效果</td></tr>
+  <tr><td>上下箭头</td><td>调整绘制顺序</td></tr>
+  <tr><td>复制图标</td><td>复制一份图层，适合在相似配置上做微调</td></tr>
+  <tr><td>垃圾桶</td><td>删除图层</td></tr>
+  <tr><td>右上角「+ 添加图层」</td><td>新增图层；顶部会显示「共 N 层」</td></tr>
+</table>
+
+<div class="box tip">
+  <b>多图层是 ggplot2 的核心能力。</b>例如散点图叠加拟合线：先加一个 <code>point</code> 图层，
+  再加一个 <code>smooth</code> 图层并勾选只显示线不显示置信带，两者共享同一套坐标与主题。
+</div>
+
+<h2>3.3 美学映射</h2>
+<p>「美学」页签决定数据列如何映射到视觉属性。每一行的结构是：<b>属性名</b> + <b>映射/常量开关</b> + <b>取值</b>。</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:05-panel-aes.png}}" alt="美学页签">
+  <figcaption>图 3-3　aes 映射：x 与 y 已映射到数据列，其余属性可选择映射或常量</figcaption>
+</figure>
+
+<table>
+  <tr><th style="width:18%">模式</th><th>含义</th></tr>
+  <tr><td><b>映射</b></td><td>把某个数据列映射到该属性。例如把 <code>class</code> 映射到 <code>colour</code>，不同类别会显示不同颜色，并自动生成图例</td></tr>
+  <tr><td><b>常量</b></td><td>给该属性一个固定值，不参与映射。例如把 <code>size</code> 设为常量 3，所有点一样大</td></tr>
+</table>
+
+<p>可用的属性包括 <code>x</code>、<code>y</code>、<code>shape</code>（形状）、<code>colour</code>（颜色）、<code>fill</code>（填充）、<code>size</code>（大小）、<code>alpha</code>（透明度）、<code>stroke</code>（描边宽）、<code>group</code>（分组）。带 <code>*</code> 号的是该 geom 必需的属性。</p>
+
+<p>页签下方的「图层开关」还可以设置 <code>inherit.aes</code> 与 <code>show.legend</code>。</p>
+
+<div class="box tip">
+  <b>映射与常量的区别很重要。</b>想要「所有点统一红色」，用常量；想要「不同类别不同颜色」，用映射。
+  把常量误设成映射会凭空多出一个图例。
+</div>
+
+<h2>3.4 参数调整</h2>
+<p>「美学」管的是映射关系，「参数」管的是函数内部的具体行为。这里分四块：</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:06-panel-params.png}}" alt="参数页签">
+  <figcaption>图 3-4　参数页签：geom 参数、stat 选择、position 调整、常量美学</figcaption>
+</figure>
+
+<ul>
+  <li><b>geom / stat 参数</b>：当前几何对象特有的参数，例如柱状图的 <code>width</code>、密度图的 <code>bw</code>、<code>na.rm</code> 等。</li>
+  <li><b>stat 选择</b>：更换统计变换，例如把 <code>identity</code> 换成 <code>bin</code> 或 <code>smooth</code>。</li>
+  <li><b>position 调整</b>：处理重叠位置，例如 <code>dodge</code>（并排）、<code>stack</code>（堆叠）、<code>jitter</code>（抖动）。</li>
+  <li><b>常量美学</b>：不进入 aes 的固定外观值。</li>
+</ul>
+
+<!-- 第 4 章 -->
+<h1>第 4 章　图形设置</h1>
+
+<h2>4.1 标度</h2>
+<p>标度控制「数据值 → 视觉值」的转换规则。打开「标度」页签后，先选择要调整的标度类型（对应某个 aes），再设置它的参数。</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:07-panel-scale.png}}" alt="标度页签">
+  <figcaption>图 4-1　标度页签：按 aes 选择标度，下方是该标度专属参数与通用参数</figcaption>
+</figure>
+
+<p>典型用途：</p>
+<ul>
+  <li><b>颜色</b>：换成期刊友好的配色、设置渐变端点色</li>
+  <li><b>坐标轴范围</b>：限定 x/y 的显示区间</li>
+  <li><b>坐标变换</b>：对数刻度、反向刻度</li>
+  <li><b>标签</b>：自定义刻度文字、图例标题</li>
+</ul>
+
+<div class="box tip">
+  <b>不确定要不要加标度？</b>可以先不加。ggplot2 会按数据类型自动给出合理的默认标度，只有需要改配色、范围或变换时才手动添加。
+</div>
+
+<h2>4.2 坐标系与分面</h2>
+<figure class="narrow">
+  <img src="{{SHOT:08-panel-coord.png}}" alt="坐标页签">
+  <figcaption>图 4-2　坐标页签：坐标系与分面</figcaption>
+</figure>
+
+<p><b>坐标系</b>常用的是 <code>coord_flip()</code>（横纵互换，适合长类别名的条形图）和 <code>coord_fixed()</code>（固定纵横比，适合需要保持比例的场景）。</p>
+
+<p><b>分面</b>把一个图拆成多个小图。<code>facet_wrap</code> 按一个或多个变量自动排布；<code>facet_grid</code> 用行 × 列两个维度交叉排布。可以设置分面标签位置与是否固定坐标轴刻度。</p>
+
+<!-- 第 5 章 -->
+<h1>第 5 章　美化与标注</h1>
+
+<h2>5.1 标签</h2>
+<p>「标签」页签设置标题、副标题、坐标轴标签、图例标题等文字内容。</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:09-panel-labs.png}}" alt="标签页签">
+  <figcaption>图 5-1　标签页签：图表标签、图例标题、图例与引导设置</figcaption>
+</figure>
+
+<p>页签分三块：</p>
+<ul>
+  <li><b>图表标签（labs）</b>：主标题、副标题、说明文字、x/y 轴标题</li>
+  <li><b>图例标题</b>：每个 aes 映射的图例标题，可以单独命名</li>
+  <li><b>图例 / 引导（guides）</b>：控制图例位置、是否显示、连续色条的方向等</li>
+</ul>
+
+<h2>5.2 注释</h2>
+<p>「注释」页签用于在图上叠加说明性元素，例如参考线、文字标注、显著性标记等。这类元素不参与数据映射，只做视觉强调。</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:10-panel-annot.png}}" alt="注释页签">
+  <figcaption>图 5-2　注释页签</figcaption>
+</figure>
+
+<h2>5.3 主题</h2>
+<p>主题决定图表的整体外观：背景、网格线、字体、轴线等。Glyph 默认使用期刊风格的 Prism 主题。</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:11-panel-theme.png}}" alt="主题页签">
+  <figcaption>图 5-3　主题页签：基础主题与逐项元素设置</figcaption>
+</figure>
+
+<p>页签分两层：</p>
+<ul>
+  <li><b>基础主题</b>：选一个预设（如 <code>theme_minimal</code>、<code>theme_bw</code>、<code>theme_prism</code>），一次性改变整体风格</li>
+  <li><b>元素设置</b>：在预设之上逐项微调，例如网格线粗细、轴文字字号、图例位置</li>
+</ul>
+
+<div class="box tip">
+  <b>建议顺序：先选基础主题，再改元素。</b>反过来先改元素再换主题，元素设置可能需要重做。
+</div>
+
+<!-- 第 6 章 -->
+<h1>第 6 章　数据统计</h1>
+<p class="lead">画布底部的「数据统计」抽屉把常用的统计分析放在绘图界面里，算完可以直接落到图上，省去在 R 与图表之间来回切换。</p>
+
+<figure class="shot">
+  <img src="{{SHOT:16-stats.png}}" alt="数据统计抽屉">
+  <figcaption>图 6-1　描述统计结果：样本量、缺失数、均值、标准差、中位数、四分位数、极值</figcaption>
+</figure>
+
+<h2>6.1 描述统计</h2>
+<ol class="steps">
+  <li>点底栏「▸ 数据统计」展开抽屉。</li>
+  <li>在「统计变量」里选择一个或多个数值列。</li>
+  <li>可选地设置「分组变量」，会按组分别统计并追加一行合计。</li>
+  <li>点击「计算」。</li>
+</ol>
+<p>结果表包含：变量、分组、n、缺失、均值、SD、中位数、Q1、Q3、最小、最大。右上角的「代码」按钮可以查看对应的 R 代码。</p>
+
+<h2>6.2 统计检验与回归</h2>
+<p>切到「统计检验」可以完成组间比较，切到「回归分析」可以做线性拟合与结果解读。两者都会给出统计量与 p 值，并可直接生成图上标注。</p>
+
+<h2>6.3 图表建议与图上标注</h2>
+<table>
+  <tr><th style="width:24%">页签</th><th>作用</th></tr>
+  <tr><td><b>图表建议</b></td><td>根据当前数据的变量类型推荐合适的图形类型</td></tr>
+  <tr><td><b>图上标注</b></td><td>把显著性括号、p 值、样本量等标注直接画到图上</td></tr>
+</table>
+
+<h2>6.4 基线表</h2>
+<p>「基线表」用于生成论文中常见的「Table 1」——按分组列出各变量的统计描述。这是临床研究论文的标配表格。</p>
+
+<!-- 第 7 章 -->
+<h1>第 7 章　导出图形</h1>
+
+<h2>7.1 画幅与自适应</h2>
+<p>点顶栏的画幅标签（形如 <code>1188×668 · 150dpi</code>）打开尺寸设置面板：</p>
+<table>
+  <tr><th style="width:26%">设置</th><th>说明</th></tr>
+  <tr><td>像素 / 毫米</td><td>两种输入方式。投期刊建议用毫米，直接填目标印刷尺寸</td></tr>
+  <tr><td>预设</td><td>单栏 85 mm、1.5 栏 114 mm、双栏 170 mm、Nature 89 mm</td></tr>
+  <tr><td>自适应画布</td><td>开启时渲染尺寸跟随窗口；手动改画幅后自动关闭</td></tr>
+  <tr><td>预览 / 导出</td><td>这是两套独立设置：预览追求速度，导出追求精度（默认 300 dpi）</td></tr>
+</table>
+
+<div class="box tip">
+  <b>预览尺寸不影响导出质量。</b>预览用低分辨率是为了让调参更快，导出时会按「导出」那一栏的设置重新渲染。
+</div>
+
+<h2>7.2 导出前检查</h2>
+<p>点底栏「导出检查」，或导出时自动触发，会对当前图形做规范性检查：</p>
+
+<figure class="shot">
+  <img src="{{SHOT:17-export-check.png}}" alt="导出前检查">
+  <figcaption>图 7-1　导出前检查：白底、位图分辨率、物理尺寸、字体、字号五项全部通过</figcaption>
+</figure>
+
+<table>
+  <tr><th style="width:26%">检查项</th><th>说明</th></tr>
+  <tr><td>白底</td><td>期刊通常要求背景为白色，深色主题会被提示</td></tr>
+  <tr><td>位图分辨率</td><td>检查 dpi 是否达到目标期刊要求（一般 ≥300）</td></tr>
+  <tr><td>物理尺寸</td><td>检查宽度是否符合期刊栏宽</td></tr>
+  <tr><td>字体</td><td>检查是否使用了期刊允许的字体</td></tr>
+  <tr><td>文字字号</td><td>检查最小字号是否达到下限（以免印刷后不可读）</td></tr>
+</table>
+
+<h2>7.3 格式与期刊模板</h2>
+<p>导出支持 <b>PNG（位图）</b>、<b>SVG（矢量）</b>、<b>PDF（矢量）</b>。矢量格式放大不失真，是投稿首选。</p>
+<p>右上角可以选择「目标期刊」，检查规则会随之切换：</p>
+<table>
+  <tr><th style="width:18%">模板</th><th style="width:18%">栏宽</th><th style="width:14%">最小字号</th><th>推荐格式</th></tr>
+  <tr><td>通用</td><td>—</td><td>6 pt</td><td>png / svg / pdf</td></tr>
+  <tr><td>Nature</td><td>89 mm</td><td>5 pt</td><td>pdf / svg / png</td></tr>
+  <tr><td>Science</td><td>55 mm</td><td>5 pt</td><td>pdf / svg</td></tr>
+  <tr><td>Cell</td><td>85 mm</td><td>6 pt</td><td>pdf / svg / png</td></tr>
+  <tr><td>PLOS</td><td>83 mm</td><td>6 pt</td><td>tiff / eps / pdf</td></tr>
+  <tr><td>IEEE</td><td>88 mm</td><td>8 pt</td><td>pdf / svg</td></tr>
+  <tr><td>中文核心</td><td>85 mm</td><td>7 pt</td><td>pdf / svg / png</td></tr>
+</table>
+
+<h2>7.4 可复现包</h2>
+<p>点底栏「可复现包」会导出一个压缩包，里面包含生成这张图的完整 R 脚本与所用数据。把它交给合作者或几个月后的自己，可以直接复现出同一张图，不依赖 Glyph。</p>
+
+<div class="box tip">
+  <b>投稿前建议。</b>除了导出图片本身，也顺手导出一份可复现包存档——期刊常会要求提供绘图代码，审稿阶段也常需要改细节重出图。
+</div>
+
+<!-- 第 8 章 -->
+<h1>第 8 章　图库</h1>
+<p class="lead">图库用来存档已经调好的图，之后可以随时取回复用、参与拼图组合，或者打开继续编辑。</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:12-gallery.png}}" alt="图库页签">
+  <figcaption>图 8-1　图库页签：顶部是存入按钮，网格中每个卡片是一张已存档的图</figcaption>
+</figure>
+
+<h2>8.1 存入与更新</h2>
+<ol class="steps">
+  <li>调好一张图后，点图库页顶部「存入当前绘图」（或底栏的「存入图库」）。</li>
+  <li>保存成功后会生成一个新条目，卡片显示缩略图、层数与数据源。</li>
+  <li>继续修改这张图后再存，按钮会变成 <b>「更新到「条目名」」</b>，点击即覆盖更新原条目，<b>名称保持不变</b>。</li>
+  <li>如果想保留旧版本、另存一份，点按钮右侧的下拉箭头，选「另存为新条目」。</li>
+</ol>
+
+<div class="box tip">
+  <b>更新 vs 另存。</b>从图库打开某张图、改完再存，默认是「更新原条目」——这样不会每次微调都产生一条新记录。
+  需要保留历史版本时才用「另存为新条目」。
+</div>
+
+<h2>8.2 重命名与删除</h2>
+<ul>
+  <li><b>重命名</b>：点卡片名称右侧的铅笔图标，名称会变成输入框。<code>回车</code>或点别处保存，<code>Esc</code> 取消。</li>
+  <li><b>删除</b>：点卡片右下角的垃圾桶图标，需要确认。</li>
+</ul>
+
+<h2>8.3 打开并继续编辑</h2>
+<p>点击任意卡片即可把这张图重新载入画布：</p>
+<table>
+  <tr><th style="width:22%">卡片类型</th><th>打开后的效果</th></tr>
+  <tr><td><b>普通图</b></td><td>还原完整的绘图规格<b>以及它使用的数据集</b>，可以直接继续编辑图层、标度、主题</td></tr>
+  <tr><td><b>代码图</b>（带「代码」徽标）</td><td>还原为一段代码绘制出的图。需要修改时，到「代码」视图点「载入编辑器」送到高级页编辑运行</td></tr>
+</table>
+
+<div class="box warn">
+  <b>打开会切换数据集。</b>因为图层映射只对生成它的那个数据集有意义，所以打开图库条目时会连数据源一起切换。
+  如果当前画布有未保存的改动，会先弹窗确认。
+</div>
+
+<p>打开代码图后，画布顶栏会显示橙色的「代码图」标签和一个「返回我的图」按钮，点它可以切回你原本用图层搭出来的图。</p>
+
+<!-- 第 9 章 -->
+<h1>第 9 章　拼图组合</h1>
+<p class="lead">把图库里的多张图组合成一张出版级的多面板图，底层由 patchwork 驱动。</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:13-patchwork.png}}" alt="拼图页签">
+  <figcaption>图 9-1　拼图页签：组合序列、布局参数与整体标注</figcaption>
+</figure>
+
+<ol class="steps">
+  <li>先把要组合的图都存入图库。</li>
+  <li>到「拼图」页签，点「从图库选择…」打开选择弹窗，勾选多张图。</li>
+  <li>在「组合序列」里调整顺序与运算符：<code>+</code> 表示并排，<code>/</code> 表示上下堆叠。</li>
+  <li>在「plot_layout」里设置行列数、各面板的相对宽度 / 高度比例。</li>
+  <li>在「plot_annotation」里设置整张图的标题、副标题、说明文字与子图编号（A/B/C）。</li>
+  <li>展开「标注样式」可以单独调整标注的字号、加粗、颜色与字体。</li>
+</ol>
+
+<div class="box warn">
+  <b>标注样式只影响标注层。</b><code>plot_annotation</code> 的主题只作用于整体的标题、副标题、说明与编号，
+  <b>不会改变各个子图内部的字号</b>。子图的字号要到各自的「主题 → 元素设置」里改，或者调整基础主题的 base_size。
+</div>
+
+<!-- 第 10 章 -->
+<h1>第 10 章　代码视图与编辑器</h1>
+
+<h2>10.1 代码视图</h2>
+<p>点画布顶栏的「代码」切换到代码视图。这里显示的是用当前绘图规格自动生成的 R 代码，可以直接复制粘贴到 RStudio / Positron 运行。</p>
+
+<figure class="shot">
+  <img src="{{SHOT:14-code-view.png}}" alt="代码视图">
+  <figcaption>图 10-1　代码视图：带语法高亮与行号，右上角显示总行数并可直接复制或下载 .R</figcaption>
+</figure>
+
+<p>代码视图是<b>只读</b>的，用于查看与导出。想修改代码请走下一节的「载入编辑器」。</p>
+
+<h2>10.2 载入编辑器</h2>
+<p>这是图形界面与代码模式之间的桥梁：</p>
+<ol class="steps">
+  <li>在代码视图右上角点「载入编辑器」。</li>
+  <li>右侧会自动切到「高级」页签，代码被填入编辑器，可以自由修改。</li>
+  <li>点「运行」或按 <code>Ctrl+Enter</code> 执行。</li>
+  <li>画布立即显示运行结果；同时代码视图也会同步成你改过的代码。</li>
+</ol>
+
+<div class="box tip">
+  <b>什么时候用。</b>需要 ggplot2 原生能力、而界面上没有对应控件时，例如自定义 <code>scale_*</code> 组合、
+  特殊的 <code>annotation_custom</code>、或者调用某个扩展包的生僻 geom。改完仍然可以点「存入图库」存档。
+</div>
+
+<div class="box warn">
+  <b>代码模式下来源会切换。</b>一旦运行了自定义代码，画布显示的就是代码产出的图，而不是图层搭出来的图。
+  顶栏会出现「代码图」标签，点「返回我的图」可以切回。
+</div>
+
+<h2>10.3 智能补全</h2>
+<p>编辑器内置 R 代码补全，词表来自 ggplot2 生态的注册表与本机已安装的 R 包。</p>
+
+<figure class="narrow">
+  <img src="{{SHOT:15-completion.png}}" alt="代码补全">
+  <figcaption>图 10-2　输入 <code>theme_</code> 后自动列出全部主题函数</figcaption>
+</figure>
+
+<table>
+  <tr><th style="width:32%">输入</th><th>补全内容</th></tr>
+  <tr><td><code>geom_</code></td><td>全部几何对象函数（约 180 个）</td></tr>
+  <tr><td><code>scale_</code></td><td>全部标度函数（约 340 个）</td></tr>
+  <tr><td><code>theme_</code></td><td>全部主题函数</td></tr>
+  <tr><td><code>stat_</code> / <code>coord_</code> / <code>facet_</code> / <code>guide_</code></td><td>对应的函数族</td></tr>
+  <tr><td><code>library(</code></td><td>本机已安装的全部 R 包，常用的排在最前</td></tr>
+  <tr><td><code>aes(</code></td><td>当前数据集的列名 + aes 属性名</td></tr>
+  <tr><td><code>geom_point(</code></td><td>该函数的参数与可用 aes 映射；已写过的参数不再重复提示</td></tr>
+</table>
+
+<div class="box tip">
+  <b>补全随数据集变化。</b><code>aes(</code> 里提示的列名来自左侧当前选中的数据源，
+  切换数据集后提示会随之更新，不会提示不存在的列。
+</div>
+
+<!-- 第 11 章 -->
+<h1>第 11 章　项目、扩展与快捷键</h1>
+
+<h2>11.1 项目文件</h2>
+<p>底栏右侧的「项目」下拉菜单提供：</p>
+<ul>
+  <li><b>保存项目（JSON）</b>：把当前完整绘图规格存成文件，可分享给他人或备份</li>
+  <li><b>载入项目</b>：恢复之前保存的项目，同时同步左侧数据源</li>
+  <li><b>清空画布</b>：从零开始</li>
+</ul>
+<p>Glyph 还会自动保存草稿。如果意外关闭了窗口，下次打开时顶部会提示「发现上次未保存的草稿」，可以选择恢复或丢弃。</p>
+
+<h2>11.2 扩展管理</h2>
+<p>「扩展」页签列出可用的 ggplot2 扩展包（如 patchwork、ggrepel、ggsci、ggprism 等），显示是否已安装与是否启用。停用某个扩展后，依赖它的功能会明确提示，而不是静默失败。</p>
+
+<h2>11.3 快捷键</h2>
+<table>
+  <tr><th style="width:34%">快捷键</th><th style="width:26%">位置</th><th>作用</th></tr>
+  <tr><td><code>Ctrl+Z</code> / <code>Ctrl+Y</code></td><td>全局</td><td>撤销 / 重做绘图操作</td></tr>
+  <tr><td><code>Ctrl+Enter</code></td><td>代码编辑器</td><td>运行当前代码</td></tr>
+  <tr><td><code>Ctrl+/</code></td><td>代码编辑器</td><td>注释 / 取消注释选中行</td></tr>
+  <tr><td><code>Ctrl+Shift+F</code></td><td>代码编辑器</td><td>格式化 R 代码</td></tr>
+  <tr><td><code>回车</code></td><td>图库重命名</td><td>确认新名称</td></tr>
+  <tr><td><code>Esc</code></td><td>图库重命名</td><td>取消重命名</td></tr>
+</table>
+
+<h2>11.4 常见问题</h2>
+<table>
+  <tr><th style="width:38%">现象</th><th>原因与处理</th></tr>
+  <tr><td>拖窗口后图没变</td><td>检查画幅面板里的「自适应画布」是否被关掉了（手动改过画幅会自动关闭）</td></tr>
+  <tr><td>图上多出一个图例</td><td>某个属性被设成了「映射」而不是「常量」，去「美学」页签检查</td></tr>
+  <tr><td>打开图库条目后数据集变了</td><td>这是预期行为：图库条目会连数据源一起还原，以保证映射有意义</td></tr>
+  <tr><td>拼图标题变大但子图字号没变</td><td><code>plot_annotation</code> 只作用于标注层，子图字号要到各自主题里改</td></tr>
+  <tr><td>导出检查不通过</td><td>按提示逐项调整：通常是 dpi 不够、字号太小或背景不是白色</td></tr>
+  <tr><td>图看起来糊</td><td>大屏上先确认「自适应画布」开着；导出时用 300 dpi 或选 SVG/PDF</td></tr>
+</table>
+
+<div class="box tip" style="margin-top:10mm">
+  <b>推荐的上手路径。</b>先用内置数据集画一张散点图，把「图层 → 美学 → 参数 → 标度 → 主题」走一遍；
+  然后试一次存入图库并重新打开，理解「更新 vs 另存」；最后到代码视图点一次「载入编辑器」，
+  看看图形操作对应生成了什么代码——这是理解 ggplot2 表达式最直观的方式。
+</div>
+
+</body>
+</html>
