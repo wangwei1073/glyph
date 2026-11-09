@@ -823,7 +823,32 @@ ggspec_api_app <- function(state) {
       }, error = function(e) NULL)
       if (is.null(spec_json)) return(json_error("绘图规格解析失败", 400))
       id <- state$pin_store$add(spec_json, (body$label %||% NULL), (body$project %||% ""))
-      return(json_response(list(ok = TRUE, id = id, pins = state$pin_store$list())))
+      return(json_response(list(ok = TRUE, id = id, created = TRUE, pins = state$pin_store$list())))
+    }
+    # 覆盖更新已有条目（标签保持不变）。
+    # 条目已被删除时回退为新建并返回 created = TRUE，避免前端卡在「更新失败」。
+    if (path == "/api/pins/update" && method == "POST") {
+      spec_json <- tryCatch({
+        raw <- trimws(as.character(body$specJson %||% ""))
+        if (!nzchar(raw)) return(json_error("缺少绘图规格"))
+        jsonlite::fromJSON(raw, simplifyVector = FALSE)
+        raw
+      }, error = function(e) NULL)
+      if (is.null(spec_json)) return(json_error("绘图规格解析失败", 400))
+      id <- as.character(body$id %||% "")
+      project <- body$project %||% ""
+      ok <- isTRUE(state$pin_store$set_spec(id, spec_json))
+      created <- FALSE
+      if (!ok) {
+        id <- state$pin_store$add(spec_json, (body$label %||% NULL), project)
+        created <- TRUE
+      } else {
+        # 缩略图是懒生成并缓存的（见 /api/pins/thumb/）：规格变了必须让它失效，
+        # 否则卡片上仍显示旧图。
+        unlink(state$pin_store$thumb_path(id))
+      }
+      return(json_response(list(ok = TRUE, id = id, created = created,
+                                pins = state$pin_store$list())))
     }
     if (path == "/api/pins/delete" && method == "POST") {
       state$pin_store$remove(body$id %||% "")

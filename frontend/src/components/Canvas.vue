@@ -419,10 +419,14 @@ async function downloadCode() {
   downloadBlob(blob, 'ggplot-plot.R')
 }
 
+// 存入图库：编辑自某条图库条目时覆盖更新（标签不变），否则新建。
+// 需要「另存为新条目」时去图库页签的分体按钮下拉里选。
 function pinCurrent() {
   if (!spec.spec.layers.length) return
-  pins.saveCurrent().then((id) => {
-    ElMessage.success(`已存入图库：${pins.byId[id]?.label || id}`)
+  pins.saveCurrent().then((res) => {
+    const label = pins.byId[res.id]?.label || res.id
+    if (res.created) ElMessage.success(`已存入图库：${label}`)
+    else ElMessage.success(`已更新图库条目：${label}`)
   }).catch((e) => ElMessage.error(e.message))
 }
 
@@ -692,11 +696,14 @@ async function drawPlotly() {
       class="ft-warn" :disable-transitions="true">{{ spec.last.warnings.length }} 条警告</el-tag>
     <span class="ft-spacer" />
 
-    <!-- 图库 -->
-    <el-tooltip content="把当前图存入图库（用于拼图组合）">
+    <!-- 图库：编辑自某条时是「更新」，否则是「存入」 -->
+    <el-tooltip :content="spec.sourcePinId
+      ? `更新图库条目「${spec.sourcePinLabel || spec.sourcePinId}」（标签不变）`
+      : '把当前图存入图库（用于拼图组合）'">
       <el-button size="small" text :disabled="!spec.spec.layers.length || spec.composeActive || pins.saving"
         @click="pinCurrent">
-        <el-icon class="el-icon--left"><StarFilled /></el-icon><span class="ft-label">存入图库</span>
+        <el-icon class="el-icon--left"><StarFilled /></el-icon>
+        <span class="ft-label">{{ spec.sourcePinId ? '更新图库' : '存入图库' }}</span>
       </el-button>
     </el-tooltip>
     <el-tooltip :content="plotlyOn ? '生成可缩放、可悬停的交互图' : 'plotly 扩展已在「高级 → 扩展管理」中关闭'">

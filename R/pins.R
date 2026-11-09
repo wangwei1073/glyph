@@ -40,7 +40,11 @@ Pins <- local({
         label = (label %||% paste0("图", n)),
         specJson = spec_json,
         project = as.character(project %||% ""),
-        t = format(Sys.time(), "%m-%d %H:%M")
+        t = format(Sys.time(), "%m-%d %H:%M"),
+        # rev：缩略图的版本号。前端把它拼进缩略图 URL（?v=rev），
+        # 规格一改 rev 就变，浏览器才会重新取图 —— 否则 URL 不变，
+        # 即使后端删了缓存文件、加了 no-store，浏览器也不会再发请求。
+        rev = 1L
       )
       .save()
       id
@@ -48,6 +52,18 @@ Pins <- local({
     remove = function(id) {
       .pins[[id]] <<- NULL
       .save()
+    },
+    # 覆盖更新已有条目的绘图规格（标签保持不变）
+    # 返回 TRUE 表示更新成功；条目不存在返回 FALSE（调用方决定回退策略）
+    # 注意：不更新 project —— 条目归属不因「编辑后保存」而改变，
+    # 否则把一个无项目的共享条目改成某个项目专属后，在其他项目里就消失了。
+    set_spec = function(id, spec_json) {
+      if (is.null(.pins[[id]])) return(FALSE)
+      .pins[[id]]$specJson <<- spec_json
+      .pins[[id]]$t <<- format(Sys.time(), "%m-%d %H:%M")
+      .pins[[id]]$rev <<- as.integer(.pins[[id]]$rev %||% 0L) + 1L
+      .save()
+      TRUE
     },
     rename = function(id, label) {
       if (!is.null(.pins[[id]])) {
@@ -89,6 +105,8 @@ Pins <- local({
           label = as.character(it$label %||% it$id),
           project = as.character(it$project %||% ""),
           t = as.character(it$t %||% ""),
+          # 缩略图版本号：前端拼进 URL 做缓存失效（老条目没有该字段，按 0 处理）
+          rev = as.integer(it$rev %||% 0L),
           src = as.character(src$name %||% ""),
           srcType = as.character(src$type %||% "none"),
           layers = length((sp %||% list())$layers %||% list()),

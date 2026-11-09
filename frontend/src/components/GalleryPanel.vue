@@ -28,22 +28,34 @@ const filteredPins = computed(() => {
   })
 })
 
-function thumbUrl(p) { return `/api/pins/thumb/${p.id}.png` }
+// 缩略图地址带上 rev：条目被「更新」后 rev 变化，URL 才会变，
+// 浏览器才会重新取图（只删后端缓存文件、加 no-store 都不够 —— URL 不变就不发请求）
+function thumbUrl(p) {
+  return `/api/pins/thumb/${p.id}.png?v=${p.rev || 0}`
+}
 
-async function saveCurrent() {
+// 存入图库：编辑自某条图库条目时默认覆盖更新（标签不变），否则新建。
+// mode='new' 用于「另存为新条目」。
+async function saveCurrent(mode = 'auto') {
   if (!spec.spec.layers.length) {
     ElMessage.warning('当前没有图层，先在画布上构建一个图')
     return
   }
   saving.value = true
   try {
-    const id = await pins.saveCurrent()
-    ElMessage.success(`已存入图库：${pins.byId[id]?.label || id}`)
+    const res = await pins.saveCurrent(null, mode)
+    const label = pins.byId[res.id]?.label || res.id
+    if (res.created) ElMessage.success(`已另存为新条目：${label}`)
+    else ElMessage.success(`已更新图库条目：${label}`)
   } catch (e) {
     ElMessage.error(e.message)
   } finally {
     saving.value = false
   }
+}
+
+function onSaveCommand(cmd) {
+  saveCurrent(cmd === 'new' ? 'new' : 'update')
 }
 
 const saving = ref(false)
@@ -55,6 +67,9 @@ async function openCode(p) {
   try {
     const res = await pins.openCode(p.id)
     if (res.type !== 'code') return
+    // 画布现在是代码图，不再对应任何 spec 条目
+    spec.sourcePinId = ''
+    spec.sourcePinLabel = ''
     spec.last = { ...(spec.last || {}), ok: true, pngUrl: res.pngUrl || null, png: null,
       code: res.code, warnings: [], messages: [], error: null, elapsed: 0,
       renderedFromCode: true }
@@ -125,6 +140,9 @@ async function openSpec(p) {
   // 顺序不能反：data.select() 会读 spec.spec.data 的加工步骤来算列，
   // 所以先 loadProject 再 select，列才是这张图对应的列。
   spec.loadProject(pinSpec)
+  // 记住来源：之后「存入图库」会默认覆盖更新这一条（标签不变）
+  spec.sourcePinId = p.id
+  spec.sourcePinLabel = p.label
   // 图谱条目永远是单图，清掉可能残留的拼图状态与代码图标记
   spec.spec.combine = { ...(spec.spec.combine || {}), active: false, slots: [] }
   if (spec.last) spec.last.renderedFromCode = false
@@ -153,8 +171,25 @@ onMounted(() => { pins.load() })
   <div class="gg-tab-scroll">
     <div class="gg-subhead">图库（把画布当前图存档复用）</div>
     <div style="padding: 0 12px 6px">
-      <el-button size="small" type="primary" plain :loading="saving"
-        :disabled="!spec.spec.layers.length || spec.composeActive" @click="saveCurrent">
+      <!-- 编辑自某条图库条目时：主按钮覆盖更新那条，下拉里保留「另存为新条目」 -->
+      <el-dropdown v-if="spec.sourcePinId" split-button size="small" type="primary" plain
+        :disabled="!spec.spec.layers.length || spec.composeActive || saving"
+        @click="onSaveCommand('update')" @command="onSaveCommand">
+        <el-icon style="margin-right:4px"><Refresh /></el-icon>
+        更新到「{{ spec.sourcePinLabel || spec.sourcePinId }}」
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="update">
+              更新到「{{ spec.sourcePinLabel || spec.sourcePinId }}」
+            </el-dropdown-item>
+            <el-dropdown-item command="new" divided>
+              另存为新条目
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-button v-else size="small" type="primary" plain :loading="saving"
+        :disabled="!spec.spec.layers.length || spec.composeActive" @click="saveCurrent('new')">
         <el-icon><AddFilled /></el-icon>存入当前绘图
       </el-button>
       <span v-if="spec.composeActive" class="gal-hint">

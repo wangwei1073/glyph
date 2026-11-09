@@ -194,6 +194,9 @@ export const editsClear = (source) => post('/api/edits/clear', { source })
 // 图库（pins，用于 patchwork 拼图）
 export const getPins = () => api('/api/pins')
 export const savePin = (specJson, label = null, project = '') => post('/api/pins/save', { specJson, label, project })
+// 覆盖更新已有条目（标签不变）；条目已删除时后端会回退为新建，返回 created 标记
+export const updatePin = (id, specJson, label = null, project = '') =>
+  post('/api/pins/update', { id, specJson, label, project })
 export const deletePin = (id) => post('/api/pins/delete', { id })
 export const saveCodePin = (payload) => post('/api/pins/save-code', payload)
 export const openPin = (id) => post('/api/pins/open', { id })

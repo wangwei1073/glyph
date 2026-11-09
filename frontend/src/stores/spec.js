@@ -55,6 +55,10 @@ export const useSpecStore = defineStore('spec', {
     // pngUrl: /api/plot/xxx.png（后端落盘）；png: base64 备用
     last: { pngUrl: null, png: null, code: '', warnings: [], messages: [], error: null, elapsed: 0, ok: false },
     pendingCode: '',
+    // 画布内容来自哪个图库条目（打开 spec 图后记下）。
+    // 用于「存入图库」时决定是覆盖更新那条、还是另存为新条目。
+    sourcePinId: '',
+    sourcePinLabel: '',
     renderOpts: { width: 900, height: 560, dpi: 150 },
     dark: false,
     history: [],
@@ -438,6 +442,10 @@ export const useSpecStore = defineStore('spec', {
       this.spec = merged
       this.ensureDefaultTheme()
       this.selectedLayer = 0
+      // 通用载入入口（项目文件 / 草稿恢复 / 空项目）：不再对应任何图库条目。
+      // 从图库打开 spec 图时，调用方会在这之后重新设上来源。
+      this.sourcePinId = ''
+      this.sourcePinLabel = ''
     },
     // 数据源切换后，丢弃指向不存在列的映射（否则渲染报「找不到对象 'xxx'」）
     pruneMappings(colNames) {

@@ -1,7 +1,7 @@
 // Glyph - 图库 store：保存当前绘图、管理槽位，供拼图面板使用
 // 图库按项目隔离：条目带 project 字段；旧条目（无 project）对所有项目可见
 import { defineStore } from 'pinia'
-import { getPins, savePin, deletePin, saveCodePin, openPin } from '../api'
+import { getPins, savePin, updatePin, deletePin, saveCodePin, openPin } from '../api'
 import { useSpecStore } from './spec'
 
 export const usePinStore = defineStore('pins', {
@@ -31,18 +31,33 @@ export const usePinStore = defineStore('pins', {
         this.loading = false
       }
     },
-    async saveCurrent(label = null) {
+    // 把当前画布存入图库。
+    // 若画布是「从某个图库条目打开并编辑」而来（spec.sourcePinId），
+    // mode='update' 会覆盖那条（标签不变），mode='new' 则另存为新条目。
+    // 默认 auto：有来源就更新，否则新建。
+    async saveCurrent(label = null, mode = 'auto') {
       const spec = useSpecStore()
       const obj = JSON.parse(JSON.stringify(spec.spec))
       delete obj.combine       // 图库条目永远是单图
       this.saving = true
       try {
-        const res = await savePin(JSON.stringify(obj), label, spec.projectId)
-        if (res.ok) {
+        const wantUpdate = mode === 'update' || (mode === 'auto' && !!spec.sourcePinId)
+        if (wantUpdate && spec.sourcePinId) {
+          const res = await updatePin(spec.sourcePinId, JSON.stringify(obj), label, spec.projectId)
+          if (!res.ok) throw new Error(res.error || '更新失败')
           this.all = res.pins || []
-          return res.id
+          // 后端在条目已被删除时会回退为新建，这里同步记住新 id
+          spec.sourcePinId = res.id
+          spec.sourcePinLabel = this.all.find(p => p.id === res.id)?.label || spec.sourcePinLabel
+          return { id: res.id, created: !!res.created }
         }
-        throw new Error(res.error || '保存失败')
+        const res = await savePin(JSON.stringify(obj), label, spec.projectId)
+        if (!res.ok) throw new Error(res.error || '保存失败')
+        this.all = res.pins || []
+        // 另存后，画布对应的就是新条目
+        spec.sourcePinId = res.id
+        spec.sourcePinLabel = this.all.find(p => p.id === res.id)?.label || ''
+        return { id: res.id, created: true }
       } finally {
         this.saving = false
       }

@@ -29,7 +29,8 @@ const cb = () => {
   return c
 }
 
-function thumbUrl(p) { return `/api/pins/thumb/${p.id}.png` }
+// 缩略图带 rev：条目更新后 URL 变化才会重新取图（与图库面板一致）
+function thumbUrl(p) { return `/api/pins/thumb/${p.id}.png?v=${p.rev || 0}` }
 
 function addSlot() {
   if (!ensurePatchwork()) return
