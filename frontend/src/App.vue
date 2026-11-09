@@ -19,6 +19,24 @@ const spec = useSpecStore()
 const pins = usePinStore()
 const ui = useUiStore()
 
+// ---- 右侧栏宽度拖拽（持久化） ----
+const rightWidth = ref(Number(localStorage.getItem('gg-right-w')) || 400)
+function startResize() {
+  document.body.style.cursor = 'col-resize'
+  const move = (ev) => {
+    const max = Math.round(window.innerWidth * 0.65)
+    rightWidth.value = Math.min(max, Math.max(300, window.innerWidth - ev.clientX))
+  }
+  const up = () => {
+    document.body.style.cursor = ''
+    localStorage.setItem('gg-right-w', String(rightWidth.value))
+    window.removeEventListener('mousemove', move)
+    window.removeEventListener('mouseup', up)
+  }
+  window.addEventListener('mousemove', move)
+  window.addEventListener('mouseup', up)
+}
+
 // ---- 自动渲染（深度 watch spec + 渲染设置，550ms 防抖） ----
 let debounceTimer = null
 function scheduleRender() {
@@ -289,7 +307,8 @@ function onProjectCmd(cmd) {
         @click="ui.toggleRight()">
         <el-icon><ArrowLeft /></el-icon>
       </button>
-      <div v-show="ui.rightOpen" class="gg-right"><EditorTabs /></div>
+      <div v-show="ui.rightOpen" class="gg-resizer" title="拖拽调整宽度" @mousedown.prevent="startResize" />
+      <div v-show="ui.rightOpen" class="gg-right" :style="{ width: rightWidth + 'px' }"><EditorTabs /></div>
     </div>
   </div>
 </template>

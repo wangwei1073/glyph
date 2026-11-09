@@ -130,8 +130,10 @@ body {
   display: flex; flex-direction: column; overflow: hidden;
 }
 .gg-center { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.gg-resizer { width: 5px; flex-shrink: 0; cursor: col-resize; background: transparent; transition: background .15s; }
+.gg-resizer:hover { background: var(--gg-brand-2, #eaf1fb); }
 .gg-right {
-  width: clamp(360px, 30vw, 432px); min-width: 360px; flex-shrink: 0;
+  width: 400px; min-width: 300px; flex-shrink: 0;
   border-left: 1px solid var(--gg-border);
   background: var(--gg-panel);
   display: flex; flex-direction: column; overflow: hidden;
@@ -346,5 +348,7 @@ html.dark .gg-canvas-wrap { background: var(--gg-canvas); }
 
 @media (max-width: 1200px) {
   .gg-left { min-width: 220px; }
-  .gg-right { min-width: 320px; }
+  .gg-resizer { width: 5px; flex-shrink: 0; cursor: col-resize; background: transparent; transition: background .15s; }
+.gg-resizer:hover { background: var(--gg-brand-2, #eaf1fb); }
+.gg-right { min-width: 320px; }
 }
