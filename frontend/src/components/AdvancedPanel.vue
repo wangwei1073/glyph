@@ -1,6 +1,6 @@
 <script setup>
 // 高级面板：原始代码模式 / plotly / 扩展状态
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
@@ -16,6 +16,7 @@ let EditorView, rMode, oneDark
 
 const rawCode = ref('')
 const rawRunning = ref(false)
+const consoleClass = computed(() => ({ hasErr: !!(spec.last && spec.last.error) }))
 
 async function initEditor() {
   if (editor) return editor
@@ -183,22 +184,37 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
       </el-button>
     </div>
     <div ref="editorEl" class="cm-editor-box" @keydown.ctrl.enter.prevent="runRaw" />
-    <div class="gg-hint" style="padding: 4px 12px">
-      当前数据的加工结果绑定在变量 <code class="gg-mono">df</code> 上；修改代码后点运行即可覆盖预览。
+    <div class="adv-console" :class="consoleClass">
+      <div class="adv-console-head">
+        <span>输出</span>
+        <span class="gg-hint">
+          {{ spec.last && spec.last.ok ? `运行成功 · ${spec.last.elapsed}ms` : '尚未运行' }}
+          · 图形显示在中间画布
+        </span>
+      </div>
+      <div v-if="spec.last && spec.last.error" class="adv-line err">{{ spec.last.error }}</div>
+      <div v-for="(w, i) in (spec.last && spec.last.warnings) || []" :key="'w' + i" class="adv-line warn">警告：{{ w }}</div>
+      <div v-for="(m, i) in (spec.last && spec.last.messages) || []" :key="'m' + i" class="adv-line">{{ m }}</div>
+      <div v-if="!spec.last || (!spec.last.error && !(spec.last.warnings || []).length)" class="adv-line muted">
+        {{ spec.last && spec.last.ok ? '无错误、无警告。' : '运行后可在此查看错误与警告。' }}
+      </div>
     </div>
 
-    <div class="gg-subhead gg-section-gap">渲染设置</div>
-    <div class="p-row">
-      <label>预览尺寸</label>
-      <span class="gg-hint-md">
-        {{ spec.renderOpts.width }} × {{ spec.renderOpts.height }} @ {{ spec.renderOpts.dpi }} dpi
-        （在画布顶部工具栏调整）
-      </span>
-    </div>
-    <div class="p-row">
-      <label>数据行数</label>
-      <span class="gg-hint-md">当前渲染使用的 df 已应用筛选/新增列/抽样</span>
-    </div>
+    <el-collapse class="adv-meta">
+      <el-collapse-item title="渲染信息（只读）" name="meta">
+        <div class="p-row">
+          <label>预览尺寸</label>
+          <span class="gg-hint-md">
+            {{ spec.renderOpts.width }} × {{ spec.renderOpts.height }} @ {{ spec.renderOpts.dpi }} dpi
+            （在画布顶部工具栏调整）
+          </span>
+        </div>
+        <div class="p-row">
+          <label>数据行数</label>
+          <span class="gg-hint-md">当前 df 已应用数据准备的筛选/新增列/抽样</span>
+        </div>
+      </el-collapse-item>
+    </el-collapse>
   </div>
 </template>
 
@@ -206,9 +222,9 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 .adv-pad { padding: 0 12px; }
 .cm-editor-box {
   margin: 8px 12px; border: 1px solid var(--gg-border); border-radius: var(--gg-r-ctl);
-  overflow: hidden; max-height: 340px; font-size: 13px;
+  overflow: hidden; height: 46vh; min-height: 320px; font-size: 13px;
 }
-.cm-editor-box :deep(.cm-editor) { max-height: 340px; }
+.cm-editor-box :deep(.cm-editor) { height: 100%; }
 .cm-editor-box :deep(.cm-scroller) { overflow: auto; }
 .ext-row { display: flex; align-items: center; gap: 4px; padding: 4px 0; font-size: 13px; }
 .ext-name { margin-left: 4px; }
@@ -221,4 +237,12 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
   margin-left: auto; padding: 0 5px; height: 20px; font-size: 11px;
   color: var(--gg-brand); flex-shrink: 0;
 }
+.adv-console { margin: 8px 12px 4px; border: 1px solid var(--gg-border); border-radius: var(--gg-r-ctl); background: #fbfcfe; padding: 6px 8px; }
+.adv-console.hasErr { border-color: #f3c4c0; background: #fef7f6; }
+.adv-console-head { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--gg-text-3); font-weight: 600; }
+.adv-line { font-family: Consolas, monospace; font-size: 11.5px; color: var(--gg-text-2); padding: 3px 0; white-space: pre-wrap; }
+.adv-line.err { color: #c0392b; }
+.adv-line.warn { color: #b7791f; }
+.adv-line.muted { color: var(--gg-text-4); font-family: inherit; }
+.adv-meta { margin: 4px 12px 8px; }
 </style>
