@@ -63,6 +63,28 @@ function addSlot() {
   c.slots.push({ pin: pins.items[0]?.id || '', op: '+' })
   if (c.slots.length && !c.active) c.active = true
 }
+
+const pickerVisible = ref(false)
+const pickerSel = ref([])
+
+function openPicker() {
+  if (!ensurePatchwork()) return
+  pickerSel.value = []
+  pickerVisible.value = true
+}
+function togglePick(id) {
+  const i = pickerSel.value.indexOf(id)
+  if (i >= 0) pickerSel.value.splice(i, 1)
+  else pickerSel.value.push(id)
+}
+function confirmPicker() {
+  if (!pickerSel.value.length) return
+  spec.pushHistory()
+  const c = cb()
+  for (const id of pickerSel.value) c.slots.push({ pin: id, op: '+' })
+  if (c.slots.length) c.active = true
+  pickerVisible.value = false
+}
 function removeSlot(i) {
   spec.pushHistory()
   const c = cb()
@@ -195,6 +217,9 @@ async function openCode(p) {
       <el-button size="small" text :disabled="!pins.items.length || !patchworkOn" @click="addSlot">
         <el-icon><Plus /></el-icon>添加槽位
       </el-button>
+      <el-button size="small" text :disabled="!pins.items.length || !patchworkOn" @click="openPicker">
+        <el-icon><Grid /></el-icon>从图库选择…
+      </el-button>
     </div>
     <div v-if="spec.composeActive" style="padding:0 12px 8px">
       <el-alert type="success" :closable="false" show-icon>
@@ -273,6 +298,30 @@ async function openCode(p) {
       </el-select>
     </div>
   </div>
+
+  <el-dialog v-model="pickerVisible" title="从图库选择（按选择顺序入槽）" width="560" append-to-body>
+    <div class="pick-grid">
+      <div v-for="p in pins.items" :key="p.id" class="pick-card"
+        :class="{ on: pickerSel.includes(p.id) }" @click="togglePick(p.id)">
+        <div class="pick-thumb">
+          <img :src="thumbUrl(p)" loading="lazy" alt="" />
+          <span v-if="pickerSel.includes(p.id)" class="pick-no">{{ pickerSel.indexOf(p.id) + 1 }}</span>
+        </div>
+        <div class="pick-name" :title="p.label">{{ p.label }}</div>
+        <div class="pick-meta">
+          <el-tag v-if="p.type === 'code'" size="small" type="warning">代码</el-tag>
+          <span v-else>{{ p.layers }} 层</span>
+        </div>
+      </div>
+    </div>
+    <div v-if="!pins.items.length" class="gg-empty-hint" style="padding:12px">图库为空</div>
+    <template #footer>
+      <el-button @click="pickerVisible = false">取消</el-button>
+      <el-button type="primary" :disabled="!pickerSel.length" @click="confirmPicker">
+        加入 {{ pickerSel.length }} 个槽位
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -302,4 +351,13 @@ async function openCode(p) {
 .pc-name { font-size: 12px; font-weight: 600; padding: 4px 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-meta { font-size: 10.5px; color: var(--gg-text-4); padding: 1px 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-actions { display: flex; justify-content: flex-end; padding: 2px 4px 4px; }
+.pick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 420px; overflow: auto; }
+.pick-card { border: 1px solid var(--gg-border); border-radius: 6px; overflow: hidden; cursor: pointer; background: #fff; }
+.pick-card.on { border-color: var(--gg-brand); box-shadow: 0 0 0 1px var(--gg-brand) inset; }
+.pick-thumb { position: relative; height: 88px; background: #f6f8fb; }
+.pick-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pick-no { position: absolute; top: 4px; right: 4px; min-width: 18px; height: 18px; border-radius: 9px;
+  background: var(--gg-brand); color: #fff; font-size: 11px; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+.pick-name { font-size: 12px; padding: 4px 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-meta { padding: 2px 6px 5px; font-size: 10.5px; color: var(--gg-text-4); }
 </style>
