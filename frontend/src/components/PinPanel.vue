@@ -11,6 +11,17 @@ const pins = usePinStore()
 const spec = useSpecStore()
 const meta = useMetaStore()
 const saving = ref(false)
+const q = ref('')
+const typeFilter = ref('all')
+const filteredPins = computed(() => {
+  const kw = q.value.trim().toLowerCase()
+  return pins.items.filter(p => {
+    if (typeFilter.value !== 'all' && (p.type || 'spec') !== typeFilter.value) return false
+    if (!kw) return true
+    return (p.label || '').toLowerCase().includes(kw) || (p.src || '').toLowerCase().includes(kw)
+  })
+})
+function thumbUrl(p) { return `/api/pins/thumb/${p.id}.png` }
 
 // 拼图组合依赖 patchwork；关闭后禁用组合相关操作（图库存取本身不受影响）
 const patchworkOn = computed(() => !!(meta.ext && meta.ext.patchwork))
@@ -115,27 +126,39 @@ async function openCode(p) {
       </span>
     </div>
     <div v-if="pins.loading" v-loading="true" style="min-height:40px" />
-    <div v-for="p in pins.items" :key="p.id" class="pin-row">
-      <span class="pin-badge gg-mono">{{ p.id }}</span>
-      <el-tag v-if="p.type === 'code'" size="small" type="warning">代码</el-tag>
-      <span class="pin-name">{{ p.label }}</span>
-      <span class="pin-meta">
-        {{ p.layers }} 层
-        <template v-if="p.srcType === 'dataset'"> · {{ p.src }}</template>
-        <template v-else-if="p.srcType === 'user'"> · 自有数据</template>
-      </span>
-      <el-button v-if="p.type === 'code'" size="small" text type="primary" @click="openCode(p)">打开</el-button>
-      <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
-        <template #reference>
-          <el-button size="small" text type="danger"><el-icon><Delete /></el-icon></el-button>
-        </template>
-      </el-popconfirm>
+    <div class="pin-tools">
+      <el-input v-model="q" size="small" placeholder="搜索图库…" clearable />
+      <el-select v-model="typeFilter" size="small" style="width:104px">
+        <el-option value="all" label="全部" />
+        <el-option value="spec" label="图" />
+        <el-option value="code" label="代码" />
+      </el-select>
+    </div>
+    <div class="pin-grid">
+      <div v-for="p in filteredPins" :key="p.id" class="pin-card" :class="{ code: p.type === 'code' }">
+        <div class="pc-thumb">
+          <img :src="thumbUrl(p)" loading="lazy" alt="" />
+          <el-tag v-if="p.type === 'code'" size="small" type="warning" class="pc-badge">代码</el-tag>
+        </div>
+        <div class="pc-name" :title="p.label">{{ p.label }}</div>
+        <div class="pc-meta">
+          {{ p.type === 'code' ? '代码图' : (p.layers + ' 层') }}
+          <template v-if="p.srcType === 'dataset'"> · {{ p.src }}</template>
+          <template v-else-if="p.srcType === 'user'"> · 自有数据</template>
+        </div>
+        <div class="pc-actions">
+          <el-button v-if="p.type === 'code'" size="small" text type="primary" @click="openCode(p)">打开</el-button>
+          <el-popconfirm title="从图库删除该条目？" width="200" @confirm="pins.remove(p.id)">
+            <template #reference>
+              <el-button size="small" text type="danger"><el-icon><Delete /></el-icon></el-button>
+            </template>
+          </el-popconfirm>
+        </div>
+      </div>
     </div>
     <div v-if="!pins.items.length && !pins.loading" class="gg-empty-hint" style="padding:10px 12px">
       图库为空：把画布当前图存进来，即可参与拼图组合
-    </div>
-
-    <div class="gg-subhead" style="margin-top:14px">组合序列</div>
+    </div><div class="gg-subhead" style="margin-top:14px">组合序列</div>
     <el-alert v-if="!patchworkOn" type="warning" :closable="false" show-icon
       style="margin:0 12px 6px" title="patchwork 扩展已关闭">
       拼图组合不可用。可在「高级 → 扩展管理」中重新启用；图库的存取不受影响。
@@ -269,4 +292,14 @@ async function openCode(p) {
   display: flex; align-items: center; justify-content: center;
 }
 .op { font-size: 13px; color: var(--el-text-color-secondary); }
+.pin-tools { display: flex; gap: 6px; padding: 0 12px 8px; }
+.pin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 8px; }
+.pin-card { border: 1px solid var(--gg-border); border-radius: 6px; overflow: hidden; background: #fff; }
+.pin-card.code { border-color: #f0d9b5; }
+.pc-thumb { position: relative; height: 84px; background: #f6f8fb; display: flex; align-items: center; justify-content: center; }
+.pc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pc-badge { position: absolute; top: 4px; left: 4px; }
+.pc-name { font-size: 12px; font-weight: 600; padding: 4px 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-meta { font-size: 10.5px; color: var(--gg-text-4); padding: 1px 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-actions { display: flex; justify-content: flex-end; padding: 2px 4px 4px; }
 </style>

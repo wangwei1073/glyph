@@ -891,7 +891,42 @@ ggspec_api_app <- function(state) {
     }
     if (startsWith(path, "/api/pins/thumb/") && method == "GET") {
       fn <- gsub("[^A-Za-z0-9_.-]", "", basename(path))
-      full <- file.path(dirname(state$pin_store$thumb_path("x")), fn)
+      id <- sub("\\.png$", "", fn)
+      full <- file.path(dirname(state$pin_store$thumb_path("x")), paste0(id, ".png"))
+      # 缩略图懒生成：spec 图按 spec 渲染，代码图按代码渲染，生成后缓存
+      if (!file.exists(full)) {
+        it <- tryCatch(state$pin_store$list_full()[[id]], error = function(e) NULL)
+        if (!is.null(it)) {
+          if (identical(as.character(it$type %||% "spec"), "code")) {
+            dp <- state$pin_store$data_path(id)
+            if (file.exists(dp)) state$raw_data <- tryCatch(readRDS(dp), error = function(e) state$raw_data)
+            ro <- it$renderOpts %||% list()
+            rr <- tryCatch(ggspec_render_rawcode(
+              as.character((it$code %||% list())$text %||% ""), state,
+              as.integer(ro$width %||% 900), as.integer(ro$height %||% 560),
+              as.integer(ro$dpi %||% 150), png_dir = state$plot_dir),
+              error = function(e) NULL)
+            if (!is.null(rr) && nzchar(rr$pngUrl %||% "")) {
+              file.copy(file.path(state$plot_dir, basename(rr$pngUrl)), full, overwrite = TRUE)
+            }
+          } else if (nzchar(as.character(it$specJson %||% ""))) {
+            sp <- tryCatch(jsonlite::fromJSON(as.character(it$specJson), simplifyVector = FALSE),
+                           error = function(e) NULL)
+            if (!is.null(sp)) {
+              gen <- tryCatch(ggspec_pipeline(sp, state$meta, state), error = function(e) NULL)
+              if (!is.null(gen)) {
+                rf <- tryCatch(ggspec_render_file(gen$eval_code, gen$env_list,
+                                                  width = 480, height = 300, dpi = 96),
+                               error = function(e) NULL)
+                if (!is.null(rf)) {
+                  file.copy(rf$path, full, overwrite = TRUE)
+                  unlink(rf$path)
+                }
+              }
+            }
+          }
+        }
+      }
       if (!file.exists(full)) return(list(status = 404L, headers = list("Content-Type" = "text/plain"), body = "not found"))
       return(list(status = 200L,
                   headers = list("Content-Type" = "image/png", "Cache-Control" = "no-store"),
