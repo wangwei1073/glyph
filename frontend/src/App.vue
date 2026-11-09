@@ -7,7 +7,7 @@ import { useDataStore } from './stores/data'
 import { useSpecStore } from './stores/spec'
 import { usePinStore } from './stores/pins'
 import { useUiStore } from './stores/ui'
-import { downloadBlob, snapshotData, getEdits, importEdits, pasteData } from './api'
+import { downloadBlob, snapshotData, getEdits, importEdits, pasteData, rawRender } from './api'
 import DataPanel from './components/DataPanel.vue'
 import Canvas from './components/Canvas.vue'
 import EditorTabs from './components/EditorTabs.vue'
@@ -192,6 +192,9 @@ async function saveProject() {
     format: PROJECT_FORMAT,
     savedAt: new Date().toISOString(),
     projectId: spec.projectId,
+    mode: (spec.last && spec.last.code) ? 'code' : 'spec',
+    code: (spec.last && spec.last.code) || null,
+    renderOpts: (spec.last && spec.last.code) ? { ...spec.renderOpts } : null,
     spec: spec.spec,
     data: embedded
   }
@@ -237,6 +240,18 @@ function loadProjectClick() {
       else if (finalSrc && finalSrc.type === 'user' &&
                data.sources.some(s => s.type === 'user' && s.name === finalSrc.id)) {
         await data.select(`user:${finalSrc.id}`)
+      }
+      if (project.mode === 'code' && project.code) {
+        spec.renderOpts = { ...spec.renderOpts, ...(project.renderOpts || {}) }
+        spec.pendingCode = project.code
+        const rr = await rawRender(project.code, spec.spec, spec.renderOpts)
+        if (rr.ok) {
+          spec.last = { ok: true, pngUrl: rr.pngUrl || null, png: rr.png || null,
+            code: project.code, warnings: rr.warnings || [], messages: [], error: null,
+            elapsed: rr.elapsedMs || 0 }
+        } else {
+          ElMessage.warning('代码图渲染失败：' + (rr.error || '未知错误'))
+        }
       }
       spec.markSaved()   // 载入即视为当前内容与文件一致
       ElMessage.success(embedded ? '项目已载入（含内嵌数据）' : '项目已载入')

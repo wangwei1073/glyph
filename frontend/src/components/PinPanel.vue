@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { usePinStore } from '../stores/pins'
 import { useSpecStore } from '../stores/spec'
 import { useMetaStore } from '../stores/meta'
+import { checkPackages } from '../api'
 
 const pins = usePinStore()
 const spec = useSpecStore()

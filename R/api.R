@@ -619,6 +619,14 @@ ggspec_api_app <- function(state) {
       if (inherits(out, "error")) return(json_error(conditionMessage(out), 400))
       return(json_response(list(ok = TRUE, code = out)))
     }
+    if (path == "/api/packages/check" && method == "POST") {
+      pkgs <- as.character(unlist(body$packages %||% list()))
+      pkgs <- pkgs[nzchar(pkgs)]
+      ok <- vapply(pkgs, function(p) requireNamespace(p, quietly = TRUE), logical(1))
+      return(json_response(list(ok = TRUE,
+                                installed = pkgs[ok],
+                                missing = pkgs[!ok])))
+    }
     if (path == "/api/rawrender" && method == "POST") {
       code <- body$code %||% ""
       spec <- body$spec %||% list()
