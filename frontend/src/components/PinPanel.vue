@@ -149,7 +149,7 @@ async function openCode(p) {
     <div v-for="(sl, i) in cb().slots" :key="i" class="slot-row">
       <span class="slot-no gg-mono">{{ i + 1 }}</span>
       <el-select v-model="sl.pin" size="small" filterable style="flex:1" placeholder="选择图库条目">
-        <el-option v-for="p in pins.items.filter(x => x.type !== 'code')" :key="p.id" :value="p.id"
+        <el-option v-for="p in pins.items" :key="p.id" :value="p.id"
           :label="`${p.id} ${p.label}（${p.layers} 层）`" />
       </el-select>
       <template v-if="i < cb().slots.length - 1">

@@ -745,6 +745,28 @@ ggspec_compose_code <- function(combine, meta, state) {
   for (i in seq_along(slots)) {
     sl <- slots[[i]]
     pid <- sl$pin %||% ""
+    # 代码图槽位：用 local({ ... }) 求值出 ggplot 对象，再参与 patchwork
+    it <- tryCatch(state$pin_store$list_full()[[pid]], error = function(e) NULL)
+    if (!is.null(it) && identical(as.character(it$type %||% "spec"), "code")) {
+      mode <- as.character((it$data %||% list())$mode %||% "none")
+      code_txt <- as.character((it$code %||% list())$text %||% "")
+      if (identical(mode, "snapshot")) {
+        warns <- c(warns, sprintf("槽位 %d (%s) 是带数据快照的代码图，暂不支持拼图，已跳过", i, pid))
+        next
+      }
+      if (!nzchar(trimws(code_txt))) {
+        warns <- c(warns, sprintf("槽位 %d (%s) 代码为空，已跳过", i, pid))
+        next
+      }
+      pn <- sprintf("p%d", length(plot_names) + 1L)
+      label <- state$pin_store$label(pid) %||% pid
+      wrapped <- sprintf("%s <- local({\n%s\n})", pn, code_txt)
+      chunks_display <- c(chunks_display, sprintf("# ---- %s (%s) ----", label, pn), wrapped, "")
+      chunks_eval <- c(chunks_eval, sprintf("# ---- %s (%s) ----", label, pn), wrapped, "")
+      plot_names <- c(plot_names, pn)
+      used_ops <- c(used_ops, as.character(sl$op %||% "+"))
+      next
+    }
     spec_json <- state$pin_store$get(pid)
     if (is.null(spec_json)) {
       warns <- c(warns, sprintf("槽位 %d 引用的图库项目 %s 不存在，已跳过", i, pid))
