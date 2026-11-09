@@ -286,20 +286,35 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
   <div class="gg-tab-scroll adv-root">
     <div class="gg-subhead">原始代码模式（完全自由，直接运行 R 代码；数据通过 df 变量使用）</div>
     <div class="adv-pad">
-      <el-button size="small" @click="loadFromSpec">
-        <el-icon><Download /></el-icon>载入当前图形的生成代码
+      <el-tooltip content="载入画布当前图形的生成代码" placement="bottom">
+        <el-button text size="small" @click="loadFromSpec"><el-icon><Download /></el-icon></el-button>
+      </el-tooltip>
+      <el-button size="small" type="primary" :loading="rawRunning" @click="runRaw" title="运行代码 (Ctrl+Enter)">
+        <el-icon><VideoPlay /></el-icon>运行
       </el-button>
-      <el-button size="small" type="primary" :loading="rawRunning" @click="runRaw">
-        <el-icon><VideoPlay /></el-icon>运行代码 (Ctrl+Enter)
-      </el-button>
-      <el-button size="small" @click="runSelection" title="运行选中的代码">运行选中</el-button>
-      <el-button size="small" text @click="doUndo" title="撤销">撤销</el-button>
-      <el-button size="small" text @click="doRedo" title="重做">重做</el-button>
-      <el-button size="small" text @click="doComment" title="注释 / 取消注释 (Ctrl+/)">注释</el-button>
-      <el-button size="small" @click="copyCode">复制</el-button>
-      <el-button size="small" @click="formatNow">格式化</el-button>
-      <el-button size="small" @click="downloadCode">下载 .R</el-button>
-      <el-button size="small" type="primary" plain @click="saveVisible = true">存入图库</el-button>
+      <el-button size="small" @click="runSelection" title="只运行选中的代码">运行选中</el-button>
+      <span class="adv-spacer" />
+      <el-tooltip content="撤销" placement="bottom">
+        <el-button text size="small" @click="doUndo"><el-icon><RefreshLeft /></el-icon></el-button>
+      </el-tooltip>
+      <el-tooltip content="重做" placement="bottom">
+        <el-button text size="small" @click="doRedo"><el-icon><RefreshRight /></el-icon></el-button>
+      </el-tooltip>
+      <el-tooltip content="注释 / 取消注释 (Ctrl+/)" placement="bottom">
+        <el-button text size="small" @click="doComment"><el-icon><EditPen /></el-icon></el-button>
+      </el-tooltip>
+      <el-tooltip content="复制代码" placement="bottom">
+        <el-button text size="small" @click="copyCode"><el-icon><CopyDocument /></el-icon></el-button>
+      </el-tooltip>
+      <el-tooltip content="格式化 (Ctrl+Shift+F)" placement="bottom">
+        <el-button text size="small" @click="formatNow"><el-icon><MagicStick /></el-icon></el-button>
+      </el-tooltip>
+      <el-tooltip content="下载 .R" placement="bottom">
+        <el-button text size="small" @click="downloadCode"><el-icon><Download /></el-icon></el-button>
+      </el-tooltip>
+      <el-tooltip content="存入图库（代码图）" placement="bottom">
+        <el-button text size="small" @click="saveVisible = true"><el-icon><Collection /></el-icon></el-button>
+      </el-tooltip>
     </div>
     <div ref="editorEl" class="cm-editor-box" @keydown.ctrl.enter.prevent="runRaw" />
     <div class="adv-console" :class="consoleClass">
@@ -335,7 +350,9 @@ onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 </template>
 
 <style scoped>
-.adv-pad { padding: 0 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.adv-pad { padding: 0 12px; display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; }
+.adv-pad .el-button { margin-left: 0; padding-left: 6px; padding-right: 6px; }
+.adv-spacer { flex: 1; }
 .adv-pad .el-button { margin-left: 0; }
 .cm-editor-box {
   margin: 8px 12px; border: 1px solid var(--gg-border); border-radius: var(--gg-r-ctl);
