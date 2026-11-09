@@ -1,0 +1,8 @@
+# ============================================================================
+# dsh-plugin-glyph —— bundle patch
+# 把 Glyph 插件的一行插进 Web / Desktop profile 的配置树。
+# 行名即包名；浏览器半边由 package.json 的 dsh.client 段声明。
+# ============================================================================
+- insert:
+    - id: dsh-plugin-glyph
+      name: 'dsh-plugin-glyph'

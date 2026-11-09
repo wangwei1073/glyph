@@ -1,0 +1,298 @@
+// Glyph DSH 插件 —— 宿主半（Node）
+//
+// 职责：
+//   1. 管理 Glyph 的 R 服务进程（启动 / 健康检查 / 退出）
+//   2. 起一个本地控制服务，供浏览器半调用（start / stop / status / push）
+//
+// 为什么要有控制服务：
+//   浏览器半无法启动进程，而 Glyph 是一个常驻的 R 进程，
+//   两者需要一个通道。用本地 HTTP + CORS 最简单，也便于外部调试（curl）。
+//
+// 配置（环境变量，都有默认值）：
+//   GLYPH_HOME      Glyph 安装目录     默认 E:/Desktop/vibecoding/ggplot-gui
+//   GLYPH_RSCRIPT   Rscript 可执行文件  默认 D:/R/R-4.6.1/bin/x64/Rscript.exe
+//   GLYPH_PORT      控制服务端口        默认 4399
+//   GLYPH_DATADIR   项目目录（数据存放） 默认取 DSH 工作区，再退回 process.cwd()
+
+import { spawn } from 'node:child_process'
+import { createServer } from 'node:http'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { createServer as createNetServer } from 'node:net'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+const DEFAULTS = {
+  home: process.env.GLYPH_HOME || 'E:/Desktop/vibecoding/ggplot-gui',
+  rscript: process.env.GLYPH_RSCRIPT || 'D:/R/R-4.6.1/bin/x64/Rscript.exe',
+  controlPort: Number(process.env.GLYPH_PORT || 4399),
+  // Glyph 自身用固定端口，便于在 DSH 的浏览器页签里记住地址
+  glyphPort: Number(process.env.GLYPH_APP_PORT || 4321),
+  dataDir: process.env.GLYPH_DATADIR || ''
+}
+
+// 记住上次选的项目目录（只在用户显式指定过之后才写）
+const WS_FILE = join(homedir(), '.dsh', 'glyph-workspace.txt')
+
+// 浏览器半的调试日志：客户端把加载/报错写回宿主，方便在没有开发者工具时定位问题
+const CLIENT_LOG = join(homedir(), '.dsh', 'glyph-client.log')
+
+function appendClientLog(obj) {
+  try {
+    const line = JSON.stringify({ at: new Date().toISOString(), ...obj }) + '\n'
+    writeFileSync(CLIENT_LOG, line, { flag: 'a' })
+  } catch { /* 忽略 */ }
+}
+
+function readClientLog(limit) {
+  try {
+    const txt = readFileSync(CLIENT_LOG, 'utf8')
+    return txt.split('\n').filter(Boolean).slice(-limit).join('\n')
+  } catch {
+    return ''
+  }
+}
+
+function loadSavedDir() {
+  try {
+    const d = readFileSync(WS_FILE, 'utf8').trim()
+    return d || ''
+  } catch { return '' }
+}
+
+function saveDir(dir) {
+  try { writeFileSync(WS_FILE, dir, 'utf8') } catch { /* 忽略 */ }
+}
+
+// ---- 运行时状态（模块级：一个 DSH 进程只有一个 Glyph 实例）----
+const state = {
+  child: null,        // R 进程
+  port: 0,            // Glyph 端口
+  starting: false,
+  lastError: '',
+  workspace: '',      // 当前项目目录
+  controlPort: DEFAULTS.controlPort,
+  server: null
+}
+
+/** 挑一个空闲端口，避免和用户自己的 Glyph 实例冲突。 */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const srv = createNetServer()
+    srv.unref()
+    srv.on('error', reject)
+    srv.listen(0, '127.0.0.1', () => {
+      const p = srv.address().port
+      srv.close(() => resolve(p))
+    })
+  })
+}
+
+/** 指定端口可用就用它，否则退回随机空闲端口。 */
+async function pickPort() {
+  const want = DEFAULTS.glyphPort
+  if (!want) return freePort()
+  const ok = await new Promise((resolve) => {
+    const srv = createNetServer()
+    srv.once('error', () => resolve(false))
+    srv.listen(want, '127.0.0.1', () => srv.close(() => resolve(true)))
+  })
+  return ok ? want : freePort()
+}
+
+/** 轮询 /api/meta，直到服务就绪或超时。 */
+async function waitReady(port, timeoutMs = 45000) {
+  const t0 = Date.now()
+  while (Date.now() - t0 < timeoutMs) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/api/meta`, { signal: AbortSignal.timeout(2000) })
+      if (r.ok) return true
+    } catch { /* 还没起来 */ }
+    await new Promise(r => setTimeout(r, 500))
+  }
+  return false
+}
+
+/** 启动 Glyph R 服务。已运行则直接返回。 */
+async function start(dir) {
+  if (state.child && state.port && (!dir || dir === state.workspace)) return status()
+  if (state.starting) {
+    // 并发调用：等它起来
+    for (let i = 0; i < 90; i++) {
+      await new Promise(r => setTimeout(r, 500))
+      if (!state.starting) break
+    }
+    return status()
+  }
+  state.starting = true
+  state.lastError = ''
+  try {
+    const runR = join(DEFAULTS.home, 'run.R')
+    if (!existsSync(runR)) throw new Error(`找不到 Glyph 入口：${runR}`)
+    if (!existsSync(DEFAULTS.rscript)) throw new Error(`找不到 Rscript：${DEFAULTS.rscript}`)
+
+    const port = await pickPort()
+    const ws = dir || state.workspace || DEFAULTS.dataDir || loadSavedDir() || DEFAULTS.home
+    state.workspace = ws
+    if (dir) saveDir(dir)
+
+    const args = ['run.R', '--port', String(port), '--no-browser', '--data-dir', ws]
+    const child = spawn(DEFAULTS.rscript, args, {
+      cwd: DEFAULTS.home,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    state.child = child
+    state.port = port
+
+    // 收集输出，出错时能看到原因
+    let errBuf = ''
+    child.stderr?.on('data', (b) => { errBuf = (errBuf + b.toString()).slice(-4000) })
+    child.stdout?.on('data', () => {})
+    child.on('exit', (code) => {
+      state.child = null
+      if (code !== 0 && !state.lastError) {
+        state.lastError = `Glyph 进程退出（code=${code}）${errBuf ? '：' + errBuf.slice(-300) : ''}`
+      }
+      state.port = 0
+    })
+
+    const ready = await waitReady(port)
+    if (!ready) {
+      state.lastError = 'Glyph 启动超时' + (errBuf ? '：' + errBuf.slice(-300) : '')
+      try { child.kill() } catch { /* 忽略 */ }
+      state.child = null
+      state.port = 0
+    }
+  } catch (e) {
+    state.lastError = String(e && e.message || e)
+  } finally {
+    state.starting = false
+  }
+  return status()
+}
+
+function stop() {
+  if (state.child) {
+    try { state.child.kill() } catch { /* 忽略 */ }
+  }
+  state.child = null
+  state.port = 0
+  return status()
+}
+
+function status() {
+  return {
+    running: !!state.child && !!state.port,
+    starting: state.starting,
+    port: state.port,
+    url: state.port ? `http://127.0.0.1:${state.port}` : '',
+    workspace: state.workspace,
+    home: DEFAULTS.home,
+    error: state.lastError
+  }
+}
+
+/** 把代码推给 Glyph 的编辑器。 */
+async function push(code, run) {
+  if (!status().running) {
+    const st = await start()
+    if (!st.running) return { ok: false, error: st.error || 'Glyph 未运行' }
+  }
+  const r = await fetch(`http://127.0.0.1:${state.port}/api/code/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ code: String(code ?? ''), run: !!run })
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok || !j.ok) return { ok: false, error: j.error || `HTTP ${r.status}` }
+  return { ok: true, seq: j.seq, url: `http://127.0.0.1:${state.port}` }
+}
+
+// ---- 控制服务 ----
+function json(res, code, obj) {
+  const body = JSON.stringify(obj)
+  res.writeHead(code, {
+    'Content-Type': 'application/json; charset=utf-8',
+    // 浏览器半与 DSH 页面同源不同端口，必须放开 CORS
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Cache-Control': 'no-store'
+  })
+  res.end(body)
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    const chunks = []
+    req.on('data', c => chunks.push(c))
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8')
+      if (!raw) return resolve({})
+      try { resolve(JSON.parse(raw)) } catch { resolve({}) }
+    })
+    req.on('error', () => resolve({}))
+  })
+}
+
+function startControlServer() {
+  if (state.server) return
+  const srv = createServer(async (req, res) => {
+    const url = new URL(req.url || '/', 'http://127.0.0.1')
+    const p = url.pathname
+    if (req.method === 'OPTIONS') return json(res, 204, {})
+    try {
+      if (p === '/status' && req.method === 'GET') return json(res, 200, { ok: true, ...status() })
+      if (p === '/start' && req.method === 'POST') {
+        const b = await readBody(req)
+        // 指定了不同目录且正在运行 → 先停再起（切工作区）
+        const wantDir = (b.dir && String(b.dir).trim()) || ''
+        if (wantDir && state.child && wantDir !== state.workspace) stop()
+        return json(res, 200, { ok: true, ...(await start(wantDir || undefined)) })
+      }
+      if (p === '/stop' && req.method === 'POST') return json(res, 200, { ok: true, ...stop() })
+      if (p === '/push' && req.method === 'POST') {
+        const b = await readBody(req)
+        if (!b.code || !String(b.code).trim()) return json(res, 400, { ok: false, error: '缺少 code' })
+        return json(res, 200, { ok: true, ...(await push(b.code, b.run)) })
+      }
+      // 浏览器半上报的调试事件
+      if (p === '/log' && req.method === 'POST') {
+        const b = await readBody(req)
+        appendClientLog(b)
+        return json(res, 200, { ok: true })
+      }
+      if (p === '/log' && req.method === 'GET') {
+        const n = Number(url.searchParams.get('n') || 60)
+        return json(res, 200, { ok: true, text: readClientLog(n) })
+      }
+      return json(res, 404, { ok: false, error: 'not found' })
+    } catch (e) {
+      return json(res, 500, { ok: false, error: String(e && e.message || e) })
+    }
+  })
+  srv.on('error', (e) => {
+    state.lastError = `控制服务端口 ${state.controlPort} 不可用：${e.message}`
+  })
+  srv.listen(state.controlPort, '127.0.0.1')
+  state.server = srv
+}
+
+// ---- 插件入口 ----
+// cordis 约定：模块要同时导出 name 与 apply（缺少 name 时加载器不会把它当作插件行）。
+export const name = 'glyph'
+
+// 注意：cordis 对未在 inject 里声明的服务会直接抛错，所以这里不碰 ctx.workspace，
+// 项目目录取「DSH 进程的工作目录」——也就是用户启动 DSH 的项目文件夹。
+export function apply(ctx) {
+  // 整个启动过程包在 try/catch 里：插件出问题绝不能影响 DSH 自身启动
+  try {
+    startControlServer()
+    const ws = DEFAULTS.dataDir || loadSavedDir() || DEFAULTS.home
+    start(ws).catch(() => { /* 失败信息记录在 status 里 */ })
+    ctx?.effect?.(() => () => { stop() })
+  } catch (e) {
+    // 记录但不抛出
+    state.lastError = String(e && e.message || e)
+  }
+}

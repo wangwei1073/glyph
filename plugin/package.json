@@ -1,0 +1,34 @@
+{
+  "name": "dsh-plugin-glyph",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Glyph (ggplot2 GUI) 插件：侧栏入口启动服务与界面，聊天代码块一键推送到 Glyph 出图",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    },
+    "compatibility": {
+      "dsh": ">=0.2.0-rc.1 <0.3.0-0"
+    }
+  },
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.0-rc.1 <0.3.0-0"
+  }
+}
