@@ -14,21 +14,90 @@
 //   GLYPH_PORT      控制服务端口        默认 4399
 //   GLYPH_DATADIR   项目目录（数据存放） 默认取 DSH 工作区，再退回 process.cwd()
 
-import { spawn } from 'node:child_process'
+import { spawn, execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { createServer as createNetServer } from 'node:net'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const DEFAULTS = {
-  home: process.env.GLYPH_HOME || 'E:/Desktop/vibecoding/ggplot-gui',
-  rscript: process.env.GLYPH_RSCRIPT || 'D:/R/R-4.6.1/bin/x64/Rscript.exe',
-  controlPort: Number(process.env.GLYPH_PORT || 4399),
-  // Glyph 自身用固定端口，便于在 DSH 的浏览器页签里记住地址
-  glyphPort: Number(process.env.GLYPH_APP_PORT || 4321),
-  dataDir: process.env.GLYPH_DATADIR || ''
+// ---- 配置 ----
+// 优先级：环境变量 > 配置文件 > 自动探测
+// 配置文件：~/.dsh/glyph-plugin.json  { "glyphHome": "...", "rscript": "...", "port": 4399, "appPort": 4321 }
+const CONFIG_FILE = join(homedir(), '.dsh', 'glyph-plugin.json')
+const PLUGIN_DIR = dirname(dirname(fileURLToPath(import.meta.url)))
+
+function readConfigFile() {
+  try {
+    const obj = JSON.parse(readFileSync(CONFIG_FILE, 'utf8'))
+    return (obj && typeof obj === 'object') ? obj : {}
+  } catch { return {} }
 }
+
+/** 在若干候选位置里找 Rscript.exe */
+function detectRscript() {
+  // 1) PATH 里能直接找到
+  try {
+    const out = execFileSync(process.platform === 'win32' ? 'where' : 'which',
+      ['Rscript'], { encoding: 'utf8', timeout: 4000 })
+    const first = out.split(/\r?\n/).map(s => s.trim()).filter(Boolean)[0]
+    if (first && existsSync(first)) return first
+  } catch { /* 继续 */ }
+  // 2) 常见安装目录
+  const roots = [
+    'C:/Program Files/R', 'C:/Program Files (x86)/R',
+    'D:/R', 'E:/R', '/usr/lib/R', '/usr/local/lib/R', '/Library/Frameworks/R.framework/Resources'
+  ]
+  for (const root of roots) {
+    if (!existsSync(root)) continue
+    let entries = []
+    try { entries = readdirSync(root).sort().reverse() } catch { continue }
+    for (const e of entries) {
+      const cands = [
+        join(root, e, 'bin', 'x64', 'Rscript.exe'),
+        join(root, e, 'bin', 'Rscript.exe'),
+        join(root, e, 'bin', 'Rscript')
+      ]
+      for (const c of cands) if (existsSync(c)) return c
+    }
+    const direct = join(root, 'bin', 'Rscript')
+    if (existsSync(direct)) return direct
+  }
+  return ''
+}
+
+/** 在若干候选位置里找 Glyph 的 run.R */
+function detectHome() {
+  const cands = [
+    process.env.GLYPH_HOME || '',
+    // 插件放在仓库内部时的常见布局：<repo>/plugin/lib/index.js
+    join(PLUGIN_DIR, '..', '..'),
+    join(PLUGIN_DIR, '..'),
+    join(homedir(), 'ggplot-gui'),
+    join(homedir(), 'Documents', 'ggplot-gui'),
+    'E:/Desktop/vibecoding/ggplot-gui',
+    'D:/vibecoding/ggplot-gui'
+  ]
+  for (const c of cands) {
+    if (!c) continue
+    try { if (existsSync(join(c, 'run.R'))) return c.replace(/\\/g, '/') } catch { /* 忽略 */ }
+  }
+  return ''
+}
+
+function loadConfig() {
+  const f = readConfigFile()
+  return {
+    home: process.env.GLYPH_HOME || f.glyphHome || detectHome(),
+    rscript: process.env.GLYPH_RSCRIPT || f.rscript || detectRscript(),
+    controlPort: Number(process.env.GLYPH_PORT || f.port || 4399),
+    glyphPort: Number(process.env.GLYPH_APP_PORT || f.appPort || 4321),
+    dataDir: process.env.GLYPH_DATADIR || f.dataDir || ''
+  }
+}
+
+const DEFAULTS = loadConfig()
 
 // 记住上次选的项目目录（只在用户显式指定过之后才写）
 const WS_FILE = join(homedir(), '.dsh', 'glyph-workspace.txt')
@@ -126,9 +195,22 @@ async function start(dir) {
   state.starting = true
   state.lastError = ''
   try {
-    const runR = join(DEFAULTS.home, 'run.R')
-    if (!existsSync(runR)) throw new Error(`找不到 Glyph 入口：${runR}`)
-    if (!existsSync(DEFAULTS.rscript)) throw new Error(`找不到 Rscript：${DEFAULTS.rscript}`)
+    const runR = join(DEFAULTS.home || '.', 'run.R')
+    if (!DEFAULTS.home || !existsSync(runR)) {
+      throw new Error(
+        `找不到 Glyph 入口（run.R）。\n` +
+        `当前配置的 Glyph 目录：${DEFAULTS.home || '(未设置)'}\n` +
+        `请设置环境变量 GLYPH_HOME，或写入配置文件 ${CONFIG_FILE}：` +
+        `{"glyphHome":"<Glyph 目录>","rscript":"<Rscript 路径>"}`
+      )
+    }
+    if (!DEFAULTS.rscript || !existsSync(DEFAULTS.rscript)) {
+      throw new Error(
+        `找不到 Rscript。当前值：${DEFAULTS.rscript || '(未检测到)'}\n` +
+        `请把 R 加入 PATH，或写入配置文件 ${CONFIG_FILE}：` +
+        `{"glyphHome":"<Glyph 目录>","rscript":"<Rscript 路径>"}`
+      )
+    }
 
     const port = await pickPort()
     const ws = dir || state.workspace || DEFAULTS.dataDir || loadSavedDir() || DEFAULTS.home
@@ -188,6 +270,8 @@ function status() {
     url: state.port ? `http://127.0.0.1:${state.port}` : '',
     workspace: state.workspace,
     home: DEFAULTS.home,
+    rscript: DEFAULTS.rscript,
+    configFile: CONFIG_FILE,
     error: state.lastError
   }
 }
@@ -255,6 +339,37 @@ function startControlServer() {
         const b = await readBody(req)
         if (!b.code || !String(b.code).trim()) return json(res, 400, { ok: false, error: '缺少 code' })
         return json(res, 200, { ok: true, ...(await push(b.code, b.run)) })
+      }
+      // 配置读写：换机器时不用改代码，写配置文件即可
+      if (p === '/config' && req.method === 'GET') {
+        return json(res, 200, {
+          ok: true,
+          configFile: CONFIG_FILE,
+          config: {
+            glyphHome: DEFAULTS.home,
+            rscript: DEFAULTS.rscript,
+            appPort: DEFAULTS.glyphPort,
+            controlPort: DEFAULTS.controlPort
+          }
+        })
+      }
+      if (p === '/config' && req.method === 'POST') {
+        const b = await readBody(req)
+        const next = readConfigFile()
+        if (b.glyphHome !== undefined) next.glyphHome = String(b.glyphHome || '')
+        if (b.rscript !== undefined) next.rscript = String(b.rscript || '')
+        if (b.appPort !== undefined) next.appPort = Number(b.appPort) || 4321
+        try {
+          writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2), 'utf8')
+        } catch (e) {
+          return json(res, 500, { ok: false, error: '写配置文件失败：' + String(e && e.message || e) })
+        }
+        if (b.glyphHome !== undefined) DEFAULTS.home = String(b.glyphHome || '')
+        if (b.rscript !== undefined) DEFAULTS.rscript = String(b.rscript || '')
+        if (b.appPort !== undefined) DEFAULTS.glyphPort = Number(b.appPort) || 4321
+        // 路径变了要重启才生效
+        stop()
+        return json(res, 200, { ok: true, configFile: CONFIG_FILE, ...(await start()) })
       }
       // 浏览器半上报的调试事件
       if (p === '/log' && req.method === 'POST') {
