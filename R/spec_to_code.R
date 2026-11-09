@@ -464,7 +464,9 @@
       trim = sprintf("%s$%s <- trimws(%s$%s)  # 去空格", df_name, nm, df_name, nm),
       upper = sprintf("%s$%s <- toupper(%s$%s)  # 转大写", df_name, nm, df_name, nm),
       lower = sprintf("%s$%s <- tolower(%s$%s)  # 转小写", df_name, nm, df_name, nm),
-      replace = sprintf("%s$%s <- gsub(%s, %s, %s$%s, fixed = TRUE)  # 文本替换",
+      split = sprintf("%s <- tidyr::separate(%s, %s, into = c(%s, %s), sep = %s, extra = 'drop')  # 拆分列",
+                      df_name, df_name, deparse(nm), deparse(as.character(tx$into1 %||% paste0(nm, "_1"))),
+                      deparse(as.character(tx$into2 %||% paste0(nm, "_2"))), deparse(as.character(tx$sep %||% ","))),      replace = sprintf("%s$%s <- gsub(%s, %s, %s$%s, fixed = TRUE)  # 文本替换",
                         df_name, nm, deparse(as.character(tx$from %||% "")),
                         deparse(as.character(tx$to %||% "")), df_name, nm),
       NULL)
@@ -501,6 +503,18 @@
         lines <- c(lines, sprintf("%s$%s <- with(%s, %s)  # 新增列 %s", df_name, mm$name, df_name, enc2utf8(as.character(mm$expr)), mm$name))
       }
     }
+  }
+  for (f in prep$fillna %||% list()) {
+    if (isTRUE(f$disabled) || !has_val(f$name)) next
+    nm <- f$name; m <- as.character(f$method %||% "constant")
+    line <- switch(m,
+      constant = sprintf("%s$%s[is.na(%s$%s)] <- %s  # 缺失填充", df_name, nm, df_name, nm,
+                         deparse(as.character(f$value %||% ""))),
+      mean = sprintf("%s$%s[is.na(%s$%s)] <- mean(%s$%s, na.rm = TRUE)  # 均值填充", df_name, nm, df_name, nm, df_name, nm),
+      median = sprintf("%s$%s[is.na(%s$%s)] <- median(%s$%s, na.rm = TRUE)  # 中位数填充", df_name, nm, df_name, nm, df_name, nm),
+      mode = sprintf("%s$%s[is.na(%s$%s)] <- names(sort(table(%s$%s), decreasing = TRUE))[1]  # 众数填充", df_name, nm, df_name, nm, df_name, nm),
+      NULL)
+    if (!is.null(line)) lines <- c(lines, line)
   }
   if (!isTRUE(prep$dropnaDisabled)) {
     cols <- as.character(unlist(prep$dropnaCols %||% list()))

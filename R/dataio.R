@@ -186,6 +186,20 @@ data_prep_summary <- function(df, prep) {
     if (!nzchar(nm) || !nm %in% names(d)) next
     x0 <- as.character(d[[nm]])
     op <- as.character(tx$op %||% "trim")
+    if (identical(op, "split")) {
+      sep <- as.character(tx$sep %||% ",")
+      if (!nzchar(sep)) sep <- ","
+      parts <- strsplit(x0, sep, fixed = TRUE)
+      i1 <- as.character(tx$into1 %||% paste0(nm, "_1"))
+      i2 <- as.character(tx$into2 %||% paste0(nm, "_2"))
+      d[[i1]] <- vapply(parts, function(p) if (length(p) >= 1) p[1] else NA_character_, "")
+      d[[i2]] <- vapply(parts, function(p) if (length(p) >= 2) p[2] else NA_character_, "")
+      steps[[length(steps) + 1]] <- list(type = "text", name = nm, op = "split",
+                                         into1 = i1, into2 = i2)
+      code <- c(code, sprintf("df <- tidyr::separate(df, %s, into = c(%s, %s), sep = %s, extra = 'drop')",
+                              deparse(nm), deparse(i1), deparse(i2), deparse(sep)))
+      next
+    }
     new <- switch(op,
       trim = trimws(x0), upper = toupper(x0), lower = tolower(x0),
       replace = {
@@ -247,6 +261,32 @@ data_prep_summary <- function(df, prep) {
                               paste(sprintf('"%s"', cols), collapse = ", "),
                               if (identical(prep$dropnaHow, "all")) "all" else "any"))
     }
+  }
+  for (f in prep$fillna %||% list()) {
+    if (isTRUE(f$disabled)) next
+    nm <- trimws(as.character(f$name %||% ""))
+    if (!nzchar(nm) || !nm %in% names(d)) next
+    x <- d[[nm]]
+    nas <- is.na(x)
+    if (!any(nas)) next
+    m <- as.character(f$method %||% "constant")
+    val <- switch(m,
+      constant = f$value %||% "",
+      mean = mean(suppressWarnings(as.numeric(x)), na.rm = TRUE),
+      median = stats::median(suppressWarnings(as.numeric(x)), na.rm = TRUE),
+      mode = {
+        tab <- table(x)
+        if (length(tab)) names(tab)[which.max(tab)] else NA
+      }, NA)
+    if (is.character(x) || identical(m, "mode")) x[nas] <- as.character(val)
+    else x[nas] <- suppressWarnings(as.numeric(val))
+    d[[nm]] <- x
+    steps[[length(steps) + 1]] <- list(type = "fillna", name = nm, method = m, filled = sum(nas))
+    code <- c(code, switch(m,
+      constant = sprintf("df$%s[is.na(df$%s)] <- %s", nm, nm, deparse(as.character(f$value %||% ""))),
+      mean = sprintf("df$%s[is.na(df$%s)] <- mean(df$%s, na.rm = TRUE)", nm, nm, nm),
+      median = sprintf("df$%s[is.na(df$%s)] <- median(df$%s, na.rm = TRUE)", nm, nm, nm),
+      mode = sprintf("df$%s[is.na(df$%s)] <- names(sort(table(df$%s), decreasing = TRUE))[1]", nm, nm, nm)))
   }
   if (!isTRUE(prep$filterDisabled) && nzchar(flt)) {
     before <- nrow(d)
@@ -310,6 +350,16 @@ data_prepare <- function(df, prep) {
     if (!nzchar(nm) || !nm %in% names(df)) next
     x <- as.character(df[[nm]])
     op <- as.character(tx$op %||% "trim")
+    if (identical(op, "split")) {
+      sep <- as.character(tx$sep %||% ",")
+      if (!nzchar(sep)) sep <- ","
+      parts <- strsplit(x, sep, fixed = TRUE)
+      i1 <- as.character(tx$into1 %||% paste0(nm, "_1"))
+      i2 <- as.character(tx$into2 %||% paste0(nm, "_2"))
+      df[[i1]] <- vapply(parts, function(p) if (length(p) >= 1) p[1] else NA_character_, "")
+      df[[i2]] <- vapply(parts, function(p) if (length(p) >= 2) p[2] else NA_character_, "")
+      next
+    }
     df[[nm]] <- switch(op,
       trim = trimws(x),
       upper = toupper(x),
@@ -348,6 +398,28 @@ data_prepare <- function(df, prep) {
       drop <- if (identical(prep$dropnaHow, "all")) apply(miss, 1, all) else apply(miss, 1, any)
       df <- df[!drop, , drop = FALSE]
     }
+  }
+
+  # 缺失值填充（在删除之后，按列填 常数 / 均值 / 中位数 / 众数）
+  for (f in prep$fillna %||% list()) {
+    if (isTRUE(f$disabled)) next
+    nm <- trimws(as.character(f$name %||% ""))
+    if (!nzchar(nm) || !nm %in% names(df)) next
+    x <- df[[nm]]
+    nas <- is.na(x)
+    if (!any(nas)) next
+    m <- as.character(f$method %||% "constant")
+    val <- switch(m,
+      constant = f$value %||% "",
+      mean = mean(suppressWarnings(as.numeric(x)), na.rm = TRUE),
+      median = stats::median(suppressWarnings(as.numeric(x)), na.rm = TRUE),
+      mode = {
+        tab <- table(x)
+        if (length(tab)) names(tab)[which.max(tab)] else NA
+      }, NA)
+    if (is.character(x) || identical(m, "mode")) x[nas] <- as.character(val)
+    else x[nas] <- suppressWarnings(as.numeric(val))
+    df[[nm]] <- x
   }
 
   # 行筛选

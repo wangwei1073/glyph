@@ -5,7 +5,7 @@ import { useDataStore } from './data'
 
 export function defaultSpec() {
   return {
-    data: { source: { type: 'none' }, filter: '', mutate: [], sample: null, seed: null, filterDisabled: false, sampleDisabled: false, types: [], text: [], outliers: [], dropnaCols: [], dropnaHow: 'any', dropnaDisabled: false, dedupCols: [], dedupEnabled: false },
+    data: { source: { type: 'none' }, filter: '', mutate: [], sample: null, seed: null, filterDisabled: false, sampleDisabled: false, types: [], text: [], outliers: [], fillna: [], dropnaCols: [], dropnaHow: 'any', dropnaDisabled: false, dedupCols: [], dedupEnabled: false },
     layers: [],
     scales: [],
     coord: { type: '', params: {}, flip: false },

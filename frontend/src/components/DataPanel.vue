@@ -149,6 +149,15 @@ const prepCount = computed(() => {
   n += (sd.outliers || []).filter(o => !o.disabled && o.name).length
   return n
 })
+function addFill() {
+  if (!Array.isArray(spec.spec.data.fillna)) spec.spec.data.fillna = []
+  spec.pushHistory()
+  spec.spec.data.fillna.push({ name: '', method: 'constant', value: '', disabled: false })
+}
+function rmFill(i) {
+  spec.pushHistory()
+  spec.spec.data.fillna.splice(i, 1)
+}
 function addOutlier() {
   if (!Array.isArray(spec.spec.data.outliers)) spec.spec.data.outliers = []
   spec.pushHistory()
@@ -193,7 +202,7 @@ async function loadPrepSummary() {
     ? { type: 'dataset', name: c.name }
     : { type: 'user', id: c.name }
   const sd = spec.spec.data
-  const prep = { filter: sd.filter || '', mutate: sd.mutate || [], sample: sd.sample, seed: sd.seed, filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled, types: sd.types || [], outliers: sd.outliers || [], dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled }
+  const prep = { filter: sd.filter || '', mutate: sd.mutate || [], sample: sd.sample, seed: sd.seed, filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled, types: sd.types || [], outliers: sd.outliers || [], fillna: sd.fillna || [], dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled }
   prepSummaryLoading.value = true
   try {
     const res = await getPrepSummary(source, prep)
@@ -217,6 +226,7 @@ function prepStepLabel(s) {
   if (s.error) return `失败：${s.error}`
   if (s.type === 'type') return `类型 ${s.name}→${s.to}`
   if (s.type === 'text') return `文本 ${s.name}`
+  if (s.type === 'fillna') return `填充 ${s.name} · ${s.filled} 个`
   if (s.type === 'outlier') return `异常值 ${s.name}${s.action === 'flag' ? ` · 标记 ${s.n}` : ''}`
   if (s.type === 'mutate') return `新增 ${s.name}`
   if (s.type === 'dropna') return `缺失值 −${s.removed} 行`
@@ -232,6 +242,7 @@ function resetPrep() {
   spec.spec.data.types = []
   spec.spec.data.text = []
   spec.spec.data.outliers = []
+  spec.spec.data.fillna = []
   spec.spec.data.dropnaCols = []
   spec.spec.data.dropnaDisabled = false
   spec.spec.data.dedupCols = []
@@ -459,11 +470,20 @@ function openPreview(colName = '') {
             <el-option value="upper" label="转大写" />
             <el-option value="lower" label="转小写" />
             <el-option value="replace" label="替换" />
+            <el-option value="split" label="拆分列" />
           </el-select>
           <template v-if="tx.op === 'replace'">
             <el-input v-model="tx.from" size="small" placeholder="查找" style="width:80px"
               :disabled="!!tx.disabled" @change="prepChanged" />
             <el-input v-model="tx.to" size="small" placeholder="替换为" style="width:80px"
+              :disabled="!!tx.disabled" @change="prepChanged" />
+          </template>
+          <template v-else-if="tx.op === 'split'">
+            <el-input v-model="tx.sep" size="small" placeholder="分隔符" style="width:70px"
+              :disabled="!!tx.disabled" @change="prepChanged" />
+            <el-input v-model="tx.into1" size="small" placeholder="新列1" style="width:90px"
+              :disabled="!!tx.disabled" @change="prepChanged" />
+            <el-input v-model="tx.into2" size="small" placeholder="新列2" style="width:90px"
               :disabled="!!tx.disabled" @change="prepChanged" />
           </template>
           <el-button size="small" text type="danger" @click="() => { rmText(i); prepChanged() }">
@@ -552,7 +572,35 @@ function openPreview(colName = '') {
       <!-- ③ 行筛选 -->
       <div class="prep-step">
         <div class="ps-head">
-          <span class="ps-idx">6</span><span class="ps-title">行筛选</span>
+          <span class="ps-idx">6</span><span class="ps-title">缺失值填充</span>
+          <span class="hint">常数 / 均值 / 中位数 / 众数</span>
+        </div>
+        <div v-for="(f, i) in spec.spec.data.fillna" :key="i" class="ps-line">
+          <el-select v-model="f.name" size="small" filterable placeholder="选择列" style="flex:1;min-width:0"
+            :disabled="!!f.disabled" @change="prepChanged">
+            <el-option v-for="c in data.columns" :key="c.name" :value="c.name" :label="c.name" />
+          </el-select>
+          <el-select v-model="f.method" size="small" style="width:110px" :disabled="!!f.disabled"
+            @change="prepChanged">
+            <el-option value="constant" label="常数" />
+            <el-option value="mean" label="均值" />
+            <el-option value="median" label="中位数" />
+            <el-option value="mode" label="众数" />
+          </el-select>
+          <el-input v-if="f.method === 'constant'" v-model="f.value" size="small" placeholder="填充值"
+            style="width:90px" :disabled="!!f.disabled" @change="prepChanged" />
+          <el-button size="small" text type="danger" @click="() => { rmFill(i); prepChanged() }">
+            <el-icon><Delete /></el-icon>
+          </el-button>
+          <el-switch size="small" :model-value="!f.disabled" title="启用/停用此步"
+            @update:model-value="(v) => { f.disabled = !v; prepChanged() }" />
+        </div>
+        <el-button size="small" text @click="addFill"><el-icon><Plus /></el-icon>缺失值填充</el-button>
+      </div>
+
+      <div class="prep-step">
+        <div class="ps-head">
+          <span class="ps-idx">7</span><span class="ps-title">行筛选</span>
           <span class="hint">R 逻辑表达式；点击下方列名插入</span>
           <span style="flex:1" />
           <el-switch size="small" :model-value="!spec.spec.data.filterDisabled"
@@ -570,7 +618,7 @@ function openPreview(colName = '') {
       <!-- ④ 去重 -->
       <div class="prep-step">
         <div class="ps-head">
-          <span class="ps-idx">7</span><span class="ps-title">去重</span>
+          <span class="ps-idx">8</span><span class="ps-title">去重</span>
           <span class="hint">按所选列去重；不选则按全部列</span>
           <span style="flex:1" />
           <el-switch size="small" :model-value="!!spec.spec.data.dedupEnabled"
@@ -587,7 +635,7 @@ function openPreview(colName = '') {
       <!-- ⑤ 抽样 -->
       <div class="prep-step">
         <div class="ps-head">
-          <span class="ps-idx">8</span><span class="ps-title">抽样</span>
+          <span class="ps-idx">9</span><span class="ps-title">抽样</span>
           <span class="hint">按随机种子抽取固定行数</span>
           <span style="flex:1" />
           <el-switch size="small" :model-value="!spec.spec.data.sampleDisabled"
