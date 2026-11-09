@@ -44,6 +44,8 @@ function startResize() {
 let debounceTimer = null
 function scheduleRender() {
   if (!spec.autoRender) return
+  // 代码图打开后画布由 spec.last 承载；空白 spec 的自动渲染会把图覆盖掉
+  if (!spec.spec.layers.length && spec.last && spec.last.code && spec.last.pngUrl) return
   clearTimeout(debounceTimer)
   spec.renderQueued = true
   debounceTimer = setTimeout(() => {
