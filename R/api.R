@@ -1,4 +1,4 @@
-# ggplotGUI - httpuv API 路由 + 静态文件服务
+# Glyph - httpuv API 路由 + 静态文件服务
 
 MIME_MAP <- c(
   html = "text/html; charset=utf-8", js = "application/javascript; charset=utf-8",
@@ -117,6 +117,27 @@ ggspec_api_app <- function(state) {
   route <- function(req, body) {
     path <- req$PATH_INFO
     method <- req$REQUEST_METHOD
+
+    ## ---- 退出服务 ----
+    ## 只置标志位，由 run.R 的主循环检测后优雅停止（httpuv::runServer 是阻塞的，无法从请求内部停止）
+    ## 注意：state 是 list（值语义），直接写 state$shutdown_requested 只改局部副本；
+    ## 必须通过环境（引用语义）把标志传回主循环。
+    if (path == "/api/shutdown" && method == "POST") {
+      if (!is.null(state$shutdown_flag) && is.environment(state$shutdown_flag)) {
+        state$shutdown_flag$requested <- TRUE
+      }
+      glog("收到退出请求，服务即将停止")
+      return(json_response(list(ok = TRUE, message = "服务正在退出")))
+    }
+
+    ## ---- 心跳：IDE 插件定时调用，用于判定宿主是否还活着 ----
+    ## 同样必须用环境回传（state 是值语义的 list）
+    if (path == "/api/heartbeat") {
+      if (!is.null(state$heartbeat_env) && is.environment(state$heartbeat_env)) {
+        assign("last", Sys.time(), envir = state$heartbeat_env)
+      }
+      return(json_response(list(ok = TRUE)))
+    }
 
     ## ---- 扩展管理 ----
     if (path == "/api/extensions" && method == "GET") {

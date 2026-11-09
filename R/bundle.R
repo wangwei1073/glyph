@@ -1,4 +1,4 @@
-# ggplotGUI - 可复现包（P1-3）
+# Glyph - 可复现包（P1-3）
 # 一次导出：图（PNG+PDF）+ 原始数据 CSV + 可运行代码 + sessionInfo + 图注草稿 + 项目文件
 # 全部打成一个 zip，解压后 `Rscript figure.R` 即可复现。
 
@@ -65,7 +65,7 @@ ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
   pkgs <- unique(c("ggplot2", sub("^library\\((.*)\\)$", "\\1", gen$packages %||% character(0))))
   ver_line <- paste(Filter(Negate(is.null), vapply(pkgs, pkg_ver, "")), collapse = " · ")
   caption <- c(
-    sprintf("# %s", (spec$labs %||% list())$title %||% "ggplotGUI figure"),
+    sprintf("# %s", (spec$labs %||% list())$title %||% "Glyph figure"),
     "",
     sprintf("- 数据来源：%s", if (nzchar(data_label)) data_label else "未使用数据"),
     sprintf("- 图形尺寸：%s × %s mm @ %d dpi（PNG）/ 同尺寸 PDF", w_mm, h_mm, dpi),
@@ -77,7 +77,7 @@ ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
   )
   writeLines(caption, file.path(bdir, "caption.md"), useBytes = TRUE)
 
-  # ---- 项目文件（可重新导入 ggplotGUI） ----
+  # ---- 项目文件（可重新导入 Glyph） ----
   env_data <- NULL
   if (is_user) {
     env_data <- list(
@@ -95,8 +95,8 @@ ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
 
   # ---- 说明 ----
   readme <- c(
-    "ggplotGUI 可复现包",
-    "=================",
+    "Glyph 可复现包",
+    "=============",
     "",
     "文件：",
     sprintf("- figure.png / figure.pdf   最终图（%s × %s mm @ %d dpi）", w_mm, h_mm, dpi),
@@ -104,7 +104,7 @@ ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
     if (is_user) "- data.csv                 本次使用的原始数据（加工步骤写在代码里）",
     "- sessionInfo.txt          运行环境与包版本",
     "- caption.md               图注草稿（需人工核对）",
-    "- project.json             可重新导入 ggplotGUI 的项目文件",
+    "- project.json             可重新导入 Glyph 的项目文件",
     "",
     "复现：",
     "1. 安装代码中用到的包（见 sessionInfo.txt）",

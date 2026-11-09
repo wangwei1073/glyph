@@ -1,4 +1,4 @@
-/* ggplotGUI 全局样式
+/* Glyph 全局样式
  *
  * 设计令牌（V1 一致性层）：颜色 / 字号 / 间距 / 圆角 / 阴影 / 控件高度。
  * 组件里优先引用这里的变量，不要再写死色值或字号。
@@ -52,6 +52,7 @@
   /* 布局与控件 */
   --gg-header-h: 52px;
   --gg-strip-h: 42px;   /* 左侧栏标题与画布工具栏的统一高度 */
+  --gg-foot-h: 34px;    /* 底部工具条统一高度：左栏工具区与画布底栏等高单行 */
   --gg-ctl-h: 28px;
 
   /* ---- Element Plus 主题变量（一次覆盖，组件不再各自染蓝） ---- */
@@ -121,7 +122,7 @@ body {
   color: var(--gg-text-1);
 }
 .gg-layout { height: 100%; display: flex; flex-direction: column; }
-.gg-main { flex: 1; min-height: 0; display: flex; }
+.gg-main { flex: 1; min-height: 0; display: flex; position: relative; }
 .gg-left {
   width: clamp(240px, 21vw, 292px); min-width: 240px; flex-shrink: 0;
   border-right: 1px solid var(--gg-border);
@@ -142,8 +143,31 @@ body {
   display: flex; justify-content: center; align-items: flex-start;
 }
 .gg-side-strip:hover { color: var(--gg-brand); background: var(--gg-panel-2); }
+
+/* 左栏收起时的浮动工具区（保存状态 / 项目 / 暗色仍要可达）
+ * 停靠在左侧竖条下方，不遮挡底部统计抽屉 */
+.gg-float-tools {
+  position: absolute; left: 30px; top: calc(var(--gg-strip-h) + 10px); z-index: 30;
+  box-shadow: var(--gg-shadow-2);
+  background: var(--gg-panel); border-radius: var(--gg-r-md);
+}
+
 .gg-panel-title .collapse-btn { padding: 0 4px; height: 22px; color: var(--gg-text-4); }
 .gg-panel-title .collapse-btn:hover { color: var(--gg-brand); }
+
+/* 退出服务后的终止页（服务已停止，界面只剩这一屏） */
+.gg-quit-screen {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px;
+  background: var(--gg-bg); color: var(--gg-text-2); text-align: center;
+}
+.gg-quit-title { font-size: 20px; font-weight: 650; color: var(--gg-text-1); letter-spacing: .2px; }
+.gg-quit-sub { font-size: 13px; color: var(--gg-text-3); line-height: 1.6; }
+.gg-quit-sub code {
+  font-family: Consolas, "JetBrains Mono", monospace; font-size: 12px;
+  background: var(--gg-panel); border: 1px solid var(--gg-border);
+  border-radius: var(--gg-r-sm); padding: 1px 5px; color: var(--gg-text-2);
+}
 
 /* 启动加载页 */
 .gg-boot {
@@ -311,20 +335,16 @@ html.dark .gg-canvas-wrap { background: var(--gg-canvas); }
 .gg-hint-md { font-size: var(--gg-fs-sm); color: var(--gg-text-3); line-height: 1.5; }
 .gg-section-gap { margin-top: var(--gg-sp-4); }
 
-/* ---- 响应式：详情见 UI_REVIEW.md 第七节 ---- */
-.narrow-only { display: none; }
-
+/* ---- 响应式：详情见 UI_REVIEW.md 第七节 ----
+ * 画布顶栏 / 底栏的自适应规则已移入各自组件的 scoped 样式，
+ * 这里只保留影响整体布局的断点。
+ */
 @media (max-width: 1440px) {
-  /* 工具栏放不下时先收文字，只留图标 */
-  .gg-canvas-head .btn-label { display: none; }
-  .gg-canvas-head { gap: 4px; padding: 6px 8px; }
+  /* 尺寸按钮只留图标（按钮自身带图标，不会变成空白块） */
+  .size-btn .size-text { display: none; }
 }
 
 @media (max-width: 1200px) {
-  /* 再窄就把次要动作收进「更多」菜单 */
-  .narrow-only { display: inline-flex; }
-  .wide-only { display: none !important; }
-  .size-btn .size-text { display: none; }
   .gg-left { min-width: 220px; }
   .gg-right { min-width: 320px; }
 }

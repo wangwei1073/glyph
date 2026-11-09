@@ -1,4 +1,4 @@
-// ggplotGUI - 后端 API 封装
+// Glyph - 后端 API 封装
 // 超时按路由区分：普通请求 20s；渲染/导出/plotly 这类重活给 300s（后端单线程，
 // 一次重图可能跑几十秒）；上传不设上限（由用户自己等）。
 export const T_NORMAL = 20000
@@ -101,7 +101,7 @@ export const exportPlot = async (spec, { width = 1600, height = 1000, dpi = 300,
   const r = await fetch(res.url)
   if (!r.ok) throw new Error(`下载导出文件失败: HTTP ${r.status}`)
   const blob = await r.blob()
-  return { blob, filename: res.filename || `ggplotgui.${format}` }
+  return { blob, filename: res.filename || `Glyph.${format}` }
 }
 
 // 导出前检查（白底 / 尺寸 / dpi / 矢量 / 字体 / 字号；可选期刊模板）
@@ -161,6 +161,9 @@ export const editsClear = (source) => post('/api/edits/clear', { source })
 export const getPins = () => api('/api/pins')
 export const savePin = (specJson, label = null, project = '') => post('/api/pins/save', { specJson, label, project })
 export const deletePin = (id) => post('/api/pins/delete', { id })
+
+// 退出服务：后端置标志位，由 R 主循环优雅停止（进程退出后本页面将不再可用）
+export const shutdownServer = () => post('/api/shutdown', {})
 
 export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)

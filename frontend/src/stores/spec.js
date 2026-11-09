@@ -1,4 +1,4 @@
-// ggplotGUI - 绘图规格 store：spec 是唯一的绘图事实来源
+// Glyph - 绘图规格 store：spec 是唯一的绘图事实来源
 import { defineStore } from 'pinia'
 import { renderPlot } from '../api'
 import { useDataStore } from './data'
@@ -24,7 +24,7 @@ export function defaultSpec() {
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
 // 项目标识：图库按项目隔离；持久化到 localStorage，刷新后仍是同一个项目
-const PROJECT_ID_KEY = 'ggplotgui-project-id'
+const PROJECT_ID_KEY = 'Glyph-project-id'
 function newProjectId() {
   try {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -42,7 +42,7 @@ function currentProjectId() {
 }
 
 // 未保存草稿（崩溃/误关恢复）：只存 spec，数据本身由服务端 userdata/ 持久化
-const DRAFT_KEY = 'ggplotgui-draft-v1'
+const DRAFT_KEY = 'Glyph-draft-v1'
 
 export const useSpecStore = defineStore('spec', {
   state: () => ({

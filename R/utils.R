@@ -1,4 +1,4 @@
-# ggplotGUI - 工具函数
+# Glyph - 工具函数
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 

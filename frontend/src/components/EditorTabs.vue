@@ -35,10 +35,11 @@ const items = [
 <template>
   <div class="editor-root">
     <nav class="rail">
-      <button class="rail-btn rail-collapse" title="收起控制面板" @click="ui.toggleRight()">
-        <el-icon :size="16"><ArrowRight /></el-icon>
-      </button>
-      <div class="rail-sep" />
+      <div class="rail-head">
+        <button class="rail-btn rail-collapse" title="收起控制面板" @click="ui.toggleRight()">
+          <el-icon :size="16"><ArrowRight /></el-icon>
+        </button>
+      </div>
       <template v-for="(it, i) in items" :key="it.name">
         <div v-if="i > 0 && it.group !== items[i - 1].group" class="rail-sep" />
         <button class="rail-btn" :class="{ active: tab === it.name }" @click="tab = it.name">
@@ -67,9 +68,16 @@ const items = [
 .rail {
   width: 56px; flex-shrink: 0; overflow-y: auto; overflow-x: hidden;
   border-right: 1px solid var(--gg-border); background: var(--gg-panel);
-  padding: 4px 0 10px; display: flex; flex-direction: column; align-items: stretch;
+  padding: 0 0 10px; display: flex; flex-direction: column; align-items: stretch;
 }
 .rail::-webkit-scrollbar { width: 0; }
+/* 收起按钮占据与左栏品牌条、画布顶栏等高的头部，让三条分割线在同一水平线上 */
+.rail-head {
+  height: var(--gg-strip-h); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-bottom: 1px solid var(--gg-border);
+  margin-bottom: 4px;
+}
 .rail-btn {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 7px 0 5px; border: none; background: none; cursor: pointer;
@@ -83,7 +91,10 @@ const items = [
   width: 2.5px; border-radius: 0 2px 2px 0; background: var(--gg-accent);
 }
 .rail-lab { font-size: 11px; letter-spacing: .3px; }
-.rail-collapse { padding: 4px 0 2px; color: var(--gg-text-4); }
+.rail-collapse {
+  padding: 0; width: 100%; height: 100%; color: var(--gg-text-4);
+  justify-content: center;   /* 覆盖 .rail-btn 的默认顶部对齐，让箭头垂直居中 */
+}
 .rail-collapse:hover { color: var(--gg-brand); background: transparent; }
 .rail-sep { height: 1px; margin: 6px 12px; background: var(--gg-border); flex-shrink: 0; }
 .tab-body { flex: 1; min-width: 0; min-height: 0; }

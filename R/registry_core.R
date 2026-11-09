@@ -1,4 +1,4 @@
-# ggplotGUI - 核心注册表：从已安装的 ggplot2 自省全部能力
+# Glyph - 核心注册表：从已安装的 ggplot2 自省全部能力
 # 设计：运行时枚举 geom_/stat_/scale_/coord_/position_/facet_/guide_/theme 元素，
 #       与 registry_meta.R 的中文覆盖表合并后通过 /api/meta 提供给前端。
 #       → 无论 ggplot2 升级到什么版本，界面能力自动同步。

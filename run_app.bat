@@ -1,7 +1,7 @@
-@echo off
-rem ggplotGUI 启动器：双击运行，自动调用 R 后端并打开浏览器
+﻿@echo off
+rem Glyph 启动器：双击运行，自动调用 R 后端并打开浏览器
 chcp 65001 >nul
-title ggplotGUI - ggplot2 GUI
+title Glyph - ggplot2 GUI
 
 setlocal
 cd /d "%~dp0"
@@ -25,7 +25,7 @@ if not defined RSCRIPT (
 )
 
 echo 使用 R: %RSCRIPT%
-echo 启动 ggplotGUI (http://127.0.0.1:%PORT%) ...
+echo 启动 Glyph (http://127.0.0.1:%PORT%) ...
 start "" /b cmd /c "timeout /t 4 /nobreak >nul & start http://127.0.0.1:%PORT%"
 "%RSCRIPT%" run.R --port %PORT%
 pause

@@ -247,7 +247,7 @@ function onProjectCmd(cmd) {
 <template>
   <!-- 启动加载页：元数据枚举约 0.5–1s，避免整屏白闪；失败时停留在此并可重试 -->
   <div v-if="!meta.loaded" class="gg-boot">
-    <div class="gg-boot-logo">ggplotGUI</div>
+    <div class="gg-boot-logo">Glyph</div>
     <template v-if="!meta.error">
       <div class="gg-boot-row">
         <el-icon class="is-loading" :size="18"><Loading /></el-icon>

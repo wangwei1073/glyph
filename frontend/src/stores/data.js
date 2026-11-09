@@ -1,4 +1,4 @@
-// ggplotGUI - 数据源 store
+// Glyph - 数据源 store
 import { defineStore } from 'pinia'
 import { getSources, getColumns, uploadData, pasteData, deleteData, previewData } from '../api'
 import { useSpecStore } from './spec'

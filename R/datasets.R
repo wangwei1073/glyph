@@ -1,4 +1,4 @@
-# ggplotGUI - 内置数据集注册表与加载
+# Glyph - 内置数据集注册表与加载
 
 DATASET_LABELS <- list(
   mpg = "汽车油耗测试数据", diamonds = "钻石价格数据(53k行)", economics = "美国经济时间序列",

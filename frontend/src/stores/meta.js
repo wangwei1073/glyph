@@ -1,4 +1,4 @@
-// ggplotGUI - 元数据 store（自省注册表，一次加载）
+// Glyph - 元数据 store（自省注册表，一次加载）
 import { defineStore } from 'pinia'
 import { getMeta } from '../api'
 

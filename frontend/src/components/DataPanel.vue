@@ -157,7 +157,7 @@ function openPreview(colName = '') {
     @dragleave="dragging = false"
     @drop.prevent="onFile">
     <div class="dp-brand" :title="`ggplot2 ${meta.ggplot2Version}`">
-      <b>ggplotGUI</b>
+      <b class="dp-brand-name">Glyph</b>
       <span class="dp-brand-sep" />
       <el-icon :size="13"><Coin /></el-icon><span class="dp-brand-sec">数据</span>
       <span style="flex:1" />
@@ -183,9 +183,10 @@ function openPreview(colName = '') {
         <el-icon><Filter /></el-icon>加工
         <span v-if="prepCount" class="prep-badge">{{ prepCount }}</span>
       </el-button>
-      <el-button size="small" :disabled="!data.srcKey || data.srcKey === 'none'" @click="openPreview()">
+      <el-button size="small" :disabled="!data.srcKey || data.srcKey === 'none'"
+        :title="data.preview.nrow ? `预览数据（${data.preview.nrow} 行）` : '预览数据'"
+        @click="openPreview()">
         <el-icon><DataBoard /></el-icon>预览
-        <span v-if="data.preview.nrow" class="pv-count">{{ data.preview.nrow }}×</span>
       </el-button>
       <el-popover v-if="userItems.length" v-model:visible="manageVisible" placement="bottom-start"
         :width="260" trigger="click">
@@ -325,23 +326,36 @@ function openPreview(colName = '') {
 <style scoped>
 /* 品牌条：原顶栏 logo 迁入左栏顶部（顶栏已移除）
    高度与画布工具栏（--gg-strip-h）对齐，两栏顶部齐平 */
+/* 品牌条：原顶栏 logo 迁入左栏顶部（顶栏已移除）
+   与画布工具栏（--gg-strip-h）同高同底色，两栏顶部完全齐平 */
 .dp-brand {
   display: flex; align-items: center; gap: 7px; flex-shrink: 0;
   height: var(--gg-strip-h); padding: 0 10px;
-  background: #14293a; color: #e8eef4;
-  border-bottom: 1px solid rgba(0, 0, 0, .25);
+  background: var(--gg-panel); color: var(--gg-text-1);
+  border-bottom: 1px solid var(--gg-border);
 }
-.dp-brand b { font-size: 14px; letter-spacing: .2px; font-weight: 650; }
-.dp-brand-sep { width: 1px; height: 14px; background: rgba(255, 255, 255, .18); margin: 0 3px; }
-.dp-brand-sec { font-size: 12.5px; color: #c3d2de; }
-.dp-brand .collapse-btn { color: #a9b8c6; height: 22px; }
-.dp-brand .collapse-btn:hover { color: #fff; }
-html.dark .dp-brand { background: #0f2029; }
+.dp-brand b { font-size: 14px; letter-spacing: .2px; font-weight: 650; color: var(--gg-text-1); }
+
+/* 品牌文字背景框：主题蓝底 + 白字，作为产品名的视觉锚点 */
+.dp-brand-name {
+  display: inline-flex; align-items: center; flex-shrink: 0;
+  height: 22px; padding: 0 8px; border-radius: var(--gg-r-ctl);
+  background: var(--gg-brand); color: #fff !important;
+  line-height: 1; user-select: none;
+}
+
+.dp-brand-sep { width: 1px; height: 14px; background: var(--gg-border-strong); margin: 0 3px; }
+.dp-brand-sec { font-size: 12.5px; color: var(--gg-text-2); }
+.dp-brand .el-icon { color: var(--gg-text-3); }
+.dp-brand .collapse-btn { color: var(--gg-text-4); height: 22px; }
+.dp-brand .collapse-btn:hover { color: var(--gg-brand); }
 
 .dp-panel {
   display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
   position: relative;
 }
+/* 底部工具条锚定在底部：列清单收起 / 无数据时不能被顶上来 */
+.dp-panel :deep(.act-bar) { margin-top: auto; }
 .dp-panel.dragging { outline: 2px dashed var(--gg-accent); outline-offset: -6px; }
 .dp-srcrow {
   display: flex; align-items: center; gap: 6px; padding: 8px 10px 0; flex-wrap: wrap;
@@ -415,9 +429,6 @@ html.dark .dp-brand { background: #0f2029; }
 .pin-badge {
   font-size: 11px; background: rgba(47, 111, 191,.12); color: var(--gg-accent);
   border-radius: 4px; padding: 1px 5px;
-}
-.pv-count {
-  font-size: 11px; color: var(--el-text-color-secondary); margin-left: 4px;
 }
 .drop-mask {
   position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column;

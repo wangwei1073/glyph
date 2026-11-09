@@ -1,12 +1,11 @@
 <script setup>
-// 底部工具区：渲染控制 / 保存状态 / 项目操作 / 暗色模式
-// 原先在顶栏，改为挂在左栏底部，让画布获得完整高度。
+// 底部工具区：保存状态 / 项目操作 / 暗色模式 / 退出服务
+// 渲染与自动/手动切换已移到画布顶栏（Canvas.vue），此处不再重复。
 // compact=true 时用于左栏收起后的侧边浮层。
 import { computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
-import { useUiStore } from '../stores/ui'
-import { downloadBlob } from '../api'
+import { shutdownServer } from '../api'
 
 const props = defineProps({
   compact: { type: Boolean, default: false }   // 侧边浮层模式：只放核心按钮
@@ -14,53 +13,77 @@ const props = defineProps({
 const emit = defineEmits(['project'])
 
 const spec = useSpecStore()
-const ui = useUiStore()
 
-// 保存状态：未改动 / 有改动 / 空画布
-const saveLabel = computed(() => {
-  if (!spec.spec.layers.length) return '空画布'
-  return spec.dirty ? '未保存' : '已保存'
-})
-const saveHint = computed(() => {
-  if (!spec.spec.layers.length) return '还没有图层'
-  return spec.dirty ? '有未保存的改动（项目 → 保存）' : '所有改动已保存'
-})
+// 保存状态：这里只表达「项目有没有未保存的改动」。
+// 「空画布」属于画布自身状态，已移到画布底栏（Canvas.vue 的 statusParts）。
+const hasCanvas = computed(() => spec.hasContent)
+const saveLabel = computed(() => (spec.dirty ? '未保存' : '已保存'))
+const saveHint = computed(() => (spec.dirty ? '有未保存的改动（项目 → 保存）' : '所有改动已保存'))
 
 function toggleDark() {
   spec.dark = !spec.dark
   document.documentElement.classList.toggle('dark', spec.dark)
 }
 function cmd(c) { emit('project', c) }
+
+// 退出服务：先确认，再请求后端优雅停止；成功后页面变成「已退出」提示页
+const quitting = computed(() => false)
+async function quitApp() {
+  const dirtyTip = spec.dirty ? '\n\n注意：项目有未保存的改动，退出后会丢失。' : ''
+  try {
+    await ElMessageBox.confirm(
+      `将停止本地 R 服务并关闭 Glyph。之后需要重新双击 run_app.bat 才能再次使用。${dirtyTip}`,
+      '退出 Glyph',
+      { type: 'warning', confirmButtonText: '退出', cancelButtonText: '取消' }
+    )
+  } catch { return }
+  try {
+    await shutdownServer()
+    document.body.classList.add('gg-quit')
+    // 用最简提示页替换整个界面：服务已停，继续操作只会报错
+    document.getElementById('app').innerHTML =
+      '<div class="gg-quit-screen">'
+      + '<div class="gg-quit-title">Glyph 已退出</div>'
+      + '<div class="gg-quit-sub">本地服务已停止，可以关闭此页面了。</div>'
+      + '<div class="gg-quit-sub">下次使用请重新双击 <code>run_app.bat</code>。</div>'
+      + '</div>'
+    document.title = 'Glyph 已退出'
+  } catch (e) {
+    // 服务可能已经先一步退出（请求未及返回），这种情况同样视为成功
+    document.getElementById('app').innerHTML =
+      '<div class="gg-quit-screen">'
+      + '<div class="gg-quit-title">Glyph 已退出</div>'
+      + '<div class="gg-quit-sub">本地服务已停止，可以关闭此页面了。</div>'
+      + '</div>'
+  }
+}
 </script>
 
 <template>
   <div class="act-bar" :class="{ compact }">
-    <!-- 渲染控制 -->
-    <div class="act-row">
-      <el-tooltip content="自动渲染：修改后自动出图；关闭后点右侧「渲染」手动出图" placement="top">
-        <el-switch v-model="spec.autoRender" size="small" />
-      </el-tooltip>
-      <span class="act-label" :class="{ off: !spec.autoRender }">
-        {{ spec.autoRender ? '自动' : '手动' }}
+    <!-- 左：项目保存状态 -->
+    <el-tooltip :content="saveHint" placement="top">
+      <span class="gg-save-state" :class="{ dirty: spec.dirty, empty: !hasCanvas }">
+        <i class="dot" />{{ saveLabel }}
       </span>
-      <span style="flex:1" />
-      <el-button type="primary" size="small" :loading="spec.rendering"
-        :style="compact ? 'width:100%' : ''" @click="spec.renderNow()">
-        <el-icon class="el-icon--left"><MagicStick /></el-icon>渲染
-      </el-button>
-    </div>
+    </el-tooltip>
+    <span class="act-spacer" />
 
-    <!-- 保存状态 + 项目 + 暗色 -->
-    <div class="act-row">
-      <el-tooltip :content="saveHint" placement="top">
-        <span class="gg-save-state" :class="{ dirty: spec.dirty, empty: !spec.spec.layers.length }">
-          <i class="dot" />{{ saveLabel }}
-        </span>
+    <!-- 右：暗色 + 退出 + 项目（项目固定在最右）。三个动作间距保持一致 -->
+    <div class="act-actions">
+      <el-tooltip :content="spec.dark ? '亮色模式' : '暗色模式'" placement="top">
+        <el-button size="small" text class="act-btn act-dark" @click="toggleDark">
+          <el-icon><component :is="spec.dark ? 'Sunny' : 'Moon'" /></el-icon>
+        </el-button>
       </el-tooltip>
-      <span style="flex:1; min-width:6px" />
+      <el-tooltip content="停止本地服务并退出 Glyph" placement="top">
+        <el-button size="small" text class="act-btn act-quit" :loading="quitting" @click="quitApp">
+          <el-icon><SwitchButton /></el-icon>
+        </el-button>
+      </el-tooltip>
       <el-dropdown trigger="click" @command="cmd">
         <el-button size="small" text class="act-btn">
-          <el-icon><FolderOpened /></el-icon>项目<el-icon><ArrowDown /></el-icon>
+          <el-icon><FolderOpened /></el-icon><span class="act-label">项目</span><el-icon><ArrowDown /></el-icon>
         </el-button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -70,34 +93,37 @@ function cmd(c) { emit('project', c) }
           </el-dropdown-menu>
         </template>
       </el-dropdown>
-      <el-tooltip :content="spec.dark ? '亮色模式' : '暗色模式'" placement="top">
-        <el-button size="small" text class="act-btn act-dark" @click="toggleDark">
-          <el-icon><component :is="spec.dark ? 'Sunny' : 'Moon'" /></el-icon>
-        </el-button>
-      </el-tooltip>
     </div>
   </div>
 </template>
 
 <style scoped>
 .act-bar {
-  flex-shrink: 0; display: flex; flex-direction: column; gap: 5px;
-  padding: 6px 10px 8px; border-top: 1px solid var(--gg-border);
+  flex-shrink: 0; display: flex; align-items: center; gap: 4px;
+  height: var(--gg-foot-h); padding: 0 10px;
+  border-top: 1px solid var(--gg-border);
   background: var(--gg-panel);
+  overflow: hidden;
 }
-.act-bar.compact { border: 1px solid var(--gg-border); border-radius: 8px; padding: 6px; }
-.act-row { display: flex; align-items: center; gap: 6px; min-height: 24px; }
-.act-label { font-size: 11px; color: var(--gg-text-3, #6b7480); }
-.act-label.off { color: #c07f18; }
-.act-btn { padding: 0 5px; height: 22px; font-size: 12px; }
-/* 第二行：保存状态在左，项目+暗色靠右，留出明确间距 */
-.act-row + .act-row { padding-top: 1px; }
-.act-row + .act-row .gg-save-state { flex-shrink: 0; }
-.act-row + .act-row .act-btn { white-space: nowrap; }
+.act-bar.compact {
+  height: auto; flex-direction: column; align-items: stretch; gap: 5px;
+  border: 1px solid var(--gg-border); border-radius: 8px; padding: 6px;
+}
+.act-spacer { flex: 1 1 auto; min-width: 4px; }
+/* 右侧动作组：统一间距。Element 默认给相邻按钮加 12px margin-left，必须清掉 */
+.act-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.act-actions :deep(.el-button + .el-button) { margin-left: 0; }
+.act-btn { padding: 0 5px; height: 22px; font-size: 12px; flex-shrink: 0; }
+.act-label { white-space: nowrap; }
+/* 退出按钮：hover 才显警示色，平时与会话其它次要按钮同级 */
+.act-quit:hover { color: #c0392b; background: rgba(192, 57, 43, .08); }
+@media (max-width: 1240px) {
+  .act-bar:not(.compact) .act-label { display: none; }
+}
 
-/* 保存状态点（原顶栏样式迁入） */
+/* 保存状态点（提示信息靠左） */
 .gg-save-state {
-  display: inline-flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
   font-size: 11px; color: var(--gg-text-3, #6b7480);
   cursor: default; white-space: nowrap;
 }

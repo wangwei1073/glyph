@@ -1,4 +1,4 @@
-# ggplotGUI - 图库（pins）：把单图 spec 存档供 patchwork 拼图复用
+# Glyph - 图库（pins）：把单图 spec 存档供 patchwork 拼图复用
 # spec 以原始 JSON 文本保存（避免 R↔JSON 反复穿梭时的形状歧义），
 # 使用时以 simplifyVector=FALSE 解析回 R 列表。
 

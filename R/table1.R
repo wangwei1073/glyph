@@ -1,4 +1,4 @@
-# ggplotGUI - L5 基线特征表（Table 1）
+# Glyph - L5 基线特征表（Table 1）
 # 设计：
 #   1) 基于 gtsummary::tbl_summary 生成期刊级基线表；缺失时退化为纯 base R 实现
 #   2) 输出三层：结构化数据（前端渲染表格）+ 可复现代码 + 文件导出（docx/xlsx/csv）

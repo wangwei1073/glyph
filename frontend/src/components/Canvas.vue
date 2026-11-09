@@ -8,10 +8,8 @@ import { useDataStore } from '../stores/data'
 import { usePinStore } from '../stores/pins'
 import { exportPlot, downloadBlob, genCode, getPlotly, checkExport, getJournalTemplates, bundlePlot } from '../api'
 import StatsPanel from './StatsPanel.vue'
-import { useUiStore } from '../stores/ui'
 
 const spec = useSpecStore()
-const ui = useUiStore()
 const meta = useMetaStore()
 const data = useDataStore()
 const pins = usePinStore()
@@ -27,9 +25,20 @@ const plotlyEl = ref(null)
 const imgSrc = computed(() => spec.imgSrc)
 // 扩展是否启用（关闭后隐藏/禁用对应入口，避免点了才报错）
 const plotlyOn = computed(() => !!(meta.ext && meta.ext.plotly))
+// 底栏状态：优先表达画布自身状态（空画布 / 拼图），其次数据上下文与耗时
 const statusParts = computed(() => {
-  const parts = [`ggplot2 ${meta.ggplot2Version}`]
+  if (!spec.hasContent) return '空画布 · 尚未添加图层'
+  const parts = []
   if (spec.composeActive) parts.push(`拼图 ${spec.spec.combine.slots.length} 图`)
+  const cur = data.current
+  if (cur && cur.type !== 'none') parts.push(`${cur.label} ${data.preview.nrow}×${data.preview.ncol}`)
+  if (spec.last.elapsed) parts.push(`渲染 ${spec.last.elapsed}ms`)
+  return parts.join(' · ')
+})
+// 完整信息（含环境版本与警告）走 tooltip
+const statusTitle = computed(() => {
+  const parts = [`ggplot2 ${meta.ggplot2Version}`]
+  if (!spec.hasContent) parts.push('空画布')
   const cur = data.current
   if (cur && cur.type !== 'none') parts.push(`${cur.label} ${data.preview.nrow}×${data.preview.ncol}`)
   if (spec.last.elapsed) parts.push(`渲染 ${spec.last.elapsed}ms`)
@@ -288,13 +297,6 @@ function pinCurrent() {
   }).catch((e) => ElMessage.error(e.message))
 }
 
-// 窄窗口「更多」菜单：复用同一个动作入口
-function onMoreCmd(cmd) {
-  if (cmd === 'pin') pinCurrent()
-  else if (cmd === 'plotly') showPlotly()
-  else doExport(cmd)
-}
-
 function addFirstLayer() {
   spec.addLayer('point')
   if (!Object.keys(spec.spec.layers[0].aes || {}).length) spec.guessAes(spec.spec.layers[0])
@@ -339,29 +341,42 @@ async function drawPlotly() {
 
 <template>
   <div class="gg-canvas-head">
-    <el-tooltip content="撤销 (Ctrl+Z)">
-      <el-button size="small" text :disabled="!spec.canUndo" @click="spec.undo()">
-        <el-icon><RefreshLeft /></el-icon>
-      </el-button>
-    </el-tooltip>
-    <el-tooltip content="重做 (Ctrl+Y)">
-      <el-button size="small" text :disabled="!spec.canRedo" @click="spec.redo()">
-        <el-icon><RefreshRight /></el-icon>
-      </el-button>
-    </el-tooltip>
-    <el-radio-group v-model="view" size="small">
-      <el-radio-button value="plot">图表</el-radio-button>
-      <el-radio-button value="code">代码</el-radio-button>
-    </el-radio-group>
-    <el-tooltip content="适合窗口 / 1:1">
-      <el-button size="small" text @click="zoom100 = !zoom100">
-        <el-icon><component :is="zoom100 ? 'FullScreen' : 'ScaleToOriginal'" /></el-icon>
-      </el-button>
-    </el-tooltip>
+    <!-- 组 1｜编辑：撤销 / 重做 -->
+    <div class="ch-group">
+      <el-tooltip content="撤销 (Ctrl+Z)">
+        <el-button size="small" text :disabled="!spec.canUndo" @click="spec.undo()">
+          <el-icon><RefreshLeft /></el-icon>
+        </el-button>
+      </el-tooltip>
+      <el-tooltip content="重做 (Ctrl+Y)">
+        <el-button size="small" text :disabled="!spec.canRedo" @click="spec.redo()">
+          <el-icon><RefreshRight /></el-icon>
+        </el-button>
+      </el-tooltip>
+    </div>
 
+    <span class="ch-sep" />
+
+    <!-- 组 2｜视图：图表 / 代码 + 缩放 -->
+    <div class="ch-group">
+      <el-radio-group v-model="view" size="small">
+        <el-radio-button value="plot">图表</el-radio-button>
+        <el-radio-button value="code">代码</el-radio-button>
+      </el-radio-group>
+      <el-tooltip content="适合窗口 / 1:1">
+        <el-button size="small" text @click="zoom100 = !zoom100">
+          <el-icon><component :is="zoom100 ? 'FullScreen' : 'ScaleToOriginal'" /></el-icon>
+        </el-button>
+      </el-tooltip>
+    </div>
+
+    <span class="ch-sep" />
+
+    <!-- 组 3：尺寸 -->
     <el-popover v-model:visible="sizePopover" placement="bottom-start" :width="310" trigger="click">
       <template #reference>
         <el-button size="small" text class="gg-mono size-btn" title="预览 / 导出尺寸">
+          <el-icon class="size-icon"><FullScreen /></el-icon>
           <span class="size-text">{{ sizeLabel }}</span>
         </el-button>
       </template>
@@ -434,57 +449,23 @@ async function drawPlotly() {
     </el-popover>
 
     <span style="flex:1" />
-    <el-tooltip :content="ui.statsOpen ? '收起数据统计' : '打开数据统计（描述统计 / 检验）'">
-      <el-button size="small" :type="ui.statsOpen ? 'primary' : ''" :plain="ui.statsOpen"
-        @click="ui.toggleStats()">
-        <el-icon class="el-icon--left"><DataAnalysis /></el-icon><span class="btn-label">统计</span>
-      </el-button>
-    </el-tooltip>
-    <el-tooltip content="把当前图存入图库（用于拼图组合）">
-      <el-button class="wide-only" size="small"
-        :disabled="!spec.spec.layers.length || spec.composeActive || pins.saving"
-        @click="pinCurrent">
-        <el-icon><StarFilled /></el-icon><span class="btn-label">存入图库</span>
-      </el-button>
-    </el-tooltip>
-    <el-tooltip :content="plotlyOn ? '生成可缩放、可悬停的交互图' : 'plotly 扩展已在「高级 → 扩展管理」中关闭'">
-      <span class="wide-only">
-        <el-button size="small" :disabled="!spec.hasPlot || !plotlyOn" @click="showPlotly">
-          <el-icon class="el-icon--left"><DataLine /></el-icon><span class="btn-label">交互预览</span>
-        </el-button>
-      </span>
-    </el-tooltip>
-    <el-dropdown class="wide-only" split-button size="small" type="primary" title="导出 PNG"
-      @click="doExport('png')" @command="doExport">
-      <el-icon><Download /></el-icon><span class="btn-label">导出 PNG</span>
-      <template #dropdown>
-        <el-dropdown-menu>
-          <el-dropdown-item command="png">PNG 位图</el-dropdown-item>
-          <el-dropdown-item command="svg">SVG 矢量</el-dropdown-item>
-          <el-dropdown-item command="pdf">PDF 矢量</el-dropdown-item>
-          <el-dropdown-item command="bundle" divided>可复现包 (.zip)</el-dropdown-item>
-          <el-dropdown-item command="check">导出前检查…</el-dropdown-item>
-        </el-dropdown-menu>
-      </template>
-    </el-dropdown>
 
-    <!-- 窄窗口：次要动作收进「更多」 -->
-    <el-dropdown class="narrow-only" trigger="click" @command="onMoreCmd">
-      <el-button size="small"><el-icon><MoreFilled /></el-icon></el-button>
-      <template #dropdown>
-        <el-dropdown-menu>
-          <el-dropdown-item command="pin" :disabled="!spec.spec.layers.length || spec.composeActive">
-            存入图库
-          </el-dropdown-item>
-          <el-dropdown-item command="plotly" :disabled="!spec.hasPlot || !plotlyOn">交互预览</el-dropdown-item>
-          <el-dropdown-item command="png" divided :disabled="!spec.hasPlot">导出 PNG</el-dropdown-item>
-          <el-dropdown-item command="svg" :disabled="!spec.hasPlot">导出 SVG</el-dropdown-item>
-          <el-dropdown-item command="pdf" :disabled="!spec.hasPlot">导出 PDF</el-dropdown-item>
-          <el-dropdown-item command="bundle" divided :disabled="!spec.hasPlot">可复现包 (.zip)</el-dropdown-item>
-          <el-dropdown-item command="check" :disabled="!spec.hasPlot">导出前检查…</el-dropdown-item>
-        </el-dropdown-menu>
-      </template>
-    </el-dropdown>
+    <!-- 组 4｜渲染：自动 / 手动 + 立即渲染 -->
+    <div class="ch-group ch-render">
+      <el-tooltip :content="spec.autoRender
+        ? '自动渲染：改动后自动出图（点击改为手动）'
+        : '手动渲染：改动后不出图，点右侧「渲染」'">
+        <el-switch v-model="spec.autoRender" size="small" />
+      </el-tooltip>
+      <span class="ch-auto-label" :class="{ off: !spec.autoRender }">
+        {{ spec.autoRender ? '自动' : '手动' }}
+      </span>
+      <el-tooltip content="立即重新渲染当前图形">
+        <el-button size="small" :loading="spec.rendering" @click="spec.renderNow()">
+          <el-icon class="el-icon--left"><MagicStick /></el-icon><span class="btn-label">渲染</span>
+        </el-button>
+      </el-tooltip>
+    </div>
   </div>
 
   <div v-show="view === 'plot'" class="gg-canvas-wrap">
@@ -531,7 +512,51 @@ async function drawPlotly() {
   <!-- 底栏：数据统计抽屉（描述统计 + 统计检验） -->
   <StatsPanel />
 
-  <div class="gg-status gg-mono" :title="statusParts">{{ statusParts }}</div>
+  <!-- 底栏：单行。左侧状态提示，右侧产出与导出类动作 -->
+  <div class="gg-footer">
+    <div class="ft-status" :title="statusTitle">{{ statusParts }}</div>
+    <el-tag v-if="spec.last.warnings?.length" size="small" type="warning" effect="plain"
+      class="ft-warn" :disable-transitions="true">{{ spec.last.warnings.length }} 条警告</el-tag>
+    <span class="ft-spacer" />
+
+    <!-- 图库 -->
+    <el-tooltip content="把当前图存入图库（用于拼图组合）">
+      <el-button size="small" text :disabled="!spec.spec.layers.length || spec.composeActive || pins.saving"
+        @click="pinCurrent">
+        <el-icon class="el-icon--left"><StarFilled /></el-icon><span class="ft-label">存入图库</span>
+      </el-button>
+    </el-tooltip>
+    <el-tooltip :content="plotlyOn ? '生成可缩放、可悬停的交互图' : 'plotly 扩展已在「高级 → 扩展管理」中关闭'">
+      <el-button size="small" text :disabled="!spec.hasPlot || !plotlyOn" @click="showPlotly">
+        <el-icon class="el-icon--left"><DataLine /></el-icon><span class="ft-label">交互预览</span>
+      </el-button>
+    </el-tooltip>
+
+    <span class="ft-sep" />
+
+    <!-- 导出：检查 / 可复现包 / 主导出按钮 -->
+    <el-tooltip content="导出前检查画幅 / dpi / 字体 / 白底等期刊要求">
+      <el-button size="small" text :disabled="!spec.hasPlot" @click="doExport('check')">
+        <el-icon class="el-icon--left"><CircleCheck /></el-icon><span class="ft-label">导出检查</span>
+      </el-button>
+    </el-tooltip>
+    <el-tooltip content="导出可复现包：图 + 数据 + 代码 + 图注 (.zip)">
+      <el-button size="small" text :disabled="!spec.hasPlot" @click="bundleNow()">
+        <el-icon class="el-icon--left"><Files /></el-icon><span class="ft-label">可复现包</span>
+      </el-button>
+    </el-tooltip>
+    <el-dropdown split-button size="small" type="primary" title="导出 PNG"
+      :disabled="!spec.hasPlot" @click="doExport('png')" @command="doExport">
+      <el-icon><Download /></el-icon><span class="ft-label">导出</span>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item command="png">PNG 位图</el-dropdown-item>
+          <el-dropdown-item command="svg">SVG 矢量</el-dropdown-item>
+          <el-dropdown-item command="pdf">PDF 矢量</el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+  </div>
 
   <el-dialog v-model="checkVisible" title="导出前检查" width="580px">
     <div class="check-head">
@@ -586,16 +611,29 @@ async function drawPlotly() {
   border-bottom: 1px solid var(--gg-border); background: var(--gg-panel); flex-shrink: 0;
   flex-wrap: nowrap; min-width: 0; overflow: hidden;
 }
+/* 分组：同组内间距最小，组与组之间用分隔线，视觉上归纳成 5 个区 */
+.ch-group { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.ch-sep {
+  width: 1px; height: 16px; flex-shrink: 0;
+  background: var(--gg-border); margin: 0 2px;
+}
+.ch-auto-label {
+  font-size: var(--gg-fs-xs); color: var(--gg-text-3); white-space: nowrap;
+  cursor: default; user-select: none;
+}
+.ch-auto-label.off { color: #c07f18; }
 /* 页签与尺寸这类"必须完整显示"的控件不允许收缩；其余按钮允许被裁 */
 .gg-canvas-head :deep(.el-radio-group) { flex-shrink: 0; }
 .gg-canvas-head :deep(.el-button) { flex-shrink: 0; }
 .btn-label { white-space: nowrap; }
-/* 画布变窄时逐级收起次要按钮：先隐文字，再整体隐藏 */
+/* 画布变窄时逐级收起文字，只留图标；自动/手动开关始终可见 */
 @media (max-width: 1480px) {
-  .gg-canvas-head .wide-only .btn-label { display: none; }
+  .gg-canvas-head .ch-auto-label { display: none; }
+  .gg-canvas-head { gap: 4px; padding: 0 8px; }
 }
 @media (max-width: 1240px) {
-  .gg-canvas-head .wide-only { display: none; }
+  .gg-canvas-head .btn-label { display: none; }
+  .gg-canvas-head .ch-sep { display: none; }
 }
 .render-spin { position: absolute; top: var(--gg-strip-h); right: 22px; z-index: 5; }
 .err-box { padding: 8px 14px; flex-shrink: 0; }
@@ -603,11 +641,39 @@ async function drawPlotly() {
 .warn-box { padding: 4px 14px 8px; flex-shrink: 0; }
 .warn-item { font-size: 12px; color: var(--gg-text-3); padding: 1px 0; }
 .gg-code-view { background: var(--gg-panel); flex: 1; min-height: 0; }
-.gg-status {
-  height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
-  padding: 0 12px; border-top: 1px solid var(--gg-border); background: var(--gg-panel-2);
-  font-size: 12px; color: var(--gg-text-3);
+
+/* 底栏：单行 34px。左侧状态提示（可省略），右侧产出与导出类动作 */
+.gg-footer {
+  flex-shrink: 0; display: flex; align-items: center; gap: 2px;
+  height: var(--gg-foot-h); padding: 0 10px;
+  border-top: 1px solid var(--gg-border);
+  background: var(--gg-panel);
+  overflow: hidden;
+}
+.ft-status {
+  flex: 0 1 auto; min-width: 0; max-width: 40%;
+  font-family: Consolas, "JetBrains Mono", "Courier New", monospace;
+  font-size: var(--gg-fs-xs); color: var(--gg-text-3);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0 2px;
+}
+.ft-spacer { flex: 1 1 auto; min-width: 4px; }
+/* 底栏内的动作分隔线：图库类 ｜ 导出类 */
+.ft-sep {
+  width: 1px; height: 14px; flex-shrink: 0;
+  background: var(--gg-border); margin: 0 4px;
+}
+.gg-footer .el-button { margin: 0; padding: 0 6px; height: 22px; font-size: var(--gg-fs-sm); flex-shrink: 0; }
+.gg-footer :deep(.el-dropdown) { flex-shrink: 0; margin-left: 2px; }
+.gg-footer :deep(.el-dropdown .el-button) { height: 24px; }
+.ft-label { white-space: nowrap; }
+.ft-warn { flex-shrink: 0; }
+/* 窄底栏：先隐按钮文字，再隐状态文字，保证导出主按钮始终完整 */
+@media (max-width: 1240px) {
+  .gg-footer .ft-label { display: none; }
+}
+@media (max-width: 1080px) {
+  .gg-footer .ft-status { display: none; }
 }
 .gg-empty-hint .ghost { color: var(--gg-text-4); margin-bottom: 10px; }
 .gg-empty-hint .t { font-size: 14px; font-weight: 600; color: var(--gg-text-2); margin-bottom: 12px; }

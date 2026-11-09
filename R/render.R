@@ -1,4 +1,4 @@
-# ggplotGUI - 渲染与导出：eval 生成的代码 -> 设备输出
+# Glyph - 渲染与导出：eval 生成的代码 -> 设备输出
 # 渲染管线唯一：spec -> 代码 -> eval。代码面板与图形永远一致。
 
 .ggspec_eval_env <- function(data_df) {

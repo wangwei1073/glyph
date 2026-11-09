@@ -6,6 +6,8 @@ rt2.json
 *.tmp[0-9]*
 tests/out/
 tests/_out.txt
+tests/_run_out.txt
+tests/_run_err.txt
 *.log
 
 # 工具/编辑器内部状态
@@ -14,6 +16,13 @@ tests/_out.txt
 # 前端
 frontend/node_modules/
 _dist_check/
+
+# Positron 扩展（只提交源码，不提交依赖与产物）
+positron-ext/node_modules/
+positron-ext/out/
+positron-ext/*.vsix
+.positron-test-ext/
+.positron-test-data/
 
 # 系统
 Thumbs.db

@@ -1,4 +1,4 @@
-# ggplotGUI - spec -> R 代码生成器
+# Glyph - spec -> R 代码生成器
 # spec 是前端产出的声明式绘图规格（JSON）；本文件把它编译为可读、可复制的
 # 规范 R 代码。渲染管线唯一：/api/render 即 eval 本文件生成的代码。
 
