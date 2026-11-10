@@ -1,15 +1,13 @@
 <script setup>
-// 参数面板：选中图层的 geom 参数 / stat 参数 / position 参数
+// 参数面板：选中图层的 geom 参数 / stat 参数 / position 参数。
+// 由 LayerPanel 手风琴在展开的图层卡片内嵌使用（原独立页签已撤销）。
 import { computed } from 'vue'
 import { useMetaStore } from '../stores/meta'
 import { useSpecStore } from '../stores/spec'
-import { useUiStore } from '../stores/ui'
 import ParamControl from './ParamControl.vue'
-import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const spec = useSpecStore()
-const ui = useUiStore()
 
 const curLayerParams = computed(() => meta.layerParams(spec.curLayer?.geom))
 const curLayerStatParams = computed(() => meta.layerStatParams(spec.curLayer?.geom))
@@ -61,10 +59,8 @@ const aesParamSchema = (name) => {
 </script>
 
 <template>
-  <div v-if="spec.curLayer" class="gg-tab-scroll">
-    <div class="gg-subhead">geom / stat 参数 · {{ meta.geomByName[spec.curLayer.geom]?.fn }}</div>
-
-    <div v-if="!usedParams.length" style="padding:10px 12px;font-size:12px;color:var(--el-text-color-secondary)">
+  <div v-if="spec.curLayer" class="param-embedded">
+    <div v-if="!usedParams.length" style="padding:6px 12px;font-size:12px;color:var(--el-text-color-secondary)">
       该 geom 无额外参数
     </div>
     <div v-for="p in usedParams" :key="p.name" class="p-row">
@@ -73,7 +69,7 @@ const aesParamSchema = (name) => {
         @update:model-value="setParam(p.name, $event)" />
     </div>
 
-    <div class="gg-subhead" style="margin-top:14px">stat 选择</div>
+    <div class="gg-subhead" style="margin-top:10px">stat 选择</div>
     <div class="p-row">
       <label>stat</label>
       <el-select :model-value="spec.curLayer.stat" size="small" filterable style="width:100%"
@@ -88,7 +84,7 @@ const aesParamSchema = (name) => {
       </el-select>
     </div>
 
-    <div class="gg-subhead" style="margin-top:14px">position 调整</div>
+    <div class="gg-subhead" style="margin-top:10px">position 调整</div>
     <div class="p-row">
       <label>position</label>
       <el-select :model-value="spec.curLayer.position?.type || ''" size="small" style="width:100%"
@@ -111,7 +107,7 @@ const aesParamSchema = (name) => {
       </div>
     </template>
 
-    <div class="gg-subhead" style="margin-top:14px">常量美学（不进入 aes）</div>
+    <div class="gg-subhead" style="margin-top:10px">常量美学（不进入 aes）</div>
     <div v-for="name in usedAesParams" :key="name" class="p-row">
       <label>{{ meta.aesByName[name]?.label || name }}</label>
       <ParamControl :schema="aesParamSchema(name)"
@@ -119,13 +115,10 @@ const aesParamSchema = (name) => {
         @update:model-value="setAesParam(name, $event)" />
     </div>
   </div>
-  <EmptyState v-else icon="Tools" title="还没有可调参数"
-    desc="参数跟着选中的图层走：先在「图层」里添加并选中一个 geom。">
-    <el-button size="small" type="primary" @click="ui.setTab('layers')">去添加图层</el-button>
-  </EmptyState>
 </template>
 
 <style scoped>
+.param-embedded { padding: 2px 0 4px; }
 .opt-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
 .opt-fn { font-size: 11px; color: var(--el-text-color-secondary); }
 </style>

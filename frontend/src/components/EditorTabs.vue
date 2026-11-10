@@ -1,12 +1,11 @@
 <script setup>
-// 右侧控制面板：图标竖栏 + 内容区（分组表达语义层级）
+// 右侧控制面板：图标竖栏 + 内容区（分组表达语义层级）。
+// 美学/参数已收编进图层面板的手风琴卡片（逐层设置跟着图层走），此处只剩整图级页签。
 import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUiStore } from '../stores/ui'
 import { useSpecStore } from '../stores/spec'
 import LayerPanel from './LayerPanel.vue'
-import AesPanel from './AesPanel.vue'
-import ParamPanel from './ParamPanel.vue'
 import ScalePanel from './ScalePanel.vue'
 import CoordFacetPanel from './CoordFacetPanel.vue'
 import LabsGuidePanel from './LabsGuidePanel.vue'
@@ -27,23 +26,21 @@ const tab = computed({
 // 这些页签编辑的是「绘图规格」，而代码图是由一段 R 代码画出来的，
 // 规格对它的画面没有任何影响。此时把面板置灰并给出说明与出口，
 // 避免用户改了设置却看不出变化（或以为坏了）。
-const SPEC_TABS = ['layers', 'aes', 'params', 'scale', 'coord', 'labs', 'annot', 'theme']
+const SPEC_TABS = ['layers', 'scale', 'coord', 'labs', 'annot', 'theme']
 const isCodeImage = computed(() => !!(spec.last && spec.last.renderedFromCode))
 const locked = computed(() => isCodeImage.value && SPEC_TABS.includes(tab.value))
 
 function goBackToSpec() {
   if (!spec.backToSpec()) ElMessage.warning('画布没有图层，无法返回；先添加图层或载入项目')
 }
-// 页签按职责分组（组间显示分隔线）：
-//   0 绘图核心：图层 → 美学 → 参数（从「画什么」到「怎么映射」到「细调」）
+// 页签按职责分组（组间显示分隔线）——全部是「整图级」设置：
+//   0 绘图核心：图层（手风琴，收编了逐层的美学/参数）
 //   1 图形设置：标度 → 坐标（改变图形本身的呈现规则）
 //   2 图上元素：标签 → 注释 → 主题（叠加在图上、影响外观的内容）
 //   3 产出：图库 → 拼图（把图存起来、把图组合出去）
 //   4 系统：高级 → 扩展（代码模式与能力管理）
 const items = [
   { name: 'layers', label: '图层', icon: 'Files', group: 0 },
-  { name: 'aes', label: '美学', icon: 'CollectionTag', group: 0 },
-  { name: 'params', label: '参数', icon: 'Tools', group: 0 },
   { name: 'scale', label: '标度', icon: 'Odometer', group: 1 },
   { name: 'coord', label: '坐标', icon: 'Grid', group: 1 },
   { name: 'labs', label: '标签', icon: 'EditPen', group: 2 },
@@ -54,6 +51,9 @@ const items = [
   { name: 'adv', label: '高级', icon: 'Setting', group: 4 },
   { name: 'ext', label: '扩展', icon: 'Box', group: 4 }
 ]
+
+// 旧会话的 localStorage 可能存着已撤销的页签名（aes/params）→ 回退到图层
+if (!items.some(it => it.name === ui.tab)) ui.setTab('layers')
 </script>
 
 <template>
@@ -73,15 +73,13 @@ const items = [
       </template>
     </nav>
     <div class="tab-body gg-scroll">
-      <!-- 代码图状态下，这 8 个面板的设置对画面不生效：置灰 + 说明 + 出口 -->
+      <!-- 代码图状态下，这些页签的设置对画面不生效：置灰 + 说明 + 出口 -->
       <div v-if="locked" class="lock-bar">
         <el-icon class="lock-ico"><Tickets /></el-icon>
         <span class="lock-txt">当前显示代码图，本页设置对它不生效</span>
         <el-button size="small" text type="primary" @click="goBackToSpec">返回我的图</el-button>
       </div>
       <LayerPanel v-show="tab === 'layers'" :class="{ 'is-locked': locked }" />
-      <AesPanel v-show="tab === 'aes'" :class="{ 'is-locked': locked }" />
-      <ParamPanel v-show="tab === 'params'" :class="{ 'is-locked': locked }" />
       <ScalePanel v-show="tab === 'scale'" :class="{ 'is-locked': locked }" />
       <CoordFacetPanel v-show="tab === 'coord'" :class="{ 'is-locked': locked }" />
       <LabsGuidePanel v-show="tab === 'labs'" :class="{ 'is-locked': locked }" />

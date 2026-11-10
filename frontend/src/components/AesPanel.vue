@@ -1,17 +1,15 @@
 <script setup>
-// 美学面板：选中图层的 aes 映射 / 常量设定（双模）
+// 美学面板：选中图层的 aes 映射 / 常量设定（双模）。
+// 由 LayerPanel 手风琴在展开的图层卡片内嵌使用（原独立页签已撤销）。
 import { ref, computed, watch } from 'vue'
 import { useMetaStore } from '../stores/meta'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
-import { useUiStore } from '../stores/ui'
 import ParamControl from './ParamControl.vue'
-import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const data = useDataStore()
 const spec = useSpecStore()
-const ui = useUiStore()
 
 const mode = ref({}) // aesName -> 'map' | 'value'
 
@@ -91,12 +89,7 @@ watch(() => spec.selectedLayer, () => { afterStatHint.value = ''; mode.value = {
 </script>
 
 <template>
-  <div v-if="spec.curLayer" class="gg-tab-scroll">
-    <div class="gg-subhead">
-      图层 {{ spec.selectedLayer + 1 }} · {{ meta.geomByName[spec.curLayer.geom]?.fn }}
-      的美学映射
-    </div>
-
+  <div v-if="spec.curLayer" class="aes-embedded">
     <div v-for="row in aesRows" :key="row.name" class="aes-row">
       <label class="aes-lab" :title="row.name">
         {{ row.label }}<span v-if="row.required" class="req">*</span>
@@ -146,7 +139,7 @@ watch(() => spec.selectedLayer, () => { afterStatHint.value = ''; mode.value = {
       </div>
     </div>
 
-    <div class="gg-subhead" style="margin-top:14px">图层开关</div>
+    <div class="gg-subhead" style="margin-top:10px">图层开关</div>
     <div class="p-row">
       <label>inherit.aes</label>
       <el-select :model-value="spec.curLayer.inheritAes === undefined ? '' : String(spec.curLayer.inheritAes)"
@@ -168,20 +161,17 @@ watch(() => spec.selectedLayer, () => { afterStatHint.value = ''; mode.value = {
       </el-select>
     </div>
 
-    <div v-if="spec.curLayer.stat" class="gg-subhead" style="margin-top:14px">
+    <div v-if="spec.curLayer.stat" class="gg-subhead" style="margin-top:10px">
       stat_{{ spec.curLayer.stat }} 计算变量（after_stat）
     </div>
     <div v-if="spec.curLayer.stat" style="padding: 2px 12px; font-size: 12px; color:var(--el-text-color-secondary)">
       {{ (meta.statByName[spec.curLayer.stat]?.aes || []).join(' · ') }}
     </div>
   </div>
-  <EmptyState v-else icon="CollectionTag" title="还没有选中图层"
-    desc="先在「图层」里添加一个 geom，再回来设置映射与常量。">
-    <el-button size="small" type="primary" @click="ui.setTab('layers')">去添加图层</el-button>
-  </EmptyState>
 </template>
 
 <style scoped>
+.aes-embedded { padding: 2px 0 4px; }
 .aes-row {
   display: flex; align-items: center; gap: 7px;
   padding: 4px 12px; min-height: 36px;

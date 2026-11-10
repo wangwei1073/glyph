@@ -38,6 +38,9 @@
 - 列面板带类型徽标（numeric / character / factor / date…）与唯一值预览
 
 ### 图层（graph 类型全覆盖）
+- **手风琴式图层卡片**：点卡片展开即选中，该层的美学映射与 geom/stat/position 参数
+  直接在卡片内编辑（原「美学」「参数」页签已收编进卡片，不再跨页签跳转）；
+  摘要行显示各层映射与参数数量，不展开也能横向比较
 - **全部 ggplot2 geom（50+，随版本变化）**（运行时从已安装版本自动枚举，永不缺漏），
   加上已安装扩展：ggrepel、ggthemes 的 geom
 - 未安装的扩展可在「高级 → 扩展管理」**一键安装**（后台安装、完成后自动刷新注册表，无需重启）；
@@ -50,7 +53,7 @@
   任意 **position**（dodge / stack / fill / jitter / nudge…，含参数）
 - 图层排序、复制、删除；show.legend / inherit.aes 开关
 
-### 美学与参数
+### 美学与参数（在图层卡片内编辑）
 - 每个 geom 自动提示 required / optional 美学映射
 - **映射 vs 常量**双模：选数据列，或直接设定 size/shape/colour…（控件按类型渲染：颜色选择器、shape 线型预览、数值微调）
 - **R 表达式模式（fx）**：任何映射/参数可切换为 R 代码，如 `after_stat(count)`、`hwy / displ`
