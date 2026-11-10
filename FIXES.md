@@ -239,7 +239,16 @@ Rscript tests/review_findings.R     # 走查证据脚本，逐条对照修复状
 - 搜索框 + 类型筛选（全部 / 图 / 代码）
 - 缩略图懒生成：spec 图按 spec 渲染 480×300，代码图按代码渲染，首次访问缓存到 Pxx.png
 - 图库卡片显示代码图「代码」徽标，打开仍走缺包检查与代码恢复
-- 验证：新建 spec 图缩略图 HTTP 200（37KB）；代码图卡片 img 自然宽 900## 仍未处理（有意留下）
+- 验证：新建 spec 图缩略图 HTTP 200（37KB）；代码图卡片 img 自然宽 900## 批次 25 — 拉取最新代码走查（2026-11-10）
+
+- 修复 DataStore 删除最后一条数据后重新 bind 会复用旧 id：新增 `.next_id` 计数器持久化，
+  bind 时读取并与 meta 最大值取大。
+- 修复切换工作区后仍沿用上一个项目 `state$raw_data` / `pending_code`：切换时清空。
+- 修正 `test_extension_prism` 的过时断言：theme_prism 调色板应取 `ggprism_data$themes`（44），
+  而非 scale 用的 colour_palettes（65）。
+- 拉取后前端构建失败的根因是新增 `@codemirror/autocomplete` 未安装：执行 `npm install` 后恢复，
+  已重建 dist。
+- 走查结果：R 套件 24 项全绿（ext_batch3 SKIP）、Node 2 项全绿、前端构建通过。## 仍未处理（有意留下）
 
 1. **httpuv 单线程**：已用前端串行化 + 长超时缓解，但重渲染期间取图仍会排队；彻底解决需要异步任务队列或子进程渲染。
 2. **`state$raw_data` 全局**：原始代码模式的 df 仍挂在全局，多标签页并发时可能互相覆盖。

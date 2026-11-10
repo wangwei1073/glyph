@@ -274,6 +274,9 @@ ggspec_api_app <- function(state) {
       if (inherits(lay, "error")) {
         return(json_error(sprintf("切换工作区失败：%s", conditionMessage(lay)), 500))
       }
+      # 切工作区后清掉上一个项目的运行时数据，避免代码图继续用旧 df
+      state$raw_data <- NULL
+      state$pending_code <- NULL
       state$workspace <- list(
         root = lay$root,
         id = WORKSPACE$id_for(lay$root),

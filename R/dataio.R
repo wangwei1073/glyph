@@ -9,6 +9,7 @@ DataStore <- local({
 
   .meta_file <- function() file.path(.dir, "meta.json")
   .item_file <- function(id) file.path(.dir, paste0(id, ".rds"))
+  .counter_file <- function() file.path(.dir, ".next_id")
 
   .save_meta <- function() {
     if (is.null(.dir)) return(invisible(FALSE))
@@ -26,7 +27,14 @@ DataStore <- local({
   }
 
   .load <- function() {
-    if (is.null(.dir) || !file.exists(.meta_file())) return(invisible(FALSE))
+    if (is.null(.dir)) return(invisible(FALSE))
+    # 计数器持久化：删除最后一条数据后重新 bind 也不能复用旧 id
+    cf <- .counter_file()
+    if (file.exists(cf)) {
+      n0 <- suppressWarnings(as.integer(readLines(cf, warn = FALSE)[1]))
+      if (!is.na(n0)) .counter <<- max(.counter, n0)
+    }
+    if (!file.exists(.meta_file())) return(invisible(FALSE))
     meta <- tryCatch(jsonlite::fromJSON(.meta_file(), simplifyVector = FALSE),
                      error = function(e) NULL)
     if (!is.list(meta)) return(invisible(FALSE))
@@ -63,6 +71,7 @@ DataStore <- local({
       if (!is.null(.dir)) {
         try(saveRDS(df, .item_file(id)), silent = TRUE)
         .save_meta()
+        try(writeLines(as.character(.counter), .counter_file()), silent = TRUE)
       }
       id
     },

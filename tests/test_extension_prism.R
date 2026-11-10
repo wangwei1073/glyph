@@ -52,9 +52,9 @@ stopifnot("palette 应为下拉控件" = all(vapply(scales, function(s) s$params
 stopifnot("应有 theme_prism" = length(themes) == 1 && themes[[1]]$name == "prism")
 targs <- themes[[1]]$args
 pal_arg <- Filter(function(a) identical(a$name, "palette"), targs)
-stopifnot("theme_prism 的 palette 应为 65 选 1" =
+stopifnot("theme_prism 的 palette 应为 44 选 1（取 ggprism_data$themes）" =
             length(pal_arg) == 1 && pal_arg[[1]]$widget == "select" &&
-            length(pal_arg[[1]]$options) >= 60)
+            length(pal_arg[[1]]$options) >= 40)
 stopifnot("theme_prism 应保留 border / axis_text_angle 参数" =
             any(vapply(targs, function(a) a$name == "border", TRUE)) &&
             any(vapply(targs, function(a) a$name == "axis_text_angle", TRUE)))
