@@ -8,7 +8,7 @@ import { ElMessage } from 'element-plus'
 import { useDataStore, buildPrep } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
-import { statsColumns, statsSuggest } from '../api'
+import { statsColumns, statsSuggest, statsAgg, statsPaired } from '../api'
 import { suggestCharts } from '../chartSuggest'
 import { num, pval } from '../statsShared'
 import StatsDescTab from './StatsDescTab.vue'
@@ -116,6 +116,71 @@ watch(() => `${data.srcKey}|${JSON.stringify(prep.value)}`,
 
 // 抽屉打开那一刻也要加载一次（watcher 平时被 statsOpen 挡住）
 watch(() => ui.statsOpen, (v) => { if (v) refreshColumns() })
+
+// ---- 一键误差条图层 ----
+// 描述统计结果 → 后端聚合成 均值±CI 长表（注册为用户数据集）→ 画布生成 柱+误差条 图层组
+const aggLoading = ref(false)
+async function makeErrorbar() {
+  if (!descResult.value?.summary?.length) return
+  aggLoading.value = true
+  try {
+    const res = await statsAgg(source.value, prep.value, vars.value, groupBy.value, 'ci95')
+    if (!res.ok) throw new Error(res.error || '聚合失败')
+    // 多变量时柱与误差条都按 variable 着色并 dodge 对齐；单变量直接居中
+    const layersPos = res.nVars > 1
+      ? { type: 'dodge', params: {} } : { type: '', params: {} }
+    // 柱层：均值；多变量按 variable 着色，单变量分组时按组着色
+    spec.addLayer('col')
+    const i = spec.spec.layers.length - 1
+    spec.spec.layers[i].aes = { x: { map: res.xSuggest }, y: { map: 'mean' }, fill: { map: res.fillSuggest } }
+    spec.spec.layers[i].position = { ...layersPos }
+    // 误差条层：CI 上下界；多变量时 group=variable 保证与柱对齐 dodge
+    spec.addLayer('errorbar')
+    const j = spec.spec.layers.length - 1
+    const errAes = { x: { map: res.xSuggest }, ymin: { map: 'lower' }, ymax: { map: 'upper' } }
+    if (res.nVars > 1) errAes.group = { map: 'variable' }
+    spec.spec.layers[j].aes = errAes
+    spec.spec.layers[j].position = { ...layersPos }
+    // 两层的数据源切换为聚合数据集；列面板同步到聚合列
+    spec.setSource({ type: 'user', id: res.id })
+    await data.select(`user:${res.id}`)
+    spec.renderNow()
+    ElMessage.success(`已生成误差条图层（均值 ${res.errLabel}，数据集「${res.info?.label || res.id}」）`)
+  } catch (e) {
+    ElMessage.error('生成误差条图层失败: ' + e.message)
+  } finally {
+    aggLoading.value = false
+  }
+}
+
+// ---- 一键配对线图层 ----
+// 配对检验的两列按行位置转长表（id/variable/value）→ 画布生成 配线+散点 图层组
+const pairedLoading = ref(false)
+async function makePairedLines() {
+  if (!testMethod.value || !testResult.value) return
+  pairedLoading.value = true
+  try {
+    const res = await statsPaired(source.value, prep.value, testY.value, testGroup.value)
+    if (!res.ok) throw new Error(res.error || '生成失败')
+    // 配线层：同一 id 连成一条灰线（个体轨迹）
+    spec.addLayer('line')
+    const i = spec.spec.layers.length - 1
+    spec.spec.layers[i].aes = { x: { map: 'variable' }, y: { map: 'value' }, group: { map: 'id' } }
+    spec.spec.layers[i].aesParams = { colour: 'grey55', linewidth: 0.7 }
+    // 散点层：按前后着色
+    spec.addLayer('point')
+    const j = spec.spec.layers.length - 1
+    spec.spec.layers[j].aes = { x: { map: 'variable' }, y: { map: 'value' }, colour: { map: 'variable' } }
+    spec.setSource({ type: 'user', id: res.id })
+    await data.select(`user:${res.id}`)   // 列面板同步到配对长表列
+    spec.renderNow()
+    ElMessage.success(`已生成配对线图层（${res.n} 对，${res.level1} → ${res.level2}）`)
+  } catch (e) {
+    ElMessage.error('生成配对线图层失败: ' + e.message)
+  } finally {
+    pairedLoading.value = false
+  }
+}
 
 // ---- 图表建议 ----
 // 依据「列画像 + 已有统计结果」推导候选图；统计结果越完整，建议越贴合
@@ -277,13 +342,15 @@ function stopResize() {
           v-model:vars="vars" v-model:group-by="groupBy" v-model:result="descResult"
           :numeric-cols="numericCols" :group-cols="groupCols"
           :source="source" :prep="prep" :has-source="hasSource"
-          :loading="loading" :err="error" @refresh="refreshColumns" />
+          :loading="loading" :agg-loading="aggLoading" :err="error"
+          @refresh="refreshColumns" @agg="makeErrorbar" />
 
         <StatsTestTab v-show="tab === 'test'"
           v-model:test-method="testMethod" v-model:test-y="testY"
           v-model:test-x="testX" v-model:test-group="testGroup" v-model:result="testResult"
           :methods="methods" :numeric-cols="numericCols" :group-cols="groupCols"
-          :source="source" :prep="prep" :has-source="hasSource" :err="error" />
+          :source="source" :prep="prep" :has-source="hasSource"
+          :paired-loading="pairedLoading" :err="error" @paired="makePairedLines" />
 
         <StatsRegTab v-show="tab === 'reg'"
           v-model:reg-method="regMethod" v-model:reg-y="regY" v-model:reg-xs="regXs"

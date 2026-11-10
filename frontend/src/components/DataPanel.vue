@@ -68,14 +68,25 @@ async function onImported(src) {
   importVisible.value = false
   if (src) ElMessage.success(`已导入：${src.label}（${src.nrow}×${src.ncol}），可在「数据准备」中清洗与转换`)
 }
+// 多 sheet Excel：快速上传时后端返回 needSheet + sheets，弹窗选择后带 sheet 重新上传
+const sheetDialog = ref(false)
+const sheetList = ref([])
+const sheetPick = ref('')
+let pendingFile = null
+
 async function onFile(e) {
   const f = e.target.files ? e.target.files[0] : e.dataTransfer ? e.dataTransfer.files[0] : null
   if (!f) return
   uploading.value = true
   try {
-    await data.upload(f)
-    const src = data.current
-    if (src) spec.setSource({ type: 'user', id: src.name })
+    const res = await data.upload(f)
+    if (res && res.needSheet) {
+      pendingFile = f
+      sheetList.value = res.sheets || []
+      sheetPick.value = sheetList.value[0] || ''
+      sheetDialog.value = true
+      return
+    }
     ElMessage.success(`已载入 ${f.name}`)
   } catch (err) {
     ElMessage.error('载入失败: ' + err.message)
@@ -85,6 +96,24 @@ async function onFile(e) {
     dragging.value = false
   }
 }
+
+async function confirmSheet() {
+  if (!pendingFile) { sheetDialog.value = false; return }
+  const idx = sheetList.value.indexOf(sheetPick.value) + 1   // 后端 sheet 支持 1 起始下标
+  sheetDialog.value = false
+  uploading.value = true
+  try {
+    await data.upload(pendingFile, idx)
+    ElMessage.success(`已载入 ${pendingFile.name}（工作表：${sheetPick.value}）`)
+  } catch (err) {
+    ElMessage.error('载入失败: ' + err.message)
+  } finally {
+    uploading.value = false
+    pendingFile = null
+  }
+}
+
+function cancelSheet() { pendingFile = null }
 async function doPaste() {
   if (!pasteText.value.trim()) return
   try {
@@ -407,6 +436,21 @@ function openPreview(colName = '') {
 
     <input ref="fileInput" type="file" hidden accept=".csv,.tsv,.txt,.xlsx,.xls,.rds,.json,.rdata,.rda"
       @change="onFile" />
+
+    <!-- 多 sheet Excel 的快速上传工作表选择 -->
+    <el-dialog v-model="sheetDialog" title="选择 Excel 工作表" width="340px"
+      :close-on-click-modal="false" @close="cancelSheet">
+      <div style="font-size:12px;color:var(--el-text-color-secondary);margin-bottom:8px">
+        该 Excel 包含 {{ sheetList.length }} 个工作表，选择要导入的一个：
+      </div>
+      <el-select v-model="sheetPick" size="small" style="width:100%">
+        <el-option v-for="(s, i) in sheetList" :key="s" :value="s" :label="`${s}（第 ${i + 1} 个）`" />
+      </el-select>
+      <template #footer>
+        <el-button size="small" @click="sheetDialog = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="uploading" @click="confirmSheet">导入</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 底部工具区（原顶栏）：渲染 / 保存状态 / 项目 / 暗色 -->
     <ActionBar @project="(c) => emit('project', c)" />

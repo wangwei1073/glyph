@@ -14,7 +14,10 @@ function chk(label, cond) {
 }
 
 // ---------- 静态检查：默认 spec 必须带 prism 主题 ----------
-chk('defaultSpec 含 prism 主题', /theme:\s*\{\s*base:\s*'prism'/.test(src))
+// 2026-11 起 defaultSpec 支持用户自定义默认（主题面板「存为我的默认」）：
+// base 变为条件表达式，无用户默认时仍回落 prism
+chk('defaultSpec 含 prism 主题（无用户默认时回落）',
+  /base:\s*udTheme \? udTheme\.base : 'prism'/.test(src))
 chk('defaultSpec 带 palette 参数', /palette:\s*'black_and_white'/.test(src))
 
 // ---------- 静态检查：ensureDefaultTheme 不应在 meta 未加载时降级 ----------

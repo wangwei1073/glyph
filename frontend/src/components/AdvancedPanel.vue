@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { usePinStore } from '../stores/pins'
 import { buildPrep } from '../stores/data'
-import { rawRender, formatCode } from '../api'
+import { rawRender, formatCode, exportFullScript } from '../api'
 import CodeEditor from './CodeEditor.vue'
 
 const spec = useSpecStore()
@@ -57,6 +57,24 @@ function downloadCode() {
   a.download = 'plot.R'
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
+// 一键完整脚本：数据准备 + 绘图代码 + 依赖清单头，脱离 Glyph 可独立复跑
+async function downloadScript() {
+  if (!rawCode.value.trim()) return ElMessage.warning('代码为空')
+  try {
+    const res = await exportFullScript(spec.spec, rawCode.value)
+    if (!res.ok) throw new Error(res.error || '生成失败')
+    const blob = new Blob([res.script], { type: 'text/plain;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = res.filename || 'figure.R'
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    ElMessage.success('完整脚本已下载（含数据准备与依赖清单）')
+  } catch (e) {
+    ElMessage.error('导出失败: ' + e.message)
+  }
 }
 
 // 接收来自「代码」视图的「载入编辑器」动作。
@@ -194,6 +212,9 @@ function doComment() { toggleCommentLines(editorView) }
       </el-tooltip>
       <el-tooltip content="下载 .R" placement="bottom">
         <el-button text size="small" class="adv-icon-btn" @click="downloadCode"><el-icon><Document /></el-icon></el-button>
+      </el-tooltip>
+      <el-tooltip content="导出完整脚本（数据准备 + 绘图 + 依赖清单，脱离 Glyph 可复跑）" placement="bottom">
+        <el-button text size="small" class="adv-icon-btn" @click="downloadScript"><el-icon><Tickets /></el-icon></el-button>
       </el-tooltip>
     </div>
     <!-- 复用共享 CodeEditor（高亮 / 行号 / 换行 / Ctrl+Enter 运行 / Ctrl+/ 注释） -->

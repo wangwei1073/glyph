@@ -364,7 +364,16 @@ ggspec_api_app <- function(state) {
       ext <- body$ext %||% tools::file_ext(name)
       b64 <- body$dataBase64
       if (is.null(b64) || !nzchar(b64)) return(json_error("缺少文件内容"))
-      d <- tryCatch(data_from_upload(name, ext, b64), error = function(e) e)
+      # Excel 多工作表：未指定 sheet 时先报回清单，由前端选择后再上传（本次不落库）
+      ext_l <- tolower(sub("^\\.", "", ext))
+      sheet <- body$sheet %||% NULL
+      if (ext_l %in% c("xls", "xlsx") && is.null(sheet)) {
+        sheets <- tryCatch(data_excel_sheets(name, ext, b64), error = function(e) NULL)
+        if (!is.null(sheets) && length(sheets) > 1) {
+          return(json_response(list(ok = TRUE, needSheet = TRUE, sheets = sheets)))
+        }
+      }
+      d <- tryCatch(data_from_upload(name, ext, b64, sheet = sheet), error = function(e) e)
       if (inherits(d, "error")) return(json_error(d$message, 400))
       id <- state$data_store$add(d, body$label %||% name)
       info <- state$data_store$info(id)
@@ -484,6 +493,55 @@ ggspec_api_app <- function(state) {
                                 groupBy = as.list(res$groupBy),
                                 nrow = nrow(pv$d),
                                 code = paste(res$code, collapse = "\n"))))
+    }
+
+    ## 一键误差条数据集：聚合为 均值±CI/SE/SD 长表并注册为用户数据集，供「生成误差条图层」
+    if (path == "/api/stats/agg" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      res <- tryCatch(
+        stats_agg(pv$d,
+                  vars = as.character(unlist(body$vars %||% list())),
+                  groupBy = as.character(unlist(body$groupBy %||% list())),
+                  err = as.character(body$err %||% "ci95")[1]),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      df <- ggspec_with_rid(res$df)
+      origin <- list(kind = "stats-agg", errType = as.character(body$err %||% "ci95")[1],
+                     sourceKey = .keyof(src),
+                     importedAt = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ"))
+      id <- state$data_store$add(df, body$label %||% sprintf("误差条数据（均值%s）", res$errLabel),
+                                 origin = origin)
+      return(json_response(list(ok = TRUE, id = id, info = state$data_store$info(id),
+                                columns = column_info(df),
+                                xSuggest = res$xSuggest, fillSuggest = res$fillSuggest,
+                                hasGroup = res$hasGroup, nVars = res$nVars,
+                                errLabel = res$errLabel)))
+    }
+
+    ## 配对线数据集：两水平分组按行位置配对转长表，注册为用户数据集，供「生成配对线图层」
+    if (path == "/api/stats/paired" && method == "POST") {
+      src <- body$source %||% list()
+      prep <- body$prep %||% list()
+      pv <- tryCatch(.prepared_full(src, prep), error = function(e) e)
+      if (inherits(pv, "error")) return(json_error(pv$message, 400))
+      res <- tryCatch(
+        stats_paired_df(pv$d, as.character(body$y %||% "")[1],
+                        as.character(body$group %||% "")[1]),
+        error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      df <- ggspec_with_rid(res$df)
+      origin <- list(kind = "stats-paired", y = res$y, group = res$group,
+                     sourceKey = .keyof(src),
+                     importedAt = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ"))
+      id <- state$data_store$add(df, body$label %||% sprintf("配对数据（%s：%s vs %s）", res$y, res$level1, res$level2),
+                                 origin = origin)
+      return(json_response(list(ok = TRUE, id = id, info = state$data_store$info(id),
+                                columns = column_info(df),
+                                level1 = res$level1, level2 = res$level2,
+                                y = res$y, group = res$group, n = res$n)))
     }
 
     ## 统计可用列（数值列 / 可分组列）
@@ -777,6 +835,20 @@ ggspec_api_app <- function(state) {
                                 filename = res$filename, files = res$files)))
     }
 
+    ## ---- 一键完整脚本（不打包图与数据，只给可独立复跑的 R 脚本） ----
+    if (path == "/api/script/export" && method == "POST") {
+      spec <- body$spec %||% list()
+      res <- tryCatch(ggspec_full_script(spec, state$meta, state,
+                                         code = as.character(body$code %||% "")),
+                      error = function(e) e)
+      if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
+      return(json_response(list(
+        ok = TRUE,
+        filename = sprintf("glyph-figure-%s.R", format(Sys.time(), "%Y%m%d-%H%M%S")),
+        script = paste(res, collapse = "\n")
+      )))
+    }
+
     ## ---- 导出 ----
     if (path == "/api/export/check" && method == "POST") {
       spec <- body$spec %||% list()
@@ -808,7 +880,7 @@ ggspec_api_app <- function(state) {
       }
       # 大文件落盘，前端经 /api/plotfile/<fn> 下载
       # 文件名精确到秒，同一秒内连续导出两次会撞名并互相覆盖，故追加 3 位随机后缀
-      ext <- switch(format, png = "png", svg = "svg", pdf = "pdf", "png")
+      ext <- switch(format, png = "png", svg = "svg", pdf = "pdf", tiff = "tiff", emf = "emf", "png")
       fname <- sprintf("ggplotgui-%s-%03d.%s", format(Sys.time(), "%Y%m%d-%H%M%S"),
                        as.integer(stats::runif(1, 0, 999)), ext)
       fname <- gsub("[^A-Za-z0-9_.-]", "", fname)

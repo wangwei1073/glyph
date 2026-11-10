@@ -113,8 +113,20 @@ DataStore <- local({
   )
 }
 
+# 列出 Excel 文件的工作表（快速上传的多 sheet 选择用）
+data_excel_sheets <- function(name, ext, data_base64) {
+  ext <- tolower(sub("^\\.", "", ext %||% tools::file_ext(name)))
+  if (!ext %in% c("xls", "xlsx")) stop("仅 Excel 文件支持工作表")
+  tmp <- tempfile(fileext = paste0(".", ext))
+  on.exit(unlink(tmp), add = TRUE)
+  con <- file(tmp, open = "wb")
+  writeBin(jsonlite::base64_dec(data_base64), con)
+  close(con)
+  readxl::excel_sheets(tmp)
+}
+
 # 解码 base64 -> 临时文件 -> 读取为 data.frame
-data_from_upload <- function(name, ext, data_base64) {
+data_from_upload <- function(name, ext, data_base64, sheet = NULL) {
   ext <- tolower(sub("^\\.", "", ext %||% tools::file_ext(name)))
   tmp <- tempfile(fileext = paste0(".", ext))
   on.exit(unlink(tmp), add = TRUE)
@@ -124,7 +136,7 @@ data_from_upload <- function(name, ext, data_base64) {
   d <- switch(ext,
     csv = , txt = .read_csv_flex(tmp, readr::read_csv),
     tsv = .read_csv_flex(tmp, readr::read_tsv),
-    xls = , xlsx = readxl::read_excel(tmp),
+    xls = , xlsx = readxl::read_excel(tmp, sheet = sheet %||% 1),
     rds = readRDS(tmp),
     json = jsonlite::fromJSON(tmp, simplifyVector = TRUE),
     rdata = , rda = (function() { e <- new.env(); load(tmp, envir = e); e })(),

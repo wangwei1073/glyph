@@ -82,10 +82,15 @@ ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
     pkgs <- unique(c("ggplot2", sub("^library\\((.*)\\)$", "\\1", gen$packages %||% character(0))))
   }
   ver_line <- paste(Filter(Negate(is.null), vapply(pkgs, pkg_ver, "")), collapse = " · ")
+  # 数据文件校验哈希：审稿返修时核对数据版本用
+  data_hash <- if (is_user)
+    tryCatch(as.character(tools::md5sum(file.path(bdir, "data.csv"))), error = function(e) NULL)
+    else NULL
   caption <- c(
     sprintf("# %s", (spec$labs %||% list())$title %||% "Glyph figure"),
     "",
     sprintf("- 数据来源：%s", if (nzchar(data_label)) data_label else "未使用数据"),
+    if (!is.null(data_hash)) sprintf("- 数据校验 (MD5): %s", data_hash),
     sprintf("- 图形尺寸：%s × %s mm @ %d dpi（PNG）/ 同尺寸 PDF", w_mm, h_mm, dpi),
     if (!is.null(tpl)) sprintf("- 目标期刊模板：%s", tpl$label),
     sprintf("- 生成时间：%s", format(Sys.time(), "%Y-%m-%d %H:%M")),
@@ -151,4 +156,40 @@ ggspec_bundle <- function(spec, meta, state, width = 1600, height = 1000,
   if (!file.copy(zip_path, dst, overwrite = TRUE)) stop("可复现包写入失败")
   list(path = dst, filename = fname, files = files,
        widthMm = w_mm, heightMm = h_mm, dpi = dpi)
+}
+
+# 一键完整脚本：与可复现包 figure.R 同源（数据准备 + 绘图代码），
+# 外加头部环境注释（生成时间 / R 版本 / 依赖包与版本 / 安装命令）。
+# 数据用内联或 TODO 占位（不走 data.csv），粘贴到 RStudio 即可复跑。
+ggspec_full_script <- function(spec, meta, state, code = NULL) {
+  spec <- spec %||% list()
+  is_code <- is.character(code) && length(code) == 1L && nzchar(code)
+  has_layers <- is_code || length(spec$layers %||% list()) > 0
+  if (!has_layers) stop("画布为空，没有可导出的内容")
+
+  pkgs <- character(0)
+  if (is_code) {
+    body_lines <- c(.data_lines(spec, state, df_name = "df", data_file = NULL), "", code)
+    hits <- regmatches(code, gregexpr("library\\(\\s*[\"']?([A-Za-z0-9._]+)", code, perl = TRUE))[[1]]
+    pkgs <- unique(c("ggplot2", sub("library\\(\\s*[\"']?", "", hits)))
+  } else {
+    gen <- spec_to_code(spec, meta, state)
+    body_lines <- gen$code
+    pkgs <- unique(c("ggplot2", sub("^library\\((.*)\\)$", "\\1", gen$packages %||% character(0))))
+  }
+  pkg_ver <- function(p) {
+    if (!requireNamespace(p, quietly = TRUE))
+      return(sprintf("%s (未安装)", p))
+    sprintf("%s %s", p, as.character(utils::packageVersion(p)))
+  }
+  header <- c(
+    "# 由 Glyph 生成的完整复现脚本",
+    sprintf("# 生成时间：%s | %s", format(Sys.time(), "%Y-%m-%d %H:%M"), R.version.string),
+    sprintf("# 依赖包：%s", paste(vapply(pkgs, pkg_ver, ""), collapse = ", ")),
+    sprintf("# 缺包时先运行：install.packages(c(%s))",
+            paste(sprintf('"%s"', pkgs), collapse = ", ")),
+    "",
+    "# ============ 数据准备 ============"
+  )
+  c(header, body_lines)
 }

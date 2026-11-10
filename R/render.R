@@ -57,7 +57,7 @@
 
 # 渲染到文件，返回路径
 ggspec_render_file <- function(code, data_df, width = 800, height = 500, dpi = 150,
-                               format = c("png", "svg", "pdf")) {
+                               format = c("png", "svg", "pdf", "tiff", "emf")) {
   format <- match.arg(format)
   env <- .ggspec_eval_env(data_df)
   # 求值阶段先挂一个临时图形设备。
@@ -94,7 +94,7 @@ ggspec_render_file <- function(code, data_df, width = 800, height = 500, dpi = 1
   # 中文兜底：手写代码通常不会自己指定中文字体
   plot_obj <- .ggspec_apply_cjk_family(plot_obj, code)
 
-  ext <- switch(format, png = "png", svg = "svg", pdf = "pdf")
+  ext <- switch(format, png = "png", svg = "svg", pdf = "pdf", tiff = "tiff", emf = "emf")
   path <- tempfile(fileext = paste0(".", ext))
   w_in <- width / dpi; h_in <- height / dpi
 
@@ -116,6 +116,21 @@ ggspec_render_file <- function(code, data_df, width = 800, height = 500, dpi = 1
           grDevices::cairo_pdf(path, width = w_in, height = h_in, onefile = TRUE); TRUE
         }, error = function(e) FALSE)
         if (!ok_cairo) grDevices::pdf(path, width = w_in, height = h_in, onefile = TRUE)
+      },
+      # 期刊投稿常用的位图格式：LZW 无损压缩（多数期刊接受甚至要求 TIFF）
+      tiff = {
+        ok_cairo <- tryCatch({
+          grDevices::tiff(path, width = width, height = height, units = "px", res = dpi,
+                          bg = "white", compression = "lzw", type = "cairo"); TRUE
+        }, error = function(e) FALSE)
+        if (!ok_cairo) grDevices::tiff(path, width = width, height = height, units = "px",
+                                       res = dpi, bg = "white", compression = "lzw")
+      },
+      # Word 投稿链路的矢量元文件（仅 Windows）
+      emf = {
+        if (!identical(.Platform$OS.type, "windows"))
+          stop("EMF 导出仅支持 Windows（win.metafile 设备）；请改用 SVG / PDF")
+        grDevices::win.metafile(path, width = w_in, height = h_in)
       }
     )
     dev_opened <- TRUE
@@ -232,7 +247,7 @@ ggspec_render_rawcode <- function(code, state, width, height, dpi, png_dir = NUL
 
 # 导出文件
 ggspec_export <- function(spec, meta, state, width, height, dpi, format) {
-  format <- match.arg(format, c("png", "svg", "pdf"))
+  format <- match.arg(format, c("png", "svg", "pdf", "tiff", "emf"))
   gen <- ggspec_pipeline(spec, meta, state)
   rf <- ggspec_render_file(gen$eval_code, gen$env_list, width = width, height = height,
                            dpi = dpi, format = format)
@@ -262,7 +277,7 @@ ggspec_export <- function(spec, meta, state, width, height, dpi, format) {
 # 代码图是由代码绘制的，spec 里可能没有任何图层 —— 之前用户点导出会得到一张空白图，
 # 而且不报错（静默错误），比直接失败更糟。
 ggspec_export_code <- function(code, spec, state, width, height, dpi, format) {
-  format <- match.arg(format, c("png", "svg", "pdf"))
+  format <- match.arg(format, c("png", "svg", "pdf", "tiff", "emf"))
   if (!nzchar(code %||% "")) stop("没有可导出的代码")
   # 代码里通常用 df 引用数据，这里按 spec 的数据源解析后注入求值环境
   data_df <- tryCatch(ggspec_resolve_data(spec %||% list(), state), error = function(e) NULL)
@@ -281,7 +296,7 @@ ggspec_export_code <- function(code, spec, state, width, height, dpi, format) {
 
 ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
                                 dpi = 300, format = "png", journal = NULL, code = NULL) {
-  format <- match.arg(format, c("png", "svg", "pdf"))
+  format <- match.arg(format, c("png", "svg", "pdf", "tiff", "emf"))
   tpl <- journal_get(journal)
   issues <- list()
   add <- function(id, level, title, detail, fix = NULL) {
@@ -388,9 +403,9 @@ ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
     }
   }
 
-  # 2) 分辨率 / 矢量 / 格式
+  # 2) 分辨率 / 矢量 / 格式（位图：png/tiff；矢量：svg/pdf；emf 为矢量元文件）
   min_dpi <- if (!is.null(tpl) && !is.null(tpl$minDpi)) tpl$minDpi else 300
-  if (format == "png") {
+  if (format %in% c("png", "tiff")) {
     if (dpi < min_dpi) {
       add("dpi", "warn", "位图分辨率偏低",
           sprintf("当前 %d dpi；%s要求位图 ≥%d dpi。", dpi,
@@ -407,7 +422,7 @@ ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
     add("format", "warn", "格式不在模板要求内",
         sprintf("%s 接受：%s；当前为 %s。", tpl$label,
                 paste(toupper(tpl$formats), collapse = " / "), toupper(format)),
-        fix = if (preferred %in% c("png", "svg", "pdf"))
+        fix = if (preferred %in% c("png", "svg", "pdf", "tiff", "emf"))
           list(action = "format", value = preferred, label = sprintf("改用 %s", toupper(preferred))) else NULL)
   }
 

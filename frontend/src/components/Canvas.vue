@@ -32,6 +32,22 @@ const plotlyLoading = ref(false)
 const plotlyEl = ref(null)
 
 const imgSrc = computed(() => spec.imgSrc)
+
+// ---- 色觉/灰度模拟预览（只作用于画布显示，不影响导出文件）----
+// 投稿前检查配色在色觉障碍读者与灰度打印下的可读性。
+// 矩阵取 Machado (2009) 的通用模拟值；灰度用亮度加权的 CSS 滤镜。
+const cvdFilter = ref('')   // '' | gray | deu | pro | tri
+const CVD_OPTIONS = [
+  { value: '', label: '正常视觉' },
+  { value: 'gray', label: '灰度打印模拟' },
+  { value: 'deu', label: '绿色盲（Deuteranopia）' },
+  { value: 'pro', label: '红色盲（Protanopia）' },
+  { value: 'tri', label: '蓝黄色盲（Tritanopia）' }
+]
+const cvdStyle = computed(() => {
+  if (!cvdFilter.value) return null
+  return { filter: cvdFilter.value === 'gray' ? 'grayscale(1)' : `url(#cvd-${cvdFilter.value})` }
+})
 // 代码图状态下，导出/检查/打包都必须针对「这段代码」而不是 spec：
 // 代码图没有图层，按 spec 走会导出一张空白图（而且不报错）。
 const activeCode = computed(() =>
@@ -264,6 +280,20 @@ function setJournal(id) {
   journalId.value = id || ''
   try { localStorage.setItem('ggplotgui-journal', journalId.value) } catch { /* 忽略 */ }
   if (checkVisible.value) runExportCheck(pendingFormat.value)
+}
+
+// 期刊模板一键套用：栏宽 → 导出宽度（mm 模式换算），dpi → 模板下限，然后立刻重新检查。
+// 只动导出尺寸不动画布渲染尺寸——用户可以继续用大画布编辑，投稿导出时才是期刊规格
+function applyJournal() {
+  const tpl = journals.value.find(t => t.id === journalId.value)
+  if (!tpl) return
+  if (tpl.minDpi) exportOpts.value.dpi = tpl.minDpi
+  if (tpl.widthMm) {
+    exportMm.value.w = tpl.widthMm
+    applyExportMm()   // 按（已更新的）dpi 把 mm 换算回 px
+  }
+  ElMessage.success(`已套用 ${tpl.label}：${tpl.widthMm ? `${tpl.widthMm}mm 栏宽 · ` : ''}${exportOpts.value.dpi} dpi`)
+  runExportCheck(pendingFormat.value)
 }
 
 const checkIcon = (level) => ({
@@ -639,7 +669,8 @@ async function purgePlotly() {
          浏览器在新 src 加载完成前会继续显示旧的帧，所以不会闪白，
          渲染进展由右上角转圈提示。 -->
     <img v-if="imgSrc && (spec.hasContent || spec.last.renderedFromCode)"
-      :src="imgSrc" class="gg-canvas-img" :class="{ zoom100 }" alt="plot" />
+      :src="imgSrc" class="gg-canvas-img" :class="{ zoom100 }"
+      :style="cvdStyle" alt="plot" />
     <div v-else-if="!spec.last.error" class="gg-empty-hint">
       <el-icon class="ghost" :size="58"><TrendCharts /></el-icon>
       <div class="t">还没有图形</div>
@@ -716,6 +747,19 @@ async function purgePlotly() {
       </el-button>
     </el-tooltip>
 
+    <!-- 色觉/灰度模拟：只改画布预览，导出文件不受影响 -->
+    <el-dropdown trigger="click" size="small" @command="(v) => (cvdFilter = v)">
+      <el-button size="small" text :type="cvdFilter ? 'primary' : ''">
+        <el-icon class="el-icon--left"><View /></el-icon><span class="ft-label">色觉模拟</span>
+      </el-button>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item v-for="o in CVD_OPTIONS" :key="o.value" :command="o.value"
+            :class="{ 'cvd-on': cvdFilter === o.value }">{{ o.label }}</el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+
     <span class="ft-sep" />
 
     <!-- 导出：检查 / 可复现包 / 主导出按钮 -->
@@ -729,14 +773,16 @@ async function purgePlotly() {
         <el-icon class="el-icon--left"><Files /></el-icon><span class="ft-label">可复现包</span>
       </el-button>
     </el-tooltip>
-    <el-dropdown split-button size="small" type="primary" title="导出 PNG"
-      :disabled="!spec.hasPlot" @click="doExport('png')" @command="doExport">
+    <el-dropdown split-button size="small" type="primary" :title="`导出 ${pendingFormat.toUpperCase()}`"
+      :disabled="!spec.hasPlot" @click="doExport(pendingFormat)" @command="doExport">
       <el-icon><Download /></el-icon><span class="ft-label">导出</span>
       <template #dropdown>
         <el-dropdown-menu>
           <el-dropdown-item command="png">PNG 位图</el-dropdown-item>
           <el-dropdown-item command="svg">SVG 矢量</el-dropdown-item>
           <el-dropdown-item command="pdf">PDF 矢量</el-dropdown-item>
+          <el-dropdown-item command="tiff" divided>TIFF 位图（投稿常用，LZW 压缩）</el-dropdown-item>
+          <el-dropdown-item command="emf">EMF 矢量（Word）</el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
@@ -756,6 +802,7 @@ async function purgePlotly() {
         <el-option value="" label="不套模板" />
         <el-option v-for="t in journals" :key="t.id" :value="t.id" :label="t.label" />
       </el-select>
+      <el-button size="small" :disabled="!journalId" @click="applyJournal">套用</el-button>
     </div>
     <div v-if="journalId" class="check-note">
       {{ journals.find(t => t.id === journalId)?.note }}
@@ -786,6 +833,21 @@ async function purgePlotly() {
       <div ref="plotlyEl" />
     </div>
   </el-dialog>
+
+  <!-- 色觉模拟滤镜矩阵（Machado 2009 近似），供画布 img 的 CSS filter: url() 引用 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="cvd-deu">
+        <feColorMatrix type="matrix" values="0.367 0.860 -0.227 0 0  0.280 0.673 0.047 0 0  -0.012 0.043 0.969 0 0  0 0 0 1 0" />
+      </filter>
+      <filter id="cvd-pro">
+        <feColorMatrix type="matrix" values="0.152 1.052 -0.204 0 0  0.115 0.786 0.099 0 0  -0.003 -0.048 1.051 0 0  0 0 0 1 0" />
+      </filter>
+      <filter id="cvd-tri">
+        <feColorMatrix type="matrix" values="1.256 -0.077 -0.179 0 0  -0.016 0.927 0.089 0 0  0.006 0.143 0.851 0 0  0 0 0 1 0" />
+      </filter>
+    </defs>
+  </svg>
 </template>
 
 <style scoped>
@@ -913,4 +975,8 @@ html.dark .head-code-tag { background: #3a2f18; color: #ddb26a; border-color: #5
 .ci-fix { flex-shrink: 0; margin-left: auto; padding: 0 4px; font-size: 12px; color: var(--gg-brand); }
 .journal-sel { width: 130px; flex-shrink: 0; }
 .check-note { font-size: 11px; color: var(--gg-text-3); margin: -2px 0 8px 26px; }
+</style>
+<style scoped>
+/* 色觉模拟下拉里当前选中项高亮（el-dropdown-item 无内置选中态） */
+.cvd-on { color: var(--gg-accent); font-weight: 600; background: rgba(74, 144, 217, .08); }
 </style>

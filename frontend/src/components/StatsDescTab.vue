@@ -13,9 +13,10 @@ const props = defineProps({
   prep: { type: Object, default: () => ({}) },
   hasSource: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
+  aggLoading: { type: Boolean, default: false },
   err: { type: String, default: '' }       // 列加载等共用错误（壳的 error）
 })
-const emit = defineEmits(['refresh'])
+const emit = defineEmits(['refresh', 'agg'])
 
 const vars = defineModel('vars', { type: Array, default: () => [] })
 const groupBy = defineModel('groupBy', { type: Array, default: () => [] })
@@ -79,6 +80,13 @@ async function runDesc() {
             {{ result.nrow }} 行 · {{ result.vars.length }} 变量<template v-if="result.groupBy.length"> · 按 {{ result.groupBy.join(' × ') }} 分组</template>
           </span>
           <span style="flex:1" />
+          <el-tooltip content="把统计结果聚合成 均值±95%CI 数据集，并在画布生成柱+误差条图层（当前图会被替换，可撤销）"
+            placement="bottom">
+            <el-button size="small" type="primary" plain :loading="aggLoading"
+              @click="emit('agg')">
+              <el-icon class="el-icon--left"><DataLine /></el-icon>生成误差条图层
+            </el-button>
+          </el-tooltip>
           <el-button size="small" text @click="showCode = !showCode">
             <el-icon><Document /></el-icon>{{ showCode ? '隐藏代码' : '代码' }}
           </el-button>

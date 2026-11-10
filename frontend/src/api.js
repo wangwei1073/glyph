@@ -104,7 +104,7 @@ export const exportPreparedCSV = async (source, prep) => {
 // 后端请求体上限 50MB（base64 膨胀 4/3），因此文件本身限制在 35MB
 export const MAX_UPLOAD_BYTES = 35 * 1024 * 1024
 
-export const uploadData = async (file) => {
+export const uploadData = async (file, sheet) => {
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new Error(`文件过大：${(file.size / 1048576).toFixed(1)}MB，上限 ${MAX_UPLOAD_BYTES / 1048576}MB`)
   }
@@ -114,7 +114,9 @@ export const uploadData = async (file) => {
     fr.onerror = reject
     fr.readAsDataURL(file)
   })
-  return post('/api/data/upload', { name: file.name, ext: file.name.split('.').pop(), dataBase64: b64 }, T_UPLOAD)
+  const body = { name: file.name, ext: file.name.split('.').pop(), dataBase64: b64 }
+  if (sheet !== undefined && sheet !== null) body.sheet = sheet
+  return post('/api/data/upload', body, T_UPLOAD)
 }
 
 export const pasteData = (text, label = null) => post('/api/data/paste', label ? { text, label } : { text })
@@ -132,7 +134,15 @@ export const renderPlot = (spec, { width = 800, height = 500, dpi = 150 } = {}) 
 export const genCode = (spec) => post('/api/code', { spec })
 
 export const checkPackages = (packages) => post('/api/packages/check', { packages })
+// 一键误差条：聚合为均值±CI/SE/SD 长表并注册为用户数据集
+export const statsAgg = (source, prep, vars, groupBy, err = 'ci95') =>
+  post('/api/stats/agg', { source, prep, vars, groupBy, err }, T_HEAVY)
+// 配对线：两水平分组按行位置配对转长表并注册为用户数据集
+export const statsPaired = (source, prep, y, group) =>
+  post('/api/stats/paired', { source, prep, y, group }, T_HEAVY)
 export const formatCode = (code) => post('/api/code/format', { code })
+// 一键完整脚本：数据准备 + 绘图代码 + 依赖清单头（后端组装，与可复现包 figure.R 同源）
+export const exportFullScript = (spec, code) => post('/api/script/export', { spec, code }, T_HEAVY)
 export const rawRender = (code, spec, { width = 800, height = 500, dpi = 150 } = {}) =>
   post('/api/rawrender', { code, spec, width, height, dpi }, T_HEAVY)
 

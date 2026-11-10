@@ -77,7 +77,13 @@ export const useDataStore = defineStore('data', {
           : { type: 'user', id: c.name }
         const { columns } = await getColumns(source, prep)
         if (token !== this._refreshSeq) return
+        // 换源继承：先记下旧列名（赋值前），改绑仍存在的映射（大小写不敏感唯一匹配），
+        // 再由 pruneMappings 清掉新数据里没有的
+        const oldCols = this.colNames.slice()
         this.columns = columns
+        if (oldCols.length) {
+          try { useSpecStore().remapMappings(oldCols, this.colNames) } catch { /* 循环依赖兜底 */ }
+        }
       } catch {
         // 加工表达式暂时不合法时回退到原始列，避免列面板突然清空
         try {
@@ -86,7 +92,11 @@ export const useDataStore = defineStore('data', {
             : { type: 'user', id: c.name }
           const { columns } = await getColumns(src)
           if (token !== this._refreshSeq) return
+          const oldCols2 = this.colNames.slice()
           this.columns = columns
+          if (oldCols2.length) {
+            try { useSpecStore().remapMappings(oldCols2, this.colNames) } catch { /* 循环依赖兜底 */ }
+          }
         } catch {
           if (token !== this._refreshSeq) return
           this.columns = []
@@ -119,10 +129,14 @@ export const useDataStore = defineStore('data', {
         if (token === this._previewSeq) this.previewLoading = false
       }
     },
-    async upload(file) {
-      const { source } = await uploadData(file)
+    // sheet：Excel 工作表（1 起始下标）；多 sheet 快速上传时由 DataPanel 弹窗选择后传入
+    async upload(file, sheet) {
+      const res = await uploadData(file, sheet)
+      if (res && res.needSheet) return res
+      const { source } = res
       await this.load()
       await this.select(`${source.type}:${source.name}`)
+      return res
     },
     async paste(text) {
       const { source } = await pasteData(text)

@@ -12,8 +12,10 @@ const props = defineProps({
   source: { type: Object, default: null },
   prep: { type: Object, default: () => ({}) },
   hasSource: { type: Boolean, default: false },
+  pairedLoading: { type: Boolean, default: false },
   err: { type: String, default: '' }
 })
+const emit = defineEmits(['paired'])
 
 const testMethod = defineModel('testMethod', { type: String, default: '' })
 const testY = defineModel('testY', { type: String, default: '' })
@@ -32,6 +34,14 @@ const canRunTest = computed(() => {
   if (isCorr.value) return !!(testY.value && testX.value)
   if (!testY.value) return false
   return !!(testGroup.value || isCorr.value)
+})
+// 方法清单：suggest 不主动推荐配对检验，但它是常用方法 —— 始终补在列表末尾
+const methodOptions = computed(() => {
+  const list = [...props.methods]
+  if (!list.some(m => m.id === 't.test.paired')) {
+    list.push({ id: 't.test.paired', label: '配对 t 检验（逐位置）' })
+  }
+  return list
 })
 const sigClass = computed(() => {
   const p = result.value?.p
@@ -65,7 +75,7 @@ async function runTest() {
         <label>检验方法</label>
         <el-select v-model="testMethod" size="small" filterable clearable
           placeholder="自动选择" style="width:100%">
-          <el-option v-for="m in methods" :key="m.id" :value="m.id" :label="m.label">
+          <el-option v-for="m in methodOptions" :key="m.id" :value="m.id" :label="m.label">
             <span class="opt-row"><span>{{ m.label }}</span><span class="opt-fn gg-mono">{{ m.id }}</span></span>
           </el-option>
         </el-select>
@@ -92,6 +102,14 @@ async function runTest() {
         <el-button size="small" type="primary" :loading="testRunning" :disabled="!canRunTest" @click="runTest">
           <el-icon class="el-icon--left"><TrendCharts /></el-icon>运行检验
         </el-button>
+      </div>
+      <div v-if="testMethod === 't.test.paired' && result" class="sp-actions">
+        <el-tooltip content="把配对的两列按行位置转成长表（id/variable/value），并在画布生成 配线+散点 图层；当前图会被替换，可撤销"
+          placement="top">
+          <el-button size="small" type="primary" plain :loading="pairedLoading" @click="emit('paired')">
+            <el-icon class="el-icon--left"><Share /></el-icon>生成配对线图层
+          </el-button>
+        </el-tooltip>
       </div>
       <div v-if="needPair" class="sp-hint warn">
         配对检验按分组水平顺序逐位置配对，请确认是「同一样本的两次测量」。

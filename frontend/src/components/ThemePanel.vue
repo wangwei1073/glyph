@@ -1,13 +1,26 @@
 <script setup>
-// 主题面板：内置主题 + 全部 theme() 元素编辑
+// 主题面板：内置主题 + 全部 theme() 元素编辑 + 「我的默认」模板（新建/清空画布自动套用）
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useMetaStore } from '../stores/meta'
-import { useSpecStore } from '../stores/spec'
+import { useSpecStore, saveUserDefault, clearUserDefault } from '../stores/spec'
 import ParamControl from './ParamControl.vue'
 import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const spec = useSpecStore()
+
+function saveDefault() {
+  saveUserDefault({
+    theme: JSON.parse(JSON.stringify(spec.spec.theme)),
+    renderOpts: { ...spec.renderOpts }
+  })
+  ElMessage.success('已存为我的默认：新建 / 清空画布将自动套用当前主题与画幅')
+}
+function resetDefault() {
+  clearUserDefault()
+  ElMessage.success('已恢复 Glyph 内置默认（对已打开的图不生效，下次新建生效）')
+}
 
 const search = ref('')
 const openGroups = ref(['plot'])
@@ -133,6 +146,11 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
 
 <template>
   <div class="gg-tab-scroll">
+    <div class="th-default-row">
+      <el-button size="small" type="primary" plain @click="saveDefault">存为我的默认</el-button>
+      <el-button size="small" text @click="resetDefault">恢复内置默认</el-button>
+      <span class="th-default-tip">新建 / 清空画布时自动套用当前主题与画幅</span>
+    </div>
     <div class="gg-subhead">基础主题</div>
     <div class="p-row">
       <el-select :model-value="spec.spec.theme.base" size="small" filterable style="width:100%"
@@ -376,4 +394,11 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
   padding: 26px 18px; text-align: center; font-size: 12px; color: var(--gg-text-3); line-height: 1.9;
 }
 .th-empty-sub { font-size: 11px; color: var(--gg-text-4); }
+</style>
+<style scoped>
+.th-default-row {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 8px 12px 2px;
+}
+.th-default-tip { font-size: 10.5px; color: var(--el-text-color-secondary); }
 </style>

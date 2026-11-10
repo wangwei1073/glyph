@@ -169,3 +169,59 @@
     groupable = as.list(nm[vapply(nm, function(x) .stats_is_groupable(d[[x]]), logical(1))])
   )
 }
+
+## ---- 误差条数据集（一键均值±CI 图的前置）------------------------------------
+# 从描述统计结果构建长表：variable/group/n/mean/sd/se/lower/upper。
+# err: ci95（默认，t 分布 95% 置信区间）/ se / sd；分组只取第一个维度。
+stats_agg <- function(d, vars = character(0), groupBy = character(0),
+                      err = c("ci95", "se", "sd")) {
+  err <- match.arg(err)
+  if (!length(vars)) stop("请先选择数值变量")
+  s <- .ggspec_stats_summary(d, vars, groupBy[1])
+  sm <- s$summary
+  sm <- sm[sm$group != "（合计）", , drop = FALSE]
+  if (!nrow(sm)) stop("没有可聚合的统计结果：先选择数值变量")
+  half <- switch(err,
+    sd  = sm$sd,
+    se  = sm$se,
+    ci95 = ifelse(sm$n > 1, stats::qt(0.975, pmax(sm$n - 1L, 1L)) * sm$se, NA_real_))
+  out <- data.frame(
+    variable = sm$variable, group = sm$group, n = sm$n,
+    mean = sm$mean, sd = sm$sd, se = sm$se,
+    lower = round(sm$mean - half, 4), upper = round(sm$mean + half, 4),
+    stringsAsFactors = FALSE)
+  rownames(out) <- NULL
+  has_group <- length(s$groupBy) > 0
+  n_vars <- length(unique(out$variable))
+  list(
+    df = out,
+    xSuggest = if (has_group) s$groupBy[1] else "variable",
+    fillSuggest = if (n_vars > 1) "variable" else if (has_group) s$groupBy[1] else "variable",
+    hasGroup = has_group, nVars = n_vars,
+    errLabel = switch(err, ci95 = "95% CI", se = "±SE", sd = "±SD"))
+}
+
+## ---- 配对线数据集（配对检验结果的可视化前置）--------------------------------
+# 把「数值列 + 两水平分组列」按行位置配对，转成 id/variable/value 长表。
+# 行位置配对与 t.test.paired 的逐位置语义一致（同一观测两次测量按行序对应）。
+stats_paired_df <- function(d, y, group) {
+  y <- as.character(y)[1]
+  g <- as.character(group)[1]
+  if (!nzchar(y) || !y %in% names(d)) stop("数值列不存在或未选择")
+  if (!nzchar(g) || !g %in% names(d)) stop("分组列不存在或未选择")
+  gv <- as.character(d[[g]])
+  lv <- unique(gv[!is.na(gv)])
+  if (length(lv) != 2) stop(sprintf("配对线需要分组列恰好两个水平，当前 %d 个", length(lv)))
+  keep <- !is.na(gv) & gv %in% lv
+  d2 <- d[keep, , drop = FALSE]
+  gv2 <- as.character(d2[[g]])
+  n1 <- sum(gv2 == lv[1]); n2 <- sum(gv2 == lv[2])
+  if (n1 != n2) stop(sprintf("两个水平的观测数不一致（%d vs %d）：逐位置配对要求成对，请检查行序", n1, n2))
+  out <- data.frame(
+    id = seq_len(n1),
+    variable = factor(rep(lv, each = n1), levels = lv),
+    value = c(d2[[y]][gv2 == lv[1]], d2[[y]][gv2 == lv[2]]),
+    stringsAsFactors = FALSE)
+  rownames(out) <- NULL
+  list(df = out, level1 = lv[1], level2 = lv[2], y = y, group = g, n = n1)
+}

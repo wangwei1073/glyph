@@ -3,7 +3,27 @@ import { defineStore } from 'pinia'
 import { renderPlot, rawRender } from '../api'
 import { useDataStore } from './data'
 
+// 用户自定义默认风格：主题面板「存为我的默认」写入，新建/清空画布时自动套用。
+// 只存本机（localStorage），不随项目文件走——项目文件自带完整 spec。
+const USER_DEFAULT_KEY = 'Glyph-user-default-v1'
+export function loadUserDefault() {
+  try {
+    const o = JSON.parse(localStorage.getItem(USER_DEFAULT_KEY) || 'null')
+    return (o && typeof o === 'object') ? o : null
+  } catch { return null }
+}
+export function saveUserDefault(o) {
+  try { localStorage.setItem(USER_DEFAULT_KEY, JSON.stringify(o || {})) } catch { /* 忽略 */ }
+}
+export function clearUserDefault() {
+  try { localStorage.removeItem(USER_DEFAULT_KEY) } catch { /* 忽略 */ }
+}
+
 export function defaultSpec() {
+  // 默认出图风格：Prism 期刊风（未装 ggprism 时启动后会回退到 minimal）；
+  // 用户存过「我的默认」则覆盖主题（base/args/elements 逐层合并，缺字段回退内置值）
+  const ud = loadUserDefault()
+  const udTheme = (ud && ud.theme && ud.theme.base) ? ud.theme : null
   return {
     data: { source: { type: 'none' }, filter: '', mutate: [], sample: null, seed: null, filterDisabled: false, sampleDisabled: false, types: [], text: [], outliers: [], fillna: [], dropnaCols: [], dropnaHow: 'any', dropnaDisabled: false, dedupCols: [], dedupEnabled: false },
     layers: [],
@@ -15,8 +35,11 @@ export function defaultSpec() {
     annotations: [],
     // 图上显著性标注（L3）：[{kind:'bracket'|'text', group1, group2, label, yPos?}]
     sigMarks: [],
-    // 默认出图风格：Prism 期刊风（未装 ggprism 时启动后会回退到 minimal）
-    theme: { base: 'prism', args: { palette: 'black_and_white', base_size: 12 }, elements: {} },
+    theme: {
+      base: udTheme ? udTheme.base : 'prism',
+      args: { palette: 'black_and_white', base_size: 12, ...(udTheme ? (udTheme.args || {}) : {}) },
+      elements: { ...(udTheme ? (udTheme.elements || {}) : {}) }
+    },
     combine: { active: false, slots: [], layout: {}, annotation: {} }
   }
 }
@@ -64,7 +87,10 @@ export const useSpecStore = defineStore('spec', {
     // 用于「存入图库」时决定是覆盖更新那条、还是另存为新条目。
     sourcePinId: '',
     sourcePinLabel: '',
-    renderOpts: { width: 900, height: 560, dpi: 150 },
+    renderOpts: (() => {
+      const ud = loadUserDefault()
+      return { width: 900, height: 560, dpi: 150, ...((ud && ud.renderOpts) || {}) }
+    })(),
     dark: false,
     history: [],
     future: [],
@@ -456,6 +482,27 @@ export const useSpecStore = defineStore('spec', {
       this.sourcePinLabel = ''
     },
     // 数据源切换后，丢弃指向不存在列的映射（否则渲染报「找不到对象 'xxx'」）
+    // 换数据源时按列名继承映射（同构数据批量出图）：
+    // 旧映射列在新数据里找不到时，尝试大小写不敏感的唯一匹配改绑；仍无匹配留给 pruneMappings 清除
+    remapMappings(oldNames, newNames) {
+      const old = oldNames || []
+      if (!old.length || !(newNames || []).length) return
+      const lower = new Map()
+      for (const n of newNames) {
+        const k = n.toLowerCase()
+        if (!lower.has(k)) lower.set(k, n)  // 重名歧义时取第一个，避免误绑
+      }
+      const remap = (v) => {
+        if (!(v && typeof v === 'object' && 'map' in v && v.map)) return
+        const name = String(v.map)
+        if (newNames.includes(name)) return
+        const hit = lower.get(name.toLowerCase())
+        if (hit) v.map = hit
+      }
+      for (const l of this.spec.layers) {
+        for (const k of Object.keys(l.aes || {})) remap(l.aes[k])
+      }
+    },
     pruneMappings(colNames) {
       const colSet = new Set(colNames || [])
       if (!colSet.size) return false
