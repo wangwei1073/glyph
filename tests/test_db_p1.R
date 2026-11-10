@@ -30,6 +30,30 @@ ok("拒绝多条语句", inherits(err2, "error"))
 err3 <- tryCatch(.db_clean_sql("  "), error = function(e) e)
 ok("拒绝空 SQL", inherits(err3, "error"))
 
+## ---- SQL 守卫：写操作变体（以 SELECT/WITH 开头也必须拦下）----
+err4 <- tryCatch(.db_clean_sql("WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x"),
+                 error = function(e) e)
+ok("拒绝 WITH...INSERT（数据修改 CTE）", inherits(err4, "error"))
+err5 <- tryCatch(.db_clean_sql("WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x"),
+                 error = function(e) e)
+ok("拒绝 WITH...DELETE（数据修改 CTE）", inherits(err5, "error"))
+err6 <- tryCatch(.db_clean_sql("SELECT * INTO newtable FROM t"), error = function(e) e)
+ok("拒绝 SELECT INTO", inherits(err6, "error"))
+err7 <- tryCatch(.db_clean_sql("select setval('seq1', 100)"), error = function(e) e)
+ok("拒绝 setval（序列写函数）", inherits(err7, "error"))
+ok("字符串字面量含关键字不误伤",
+   identical(.db_clean_sql("select * from t where note = 'please update the record'"),
+             "select * from t where note = 'please update the record'"))
+ok("转义引号字符串不误伤",
+   identical(.db_clean_sql("select * from t where note = 'it''s an update log'"),
+             "select * from t where note = 'it''s an update log'"))
+ok("列名含关键字子串不误伤",
+   identical(.db_clean_sql("select update_time, created_at from t where drop_reason is null"),
+             "select update_time, created_at from t where drop_reason is null"))
+ok("replace() 读函数不误伤",
+   identical(.db_clean_sql("select replace(name, 'a', 'b') from t"),
+             "select replace(name, 'a', 'b') from t"))
+
 ## ---- 标识符 ----
 ok("Postgres 双引号", identical(.db_ident("postgres", "a"), '"a"'))
 ok("MySQL 反引号", identical(.db_ident("mysql", "a"), "`a`"))

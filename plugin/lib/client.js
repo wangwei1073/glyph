@@ -16,7 +16,13 @@ window.__ModuleLoader__.load({
     const exports = {}
     Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' })
 
-    const API = 'http://127.0.0.1:4399'
+    // 下面两行由宿主半（lib/index.js 的 syncClientFile）在启动时回写：
+    //   CONTROL_PORT ← 控制服务端口（默认 4399）
+    //   GLYPH_TOKEN  ← 访问凭证（控制服务所有路由都要求这个头，token 不经 HTTP 提供）
+    // 改配置后需重启 DSH 或硬刷新页面生效
+    const CONTROL_PORT = 4399
+    const GLYPH_TOKEN = ''
+    const API = 'http://127.0.0.1:' + CONTROL_PORT
     const STYLE_ID = 'glyph-dsh-style'
     const TAB_ID = 'glyph'
 
@@ -39,7 +45,7 @@ window.__ModuleLoader__.load({
       try {
         fetch(API + '/log', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-glyph-token': GLYPH_TOKEN },
           body: JSON.stringify(Object.assign({ event: event }, extra || {})),
           keepalive: true
         }).catch(function () {})
@@ -47,9 +53,10 @@ window.__ModuleLoader__.load({
     }
 
     function api(path, body) {
+      const headers = { 'x-glyph-token': GLYPH_TOKEN }
       const opt = body === undefined
-        ? { method: 'GET' }
-        : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        ? { method: 'GET', headers }
+        : { method: 'POST', headers: Object.assign(headers, { 'Content-Type': 'application/json' }), body: JSON.stringify(body) }
       return fetch(API + path, opt).then(r => r.json())
     }
 
@@ -72,8 +79,13 @@ window.__ModuleLoader__.load({
         React.useEffect(() => {
           let alive = true
           const load = () => {
-            api('/status').then(st => { if (alive) setState(st || {}) }).catch(() => {
-              if (alive) setState({ running: false, starting: false, url: '', error: '无法连接 Glyph 控制服务（端口 4399）' })
+            api('/status').then(st => {
+              if (!alive) return
+              // 403 / 控制服务报错都会以 {ok:false,error} 的形式返回
+              setState(st && st.ok !== false ? st
+                : { running: false, starting: false, url: '', error: (st && st.error) || 'Glyph 未运行' })
+            }).catch(() => {
+              if (alive) setState({ running: false, starting: false, url: '', error: '无法连接 Glyph 控制服务（端口 ' + CONTROL_PORT + '）' })
             })
           }
           load()

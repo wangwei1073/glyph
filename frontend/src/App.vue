@@ -50,8 +50,12 @@ function startResize() {
 // 或参数不匹配而报错，画面直接空白）。
 // 退出「代码图」状态改为显式动作：画布顶栏的「返回我的图」按钮。
 let debounceTimer = null
+// 项目载入流程自己管理渲染（载入 spec / rawRender / 收尾），期间抑制 watcher 触发的防抖渲染，
+// 否则载入中途会与项目渲染并发，既浪费一次渲染也可能闪一下旧画面
+let loadingProject = false
 function scheduleRender(fromSpec = false) {
   if (!spec.autoRender) return
+  if (loadingProject) return
   // 代码图状态下忽略 spec 改动（设置仍会保存进 spec，只是不改画面）
   if (fromSpec && spec.last && spec.last.renderedFromCode) return
   clearTimeout(debounceTimer)
@@ -226,14 +230,17 @@ async function collectEmbeddedData() {
 
 async function saveProject() {
   const embedded = await collectEmbeddedData()
+  // mode 判定必须看 renderedFromCode：spec 模式渲染也会回填 last.code（后端生成的代码），
+  // 只看 code 存在与否会把所有项目都存成 'code'，载入时走错分支
+  const isCodePlot = !!(spec.last && spec.last.renderedFromCode && spec.last.code)
   const payload = {
     app: 'ggplotgui',
     format: PROJECT_FORMAT,
     savedAt: new Date().toISOString(),
     projectId: spec.projectId,
-    mode: (spec.last && spec.last.code) ? 'code' : 'spec',
+    mode: isCodePlot ? 'code' : 'spec',
     code: (spec.last && spec.last.code) || null,
-    renderOpts: (spec.last && spec.last.code) ? { ...spec.renderOpts } : null,
+    renderOpts: isCodePlot ? { ...spec.renderOpts } : null,
     spec: spec.spec,
     data: embedded
   }
@@ -250,6 +257,7 @@ function loadProjectClick() {
   input.onchange = async () => {
     const f = input.files[0]
     if (!f) return
+    loadingProject = true
     try {
       const obj = JSON.parse(await f.text())
       const isEnvelope = !!(obj && obj.app === 'ggplotgui' && obj.spec)
@@ -280,6 +288,7 @@ function loadProjectClick() {
                data.sources.some(s => s.type === 'user' && s.name === finalSrc.id)) {
         await data.select(`user:${finalSrc.id}`)
       }
+      let renderedCode = false
       if (project.mode === 'code' && project.code) {
         spec.renderOpts = { ...spec.renderOpts, ...(project.renderOpts || {}) }
         spec.pendingCode = project.code
@@ -287,16 +296,27 @@ function loadProjectClick() {
         if (rr.ok) {
           spec.last = { ok: true, pngUrl: rr.pngUrl || null, png: rr.png || null,
             code: project.code, warnings: rr.warnings || [], messages: [], error: null,
-            elapsed: rr.elapsedMs || 0 }
+            elapsed: rr.elapsedMs || 0,
+            // 标记来源：否则后续的 resize/尺寸改动会按 spec 重渲染，把代码图顶掉
+            renderedFromCode: true }
+          renderedCode = true
         } else {
           ElMessage.warning('代码图渲染失败：' + (rr.error || '未知错误'))
         }
       }
       spec.markSaved()   // 载入即视为当前内容与文件一致
       ElMessage.success(embedded ? '项目已载入（含内嵌数据）' : '项目已载入')
-      spec.renderNow()
+      if (renderedCode) {
+        // 代码图已按原样渲染完成：取消载入 spec 触发的防抖渲染，
+        // 也不要再用 spec（空的/旧配置）渲染覆盖它
+        clearTimeout(debounceTimer)
+      } else {
+        spec.renderNow()
+      }
     } catch (e) {
       ElMessage.error('载入失败: ' + e.message)
+    } finally {
+      loadingProject = false
     }
   }
   input.click()

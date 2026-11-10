@@ -38,7 +38,7 @@
 - 列面板带类型徽标（numeric / character / factor / date…）与唯一值预览
 
 ### 图层（graph 类型全覆盖）
-- **全部 58 个 ggplot2 geom**（运行时从已安装版本自动枚举，永不缺漏），
+- **全部 ggplot2 geom（50+，随版本变化）**（运行时从已安装版本自动枚举，永不缺漏），
   加上已安装扩展：ggrepel、ggthemes 的 geom
 - 未安装的扩展可在「高级 → 扩展管理」**一键安装**（后台安装、完成后自动刷新注册表，无需重启）；
   已安装但缺运行期依赖（如 ggtext 缺 stringi）也会提示并可直接安装依赖
@@ -72,7 +72,8 @@
 - annotate()（任意 geom）与 annotation_logticks 等函数；ggprism 的 annotation_ticks 轴刻度
 - **全部 160+ 个 theme() 元素**：中文标签、按类型（text / line / rect / …）渲染对应属性；
   9 个内置主题 + ggthemes 主题 + **ggprism 的 Prism 期刊风主题**；base_family 支持微软雅黑/黑体等中文字体预设
-- **默认出图风格**：Prism 期刊风（`theme_prism` + `floral` 配色），新建图时自动套用；
+- **默认出图风格**：Prism 期刊风主题（`theme_prism`，默认 `black_and_white` 主题色）+
+  自动配色标度用 `floral` 色板，新建图时自动套用；
   在「主题」「标度」面板可随时更换（未安装 ggprism 时自动回落为 minimal）
 
 ### 输出
@@ -111,7 +112,7 @@
 │   └── (npm run build → ../dist)
 ├── tools/
 │   └── make_geom_thumbs.R    # 重新生成 geom 示意图（改了主题/默认值后跑一次）
-├── dist/                 # 构建产物（已提交；R-only 用户无需 Node）
+├── dist/                 # 构建产物（不入库；构建 cd frontend && npm run build，发布 zip 见 tools/make_release.mjs）
 └── tests/                # test_specs / test_codegen_exec / test_edits / test_patchwork / test_api_guard
 ```
 
@@ -128,7 +129,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5180（代理 /ap
 # 后端
 Rscript run.R --no-browser
 
-# 测试（全部在项目根目录运行）
+# 测试（全部在项目根目录运行；或用统一入口 Rscript run_tests.R 一次跑完全套）
 Rscript tests/test_specs.R          # 29 个代表性 spec：生成 → 解析 → 渲染
 Rscript tests/test_codegen_exec.R   # 展示代码必须可执行，且数据与渲染路径一致
 Rscript tests/test_edits.R          # 手工编辑引擎 + 行锚 + 因子列
@@ -140,6 +141,21 @@ Rscript tests/test_export_check.R   # 导出前检查：白底 / dpi / 尺寸 / 
 Rscript tests/test_ext_install.R    # 扩展一键安装：白名单 / 并发保护 / 状态机
 Rscript tests/test_import.R         # 数据导入：文件预览/提交/来源记录/SQLite
 Rscript tests/test_db_p1.R          # 远程数据库：SQL 守卫/标识符/驱动/错误脱敏
+Rscript tests/test_newscale.R       # 多重标度（ggnewscale）+ 次轴
+Rscript tests/test_layer_visibility.R  # 图层显隐
+Rscript tests/test_ext_batch1.R     # 第一批扩展端到端（ggrepel/ggsci/ggthemes/ggprism…）
+Rscript tests/test_ext_batch2.R     # 第二批扩展端到端（ggpubr/ggbeeswarm/ggtext/ggside…）
+Rscript tests/test_ext_batch3.R     # 第三批扩展端到端（ggstats/ggridges/ggh4x/ggnewscale…）
+Rscript tests/test_ext_gate.R       # 关闭 patchwork / plotly 后的行为
+Rscript tests/test_ext_manager.R    # 扩展开关（启用/停用/注册表刷新）
+Rscript tests/test_extension_prism.R  # ggprism 集成（未安装时自动跳过）
+Rscript tests/test_stats_l1.R       # L1 描述统计
+Rscript tests/test_stats_l2.R       # L2 统计检验
+Rscript tests/test_sig_l3.R         # L3 图上显著性标注
+Rscript tests/test_reg_l4.R         # L4 回归分析
+Rscript tests/test_table1_l5.R      # L5 基线特征表
+node tests/test_chart_suggest.mjs   # 图表推荐引擎（纯函数，Node 环境）
+node tests/test_theme_default.mjs   # 主题默认值回归（新建/清空/载入旧项目不丢 Prism 主题）
 
 # 重新生成 geom 示意图（改了默认主题/映射后跑一次，产物在 frontend/public/geom-thumbs）
 Rscript tools/make_geom_thumbs.R

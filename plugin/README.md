@@ -1,6 +1,6 @@
 # Glyph DSH 插件
 
-把 [Glyph](https://github.com/wangwei1073/ggplot-gui)（ggplot2 图形界面）接进 DeepSeek Harness：
+把 Glyph（ggplot2 图形界面，本仓库 `run.R`）接进 DeepSeek Harness：
 右栏多一个 **Glyph** 原生页签，聊天里的 R 代码块一键推送出图。
 
 ---
@@ -120,14 +120,49 @@ GLYPH_DATADIR    Glyph 项目目录（数据/图库存这里）
 
 ### 运行时改配置
 
-控制服务提供接口（改完会自动重启 Glyph）：
+控制服务提供接口（改完会自动重启 Glyph）。所有请求都需要带 `x-glyph-token` 头
+（见下方「安全模型」；token 存在配置文件里）：
 
 ```bash
-curl -s http://127.0.0.1:4399/config
+TOKEN=$(node -p "require(require('os').homedir()+'/.dsh/glyph-plugin.json').token")
+curl -s http://127.0.0.1:4399/status -H "x-glyph-token: $TOKEN"
+curl -s http://127.0.0.1:4399/config -H "x-glyph-token: $TOKEN"
 curl -s -X POST http://127.0.0.1:4399/config \
-  -H 'Content-Type: application/json' \
+  -H "x-glyph-token: $TOKEN" -H 'Content-Type: application/json' \
   -d '{"glyphHome":"D:/vibecoding/ggplot-gui","rscript":"D:/R/R-4.6.1/bin/x64/Rscript.exe"}'
 ```
+
+配置文件还支持两个可选键：
+
+```json
+{
+  "allowedOrigins": ["http://127.0.0.1:5000"],
+  "port": 4399
+}
+```
+
+`allowedOrigins` 仅当 DSH 渲染层不是 `file://` 加载（CORS 来源不是 `null`）时才需要，
+把渲染页面的完整来源加进去即可。
+
+---
+
+## 四点五、安全模型
+
+控制服务能启动进程、执行 R 代码推送（`/push`），必须防止任意网页驱动它，做了三层：
+
+1. **只绑 127.0.0.1** —— 外部机器连不上。
+2. **CORS 来源白名单** —— 只对 `file://`（Electron 渲染层，来源为 `null`）、
+   `127.0.0.1` / `localhost`、以及配置文件 `allowedOrigins` 里的来源回 CORS 头。
+   公网页面读不到任何响应、POST 预检直接被拒。
+3. **token 校验** —— 所有路由要求 `x-glyph-token` 头。token 由宿主生成一次、
+   存在配置文件里，并在启动时回写进 `lib/client.js`（浏览器半没有文件系统权限，
+   只能靠宿主改写源文件把 token 交到它手里；token 绝不经 HTTP 提供，
+   因此被 CORS 放行的来源也拿不到它）。若 `client.js` 无法回写（只读安装目录等），
+   自动放弃 token 校验、退回仅 CORS 白名单模式（`/status` 里 `tokenEnforced: false`）。
+
+另外，宿主以 `--heartbeat` 启动 Glyph 并每 10 秒 ping 一次：DSH 退出后心跳停止，
+Glyph 超过 120 秒没收到心跳会自行退出，不留孤儿 R 进程；停止时用 `taskkill /T /F`
+整树杀进程（R 会派生渲染/装包子进程，普通 kill 杀不干净）。
 
 ---
 

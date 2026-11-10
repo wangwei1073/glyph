@@ -16,6 +16,10 @@ tests/_run_err.txt
 # 前端
 frontend/node_modules/
 _dist_check/
+# 构建产物不入库（2026-11 起改为发布时打包；构建：cd frontend && npm run build，
+# 发布 zip：node tools/make_release.mjs）
+dist/
+releases/
 
 # Positron 扩展（只提交源码，不提交依赖与产物）
 positron-ext/node_modules/

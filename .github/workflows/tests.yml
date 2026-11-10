@@ -1,0 +1,73 @@
+# Glyph 测试套件 CI
+# 说明：本仓库主远端为 NAS git；若托管在 Gitea 且启用了 Actions，
+# 该文件同样兼容（Gitea Actions 采用 GitHub Actions 语法）。
+name: tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  r-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+
+      # 与 plugin/README.md 的包清单保持一致（缺包的用例会被跳过而不是失败）
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::ggplot2
+            any::jsonlite
+            any::httpuv
+            any::ragg
+            any::systemfonts
+            any::png
+            any::readr
+            any::readxl
+            any::scales
+            any::ggrepel
+            any::ggsci
+            any::ggthemes
+            any::ggprism
+            any::ggpubr
+            any::ggbeeswarm
+            any::ggtext
+            any::ggside
+            any::ggstats
+            any::ggridges
+            any::ggh4x
+            any::ggnewscale
+            any::ggdist
+            any::ggforce
+            any::ggbreak
+            any::hrbrthemes
+            any::patchwork
+            any::plotly
+
+      - name: Run test suite
+        run: Rscript run_tests.R
+
+  js-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run frontend unit tests
+        run: |
+          node tests/test_chart_suggest.mjs
+          node tests/test_theme_default.mjs

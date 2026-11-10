@@ -9,7 +9,9 @@ export const useDataStore = defineStore('data', {
     srcKey: 'none',          // 'dataset:mpg' | 'user:u1' | 'none'
     columns: [],             // [{name,type,nUnique,preview...}]
     preview: { rows: [], nrow: 0, ncol: 0 },
-    previewLoading: false
+    previewLoading: false,
+    _refreshSeq: 0,          // refresh 请求序号：慢请求晚归时丢弃过期结果
+    _previewSeq: 0           // refreshPreview 请求序号：同上
   }),
   getters: {
     current(state) {
@@ -49,6 +51,9 @@ export const useDataStore = defineStore('data', {
         this.preview = { rows: [], nrow: 0, ncol: 0 }
         return
       }
+      // 请求序号：没有 abort 机制，慢请求（如非法加工表达式）晚归时会覆盖新数据源的列
+      // —— 用序号丢弃过期结果（含错误回退路径发出的第二次请求）
+      const token = ++this._refreshSeq
       try {
         const sd = useSpecStore().spec.data
         const prep = {
@@ -60,6 +65,7 @@ export const useDataStore = defineStore('data', {
           ? { type: 'dataset', name: c.name }
           : { type: 'user', id: c.name }
         const { columns } = await getColumns(source, prep)
+        if (token !== this._refreshSeq) return
         this.columns = columns
       } catch {
         // 加工表达式暂时不合法时回退到原始列，避免列面板突然清空
@@ -68,9 +74,14 @@ export const useDataStore = defineStore('data', {
             ? { type: 'dataset', name: c.name }
             : { type: 'user', id: c.name }
           const { columns } = await getColumns(src)
+          if (token !== this._refreshSeq) return
           this.columns = columns
-        } catch { this.columns = [] }
+        } catch {
+          if (token !== this._refreshSeq) return
+          this.columns = []
+        }
       }
+      if (token !== this._refreshSeq) return
       await this.refreshPreview()
       // 换了数据源后，清掉指向旧列的 aes 映射，避免渲染报「找不到对象」
       try { useSpecStore().pruneMappings(this.colNames) } catch { /* 循环依赖兜底 */ }
@@ -78,6 +89,7 @@ export const useDataStore = defineStore('data', {
     async refreshPreview() {
       const c = this.current
       if (!c || c.type === 'none') return
+      const token = ++this._previewSeq
       this.previewLoading = true
       try {
         const src = c.type === 'dataset' ? { type: 'dataset', name: c.name }
@@ -85,11 +97,15 @@ export const useDataStore = defineStore('data', {
         // 数据加工参数以 spec.data 为准（单一事实来源）
         const sd = useSpecStore().spec.data
         const prep = { filter: sd.filter || '', mutate: sd.mutate || [], sample: sd.sample, seed: sd.seed, filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled, types: sd.types || [], outliers: sd.outliers || [], fillna: sd.fillna || [], dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled }
-        this.preview = await previewData(src, prep)
+        const res = await previewData(src, prep)
+        if (token !== this._previewSeq) return
+        this.preview = res
       } catch (e) {
+        if (token !== this._previewSeq) return
         this.preview = { rows: [], nrow: 0, ncol: 0, error: e.message }
       } finally {
-        this.previewLoading = false
+        // 过期请求不去动 previewLoading —— 它归最新那次请求管
+        if (token === this._previewSeq) this.previewLoading = false
       }
     },
     async upload(file) {

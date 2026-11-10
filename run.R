@@ -27,6 +27,12 @@ scriptdir <- normalizePath(scriptdir, winslash = "/", mustWork = FALSE)
 DATA_DIR <- .getarg("--data-dir", "")
 DIST <- normalizePath(file.path(scriptdir, "dist"), mustWork = FALSE)
 if (!dir.exists(DIST)) DIST <- "dist"
+# dist 不存在时给出明确指引（构建产物已不入库，克隆后需先构建或使用发布包）
+if (!dir.exists(DIST) || !file.exists(file.path(DIST, "index.html"))) {
+  cat("警告: 找不到前端构建产物 dist/index.html。\n",
+      "  请在 frontend/ 目录执行 npm install && npm run build，\n",
+      "  或使用发布包（node tools/make_release.mjs 生成）。\n", sep = "")
+}
 
 options(stringsAsFactors = FALSE)
 Sys.setenv(TZ = "UTC")

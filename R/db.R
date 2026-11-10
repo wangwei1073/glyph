@@ -1,7 +1,11 @@
 # Glyph - 远程数据库（P1）：连接 / 浏览 / 只读预览 / 导入
 # 安全约定：
 #   * 连接对象只存在后端内存，前端只拿 connId；密码不落盘、不回传；
-#   * 连接后尽量设置只读事务；自定义 SQL 只允许单条 SELECT/WITH；
+#   * 连接后按驱动设置会话只读（成败记录在连接上，测试连接时会提示）；
+#   * 自定义 SQL 先剥掉字符串字面量再查写操作关键字（挡 WITH...INSERT / SELECT INTO
+#     这类以 SELECT/WITH 开头的变体），只允许单条 SELECT/WITH；
+#   * 关键字守卫是最后一道防线：若会话只读设置失败（如部分 ODBC 后端），
+#     前端会在测试连接时收到 readOnly=FALSE 与提示，自定义 SQL 仍可用但仅受关键字守卫保护；
 #   * 预览默认 LIMIT 100，导入上限 100 万行。
 
 DB_STATE <- new.env(parent = emptyenv())
@@ -67,31 +71,45 @@ db_driver_catalog <- function() {
                             pwd = pwd)
     }
   }
-  # 尽量设只读（失败不阻断，SQL 守卫仍生效）
-  try(DBI::dbExecute(con, if (driver == "mysql")
-    "SET SESSION TRANSACTION READ ONLY" else "SET default_transaction_read_only = on"), silent = TRUE)
-  con
+  # 会话级只读：按驱动选正确的语句（此前对 ODBC 发的是 PG 语法，必失败且被静默吞掉）
+  list(con = con, readOnly = .db_set_readonly(con, driver))
+}
+
+# 尽量设只读，返回是否成功。失败不阻断连接（表浏览是纯读的），
+# 但自定义 SQL 的写风险会相应升高 —— 调用方负责把该状态透出给前端。
+.db_set_readonly <- function(con, driver) {
+  stmts <- switch(driver,
+    mysql    = "SET SESSION TRANSACTION READ ONLY",
+    postgres = "SET default_transaction_read_only = on",
+    # ODBC 后端方言未知：PG 语法不行再试 MySQL 语法
+    c("SET default_transaction_read_only = on", "SET SESSION TRANSACTION READ ONLY"))
+  for (s in stmts) {
+    ok <- tryCatch({ DBI::dbExecute(con, s); TRUE }, error = function(e) FALSE)
+    if (ok) return(TRUE)
+  }
+  FALSE
 }
 
 db_test_connection <- function(opts) {
   t0 <- Sys.time()
-  con <- tryCatch(.db_connect_raw(opts), error = function(e) e)
-  if (inherits(con, "error")) stop(.db_sanitize(conditionMessage(con), opts))
-  on.exit(try(DBI::dbDisconnect(con), silent = TRUE), add = TRUE)
-  ver <- tryCatch(as.character(DBI::dbGetQuery(con, "SELECT version() AS v")$v[1]),
+  r <- tryCatch(.db_connect_raw(opts), error = function(e) e)
+  if (inherits(r, "error")) stop(.db_sanitize(conditionMessage(r), opts))
+  on.exit(try(DBI::dbDisconnect(r$con), silent = TRUE), add = TRUE)
+  ver <- tryCatch(as.character(DBI::dbGetQuery(r$con, "SELECT version() AS v")$v[1]),
                   error = function(e) NA_character_)
-  if (is.na(ver)) ver <- tryCatch(paste(DBI::dbGetInfo(con)$db.version %||% ""), error = function(e) "")
-  list(ok = TRUE, version = ver,
+  if (is.na(ver)) ver <- tryCatch(paste(DBI::dbGetInfo(r$con)$db.version %||% ""), error = function(e) "")
+  list(ok = TRUE, version = ver, readOnly = r$readOnly,
+       warning = if (!r$readOnly) "未能启用会话只读，自定义 SQL 仅受关键字守卫保护" else NULL,
        elapsedMs = round(as.numeric(difftime(Sys.time(), t0, units = "secs")) * 1000))
 }
 
 db_connect <- function(opts) {
-  con <- tryCatch(.db_connect_raw(opts), error = function(e) e)
-  if (inherits(con, "error")) stop(.db_sanitize(conditionMessage(con), opts))
+  r <- tryCatch(.db_connect_raw(opts), error = function(e) e)
+  if (inherits(r, "error")) stop(.db_sanitize(conditionMessage(r), opts))
   id <- paste0("db-", sprintf("%08x", as.integer(stats::runif(1, 1, 2^31 - 1))))
-  info <- tryCatch(DBI::dbGetInfo(con), error = function(e) list())
+  info <- tryCatch(DBI::dbGetInfo(r$con), error = function(e) list())
   DB_STATE$conns[[id]] <- list(
-    id = id, con = con,
+    id = id, con = r$con, readOnly = r$readOnly,
     driver = as.character(opts$driver %||% ""),
     host = as.character(opts$host %||% ""),
     dbname = as.character(opts$dbname %||% ""),
@@ -100,6 +118,7 @@ db_connect <- function(opts) {
     opened = Sys.time()
   )
   list(connId = id, driver = DB_STATE$conns[[id]]$driver,
+       readOnly = r$readOnly,
        version = as.character(info$db.version %||% ""),
        host = DB_STATE$conns[[id]]$host, dbname = DB_STATE$conns[[id]]$dbname)
 }
@@ -141,10 +160,17 @@ db_tables <- function(conn_id) {
   c <- .db_conn(conn_id)
   driver <- c$driver
   if (driver == "postgres") {
-    q <- paste0("SELECT table_schema AS schema, table_name AS name, table_type AS type, ",
-                "COALESCE(table_rows, 0) AS rows FROM information_schema.tables ",
-                "WHERE table_schema NOT IN ('pg_catalog','information_schema') ",
-                "ORDER BY table_schema, table_name")
+    # information_schema.tables 没有 table_rows 列（那是 MySQL 的非标准列，PG 上必然报错）；
+    # PG 的行数估计在 pg_class.reltuples —— 直接查系统目录，表和视图一并返回
+    q <- paste0(
+      "SELECT n.nspname AS schema, c.relname AS name, ",
+      "CASE c.relkind WHEN 'r' THEN 'BASE TABLE' WHEN 'p' THEN 'BASE TABLE' ",
+      "WHEN 'v' THEN 'VIEW' WHEN 'm' THEN 'VIEW' ELSE 'OTHER' END AS type, ",
+      "GREATEST(c.reltuples::bigint, 0) AS rows ",
+      "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace ",
+      "WHERE n.nspname NOT IN ('pg_catalog','information_schema') ",
+      "AND c.relkind IN ('r','p','v','m') ",
+      "ORDER BY n.nspname, c.relname")
   } else if (driver == "mysql") {
     q <- paste0("SELECT table_schema AS schema, table_name AS name, table_type AS type, ",
                 "COALESCE(table_rows, 0) AS rows FROM information_schema.tables ",
@@ -167,6 +193,20 @@ db_tables <- function(conn_id) {
   if (!nzchar(s)) stop("SQL 为空")
   if (grepl(";", s, fixed = TRUE)) stop("只允许单条 SELECT 查询（不要包含分号）")
   if (!grepl("^\\s*(select|with)\\b", s, ignore.case = TRUE)) stop("只允许 SELECT / WITH 查询")
+  # 先剥掉字符串字面量与引号标识符再查关键字，避免 WHERE note = '请 update 记录' 这类误报
+  stripped <- gsub("'(?:[^']|'')*'", "''", s, perl = TRUE)   # 单引号字符串（含 '' 转义）
+  stripped <- gsub('"[^"]*"', '""', stripped)                # 双引号标识符
+  stripped <- gsub("`[^`]*`", "``", stripped)                # MySQL 反引号
+  # 名称级守卫之外再挡写操作：WITH ... INSERT / SELECT ... INTO 这类以 SELECT/WITH
+  # 开头的变体也必须拦下；setval/set_config 是能在 SELECT 里调用的写函数。
+  # \b 保证 update_time 之类的列名不误伤（下划线是单词字符）；
+  # 不拦 replace() 等读函数 —— REPLACE INTO 语句以 REPLACE 开头，已被前缀检查拒绝。
+  if (grepl(paste0("\\b(into|insert|update|delete|merge|truncate|create|alter|drop|",
+                   "grant|revoke|copy|call|exec|execute|do|set|reset|lock|",
+                   "vacuum|analyze|analyse|setval|set_config)\\b"),
+            stripped, ignore.case = TRUE)) {
+    stop("只读查询：不允许包含写操作或 DDL 关键字")
+  }
   s
 }
 
@@ -185,6 +225,7 @@ db_preview <- function(conn_id, schema = "", table = "", sql = "", limit = 100) 
   if (inherits(df, "error")) stop(.db_sanitize(conditionMessage(df), list()))
   list(columns = import_columns(df), rows = import_rows(df, nrow(df)),
        stats = lapply(df, .import_col_stats), previewRows = nrow(df),
+       readOnly = c$readOnly %||% TRUE,
        sql = if (nzchar(sql %||% "")) sql else q)
 }
 

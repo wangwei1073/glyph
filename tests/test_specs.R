@@ -175,6 +175,8 @@ add_spec("viridis 分箱色+size 连续标度",
     SC("colour", "viridis_b", list(option = "C")),
     SC("size", "continuous", list(range = E("c(1, 6)")))))
 
+# 以下两个用例依赖扩展包；未安装则跳过（不判失败），保持测试在精简环境下可跑
+if (requireNamespace("ggsci", quietly = TRUE) && requireNamespace("ggrepel", quietly = TRUE)) {
 add_spec("ggsci 配色+ggrepel 防重叠",
   data = "mtcars",
   layers = list(
@@ -182,15 +184,18 @@ add_spec("ggsci 配色+ggrepel 防重叠",
     G("text_repel", A(x = "wt", y = "mpg", label = E("rownames(df)")),
       params = list(max.overlaps = 20))),
   scales = list(SC("fill", "npg")))
+} else cat("[SKIP] ggsci 配色+ggrepel 防重叠（未安装 ggsci/ggrepel）\n")
 
 add_spec("guides 图例隐藏",
   layers = list(G("point", A(x = "displ", y = "hwy", colour = "class"), showLegend = FALSE)),
   guides = list(colour = "none"))
 
+if (requireNamespace("ggthemes", quietly = TRUE)) {
 add_spec("ggthemes 主题",
   data = "economics",
   layers = list(G("line", A(x = "date", y = "unemploy"))),
   theme = list(base = "economist"))
+} else cat("[SKIP] ggthemes 主题（未安装 ggthemes）\n")
 
 add_spec("面积图堆叠",
   data = "economics_long",
