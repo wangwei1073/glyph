@@ -101,7 +101,7 @@
   } else if (inherits(fit, "glm")) {
     out$deviance <- round(fit$deviance, 3)
     out$nullDeviance <- round(fit$null.deviance, 3)
-    out$aov <- round(s$aic, 3)
+    # （旧版在此误放过一个名为 aov 的 AIC 副本，与下面的 aic 同值不同名，已删）
     out$aic <- round(stats::AIC(fit), 3)
     out$pseudoR2 <- round(1 - fit$deviance / fit$null.deviance, 4)
   }

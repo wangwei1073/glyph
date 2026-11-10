@@ -25,6 +25,7 @@ DataStore <- local({
       TRUE
     }, error = function(e) FALSE))
   }
+  # .save_meta 的调用方必须检查返回值：meta 写失败 = 重启后数据不可见（静默丢失类问题）
 
   .load <- function() {
     if (is.null(.dir)) return(invisible(FALSE))
@@ -69,9 +70,14 @@ DataStore <- local({
       .items[[id]] <<- list(df = df, label = label, id = id,
                             nrow = nrow(df), ncol = ncol(df), origin = origin)
       if (!is.null(.dir)) {
-        try(saveRDS(df, .item_file(id)), silent = TRUE)
-        .save_meta()
-        try(writeLines(as.character(.counter), .counter_file()), silent = TRUE)
+        # 落盘失败必须显式报错：静默吞掉会出现「当期可用、重启后数据无声消失」
+        rds_err <- tryCatch({ saveRDS(df, .item_file(id)); NULL },
+                            error = function(e) conditionMessage(e))
+        if (!is.null(rds_err)) stop("数据落盘失败（saveRDS）：", rds_err, call. = FALSE)
+        if (!.save_meta()) stop("数据元信息写入失败（meta.json）", call. = FALSE)
+        cnt_err <- tryCatch({ writeLines(as.character(.counter), .counter_file()); NULL },
+                            error = function(e) conditionMessage(e))
+        if (!is.null(cnt_err)) stop("计数器写入失败：", cnt_err, call. = FALSE)
       }
       id
     },
@@ -97,6 +103,16 @@ DataStore <- local({
                                 nrow = it$nrow, ncol = it$ncol, package = NULL,
                                 origin = it$origin %||% NULL)
 
+# UTF-8 优先；非法 UTF-8 字节（典型：中文 Windows Excel 默认导出的 GBK CSV）回退 GBK 重读
+.read_csv_flex <- function(path, reader) {
+  tryCatch(
+    reader(path, show_col_types = FALSE, progress = FALSE),
+    error = function(e)
+      reader(path, show_col_types = FALSE, progress = FALSE,
+             locale = readr::locale(encoding = "GBK"))
+  )
+}
+
 # 解码 base64 -> 临时文件 -> 读取为 data.frame
 data_from_upload <- function(name, ext, data_base64) {
   ext <- tolower(sub("^\\.", "", ext %||% tools::file_ext(name)))
@@ -106,9 +122,8 @@ data_from_upload <- function(name, ext, data_base64) {
   writeBin(jsonlite::base64_dec(data_base64), con)
   close(con)
   d <- switch(ext,
-    csv = readr::read_csv(tmp, show_col_types = FALSE, progress = FALSE),
-    tsv = readr::read_tsv(tmp, show_col_types = FALSE, progress = FALSE),
-    txt = readr::read_csv(tmp, show_col_types = FALSE, progress = FALSE),
+    csv = , txt = .read_csv_flex(tmp, readr::read_csv),
+    tsv = .read_csv_flex(tmp, readr::read_tsv),
     xls = , xlsx = readxl::read_excel(tmp),
     rds = readRDS(tmp),
     json = jsonlite::fromJSON(tmp, simplifyVector = TRUE),
@@ -132,7 +147,10 @@ data_from_paste <- function(text) {
   on.exit(unlink(tmp), add = TRUE)
   writeLines(text, tmp, useBytes = TRUE)
   sep <- if (grepl("\t", text)) "\t" else ","
-  d <- readr::read_delim(tmp, delim = sep, show_col_types = FALSE, progress = FALSE)
+  # show_col_types / progress 由 .read_csv_flex 统一传，这里只补 delim
+  d <- .read_csv_flex(tmp, function(p, ...) {
+    readr::read_delim(p, delim = sep, ...)
+  })
   d <- as.data.frame(d)
   names(d) <- make.names(names(d), unique = TRUE)
   ggspec_with_rid(d)
@@ -172,171 +190,22 @@ data_from_paste <- function(text) {
        method = method, k = k, action = action, flag = flag)
 }
 
-data_prep_summary <- function(df, prep) {
+# ---- 数据加工引擎：summary 与 prepare 的单一实现 ------------------------------
+# 旧版 prepare 与 summary 是两份并行实现（~200 行 × 2），已经漂移过两次：
+#   1) summary 的 fillna 生成代码把数值列填成字符串（"5"），跑不出实际行为；
+#   2) summary 抽样前不 set.seed，展示的行数可能与实际 prepare 不一致。
+# 现在只有一份引擎：collect=TRUE 额外产出步骤/代码（摘要模式，单步出错记录后继续）；
+# collect=FALSE 只返回结果（严格模式，出错即 stop）。新增加工步骤只改这里。
+.prep_run <- function(df, prep, collect = FALSE) {
+  if (is.null(df)) {
+    if (collect) return(list(df = NULL, steps = list(), code = character(0)))
+    return(df)
+  }
   prep <- prep %||% list()
-  if (is.null(df)) return(list(steps = list(), nrow = 0, ncol = 0, code = character(0)))
-  d <- df
   steps <- list()
   code <- character(0)
-  for (t in prep$types %||% list()) {
-    if (isTRUE(t$disabled)) next
-    nm <- trimws(as.character(t$name %||% ""))
-    to <- as.character(t$type %||% "")
-    if (!nzchar(nm) || !nm %in% names(d) || !nzchar(to)) next
-    d[[nm]] <- switch(to, num = suppressWarnings(as.numeric(d[[nm]])),
-                      chr = as.character(d[[nm]]), fct = as.factor(d[[nm]]),
-                      lgl = suppressWarnings(as.logical(d[[nm]])),
-                      date = suppressWarnings(as.Date(d[[nm]])), d[[nm]])
-    steps[[length(steps) + 1]] <- list(type = "type", name = nm, to = to)
-    fn <- c(num = "as.numeric", chr = "as.character", fct = "as.factor",
-            lgl = "as.logical", date = "as.Date")[[to]]
-    code <- c(code, sprintf("df$%s <- %s(df$%s)", nm, fn, nm))
-  }
-  for (tx in prep$text %||% list()) {
-    if (isTRUE(tx$disabled)) next
-    nm <- trimws(as.character(tx$name %||% ""))
-    if (!nzchar(nm) || !nm %in% names(d)) next
-    x0 <- as.character(d[[nm]])
-    op <- as.character(tx$op %||% "trim")
-    if (identical(op, "split")) {
-      sep <- as.character(tx$sep %||% ",")
-      if (!nzchar(sep)) sep <- ","
-      parts <- strsplit(x0, sep, fixed = TRUE)
-      i1 <- as.character(tx$into1 %||% paste0(nm, "_1"))
-      i2 <- as.character(tx$into2 %||% paste0(nm, "_2"))
-      d[[i1]] <- vapply(parts, function(p) if (length(p) >= 1) p[1] else NA_character_, "")
-      d[[i2]] <- vapply(parts, function(p) if (length(p) >= 2) p[2] else NA_character_, "")
-      steps[[length(steps) + 1]] <- list(type = "text", name = nm, op = "split",
-                                         into1 = i1, into2 = i2)
-      code <- c(code, sprintf("df <- tidyr::separate(df, %s, into = c(%s, %s), sep = %s, extra = 'drop')",
-                              deparse(nm), deparse(i1), deparse(i2), deparse(sep)))
-      next
-    }
-    new <- switch(op,
-      trim = trimws(x0), upper = toupper(x0), lower = tolower(x0),
-      replace = {
-        from <- as.character(tx$from %||% "")
-        to <- as.character(tx$to %||% "")
-        if (nzchar(from)) gsub(from, to, x0, fixed = TRUE) else x0
-      }, x0)
-    changed <- sum(!is.na(x0) & (is.na(new) | x0 != new))
-    d[[nm]] <- new
-    steps[[length(steps) + 1]] <- list(type = "text", name = nm, op = op, changed = changed)
-    code <- c(code, switch(op,
-      trim = sprintf("df$%s <- trimws(df$%s)", nm, nm),
-      upper = sprintf("df$%s <- toupper(df$%s)", nm, nm),
-      lower = sprintf("df$%s <- tolower(df$%s)", nm, nm),
-      replace = sprintf("df$%s <- gsub(%s, %s, df$%s, fixed = TRUE)", nm,
-                        deparse(as.character(tx$from %||% "")),
-                        deparse(as.character(tx$to %||% "")), nm)))
-  }
-  for (o in prep$outliers %||% list()) {
-    if (isTRUE(o$disabled)) next
-    r <- .apply_outlier_step(d, o)
-    if (is.null(r)) next
-    d <- r$df
-    steps[[length(steps) + 1]] <- list(type = "outlier", name = r$nm, method = r$method,
-                                       action = r$action, n = r$n)
-    code <- c(code, switch(r$action,
-      flag = sprintf("df$%s_outlier <- !is.na(df$%s) & (df$%s < %.6g | df$%s > %.6g)",
-                     r$nm, r$nm, r$nm, r$lo, r$nm, r$hi),
-      drop = sprintf("df <- df[!is.na(df$%s) & (df$%s < %.6g | df$%s > %.6g), , drop = FALSE]",
-                     r$nm, r$nm, r$lo, r$nm, r$hi),
-      winsor = sprintf("df$%s <- pmin(pmax(df$%s, %.6g), %.6g)", r$nm, r$nm, r$lo, r$hi)))
-  }
-  for (m in prep$mutate %||% list()) {
-    if (isTRUE(m$disabled)) next
-    nm <- trimws(as.character(m$name %||% ""))
-    ex <- trimws(as.character(m$expr %||% ""))
-    if (!nzchar(nm) || !nzchar(ex)) next
-    val <- tryCatch(eval(parse(text = ex, keep.source = FALSE), envir = d, enclos = parent.frame()),
-                    error = function(e) e)
-    if (inherits(val, "error")) {
-      steps[[length(steps) + 1]] <- list(type = "mutate", name = nm,
-                                         error = conditionMessage(val))
-      next
-    }
-    d[[nm]] <- if (length(val) == 1L) rep(val, nrow(d)) else val
-    steps[[length(steps) + 1]] <- list(type = "mutate", name = nm)
-    code <- c(code, sprintf("df$%s <- %s", nm, ex))
-  }
-  flt <- trimws(as.character(prep$filter %||% ""))
-  if (!isTRUE(prep$dropnaDisabled)) {
-    cols <- intersect(as.character(unlist(prep$dropnaCols %||% list())), names(d))
-    if (length(cols)) {
-      before <- nrow(d)
-      miss <- is.na(d[, cols, drop = FALSE])
-      drop <- if (identical(prep$dropnaHow, "all")) apply(miss, 1, all) else apply(miss, 1, any)
-      d <- d[!drop, , drop = FALSE]
-      steps[[length(steps) + 1]] <- list(type = "dropna", removed = before - nrow(d), nrow = nrow(d))
-      code <- c(code, sprintf("df <- df[!apply(is.na(df[, c(%s), drop = FALSE]), 1, %s), , drop = FALSE]",
-                              paste(sprintf('"%s"', cols), collapse = ", "),
-                              if (identical(prep$dropnaHow, "all")) "all" else "any"))
-    }
-  }
-  for (f in prep$fillna %||% list()) {
-    if (isTRUE(f$disabled)) next
-    nm <- trimws(as.character(f$name %||% ""))
-    if (!nzchar(nm) || !nm %in% names(d)) next
-    x <- d[[nm]]
-    nas <- is.na(x)
-    if (!any(nas)) next
-    m <- as.character(f$method %||% "constant")
-    val <- switch(m,
-      constant = f$value %||% "",
-      mean = mean(suppressWarnings(as.numeric(x)), na.rm = TRUE),
-      median = stats::median(suppressWarnings(as.numeric(x)), na.rm = TRUE),
-      mode = {
-        tab <- table(x)
-        if (length(tab)) names(tab)[which.max(tab)] else NA
-      }, NA)
-    if (is.character(x) || identical(m, "mode")) x[nas] <- as.character(val)
-    else x[nas] <- suppressWarnings(as.numeric(val))
-    d[[nm]] <- x
-    steps[[length(steps) + 1]] <- list(type = "fillna", name = nm, method = m, filled = sum(nas))
-    code <- c(code, switch(m,
-      constant = sprintf("df$%s[is.na(df$%s)] <- %s", nm, nm, deparse(as.character(f$value %||% ""))),
-      mean = sprintf("df$%s[is.na(df$%s)] <- mean(df$%s, na.rm = TRUE)", nm, nm, nm),
-      median = sprintf("df$%s[is.na(df$%s)] <- median(df$%s, na.rm = TRUE)", nm, nm, nm),
-      mode = sprintf("df$%s[is.na(df$%s)] <- names(sort(table(df$%s), decreasing = TRUE))[1]", nm, nm, nm)))
-  }
-  if (!isTRUE(prep$filterDisabled) && nzchar(flt)) {
-    before <- nrow(d)
-    keep <- tryCatch(eval(parse(text = flt, keep.source = FALSE), envir = d, enclos = parent.frame()),
-                     error = function(e) e)
-    if (inherits(keep, "error")) {
-      steps[[length(steps) + 1]] <- list(type = "filter", error = conditionMessage(keep))
-    } else if (is.logical(keep)) {
-      keep <- keep & !is.na(keep)
-      d <- d[keep, , drop = FALSE]
-      steps[[length(steps) + 1]] <- list(type = "filter", removed = before - nrow(d), nrow = nrow(d))
-      code <- c(code, sprintf("df <- subset(df, %s)", flt))
-    }
-  }
-  if (isTRUE(prep$dedupEnabled)) {
-    before <- nrow(d)
-    cols <- intersect(as.character(unlist(prep$dedupCols %||% list())), names(d))
-    if (!length(cols)) cols <- setdiff(names(d), ".gg_rid")
-    if (length(cols)) {
-      d <- d[!duplicated(d[, cols, drop = FALSE]), , drop = FALSE]
-      steps[[length(steps) + 1]] <- list(type = "dedup", removed = before - nrow(d), nrow = nrow(d))
-      code <- c(code, sprintf("df <- df[!duplicated(df[, c(%s), drop = FALSE]), , drop = FALSE]",
-                              paste(sprintf('"%s"', cols), collapse = ", ")))
-    }
-  }
-  n <- prep$sample
-  if (!isTRUE(prep$sampleDisabled) && !is.null(n) && is.numeric(n) && n > 0 && n < nrow(d)) {
-    d <- d[sample.int(nrow(d), as.integer(n)), , drop = FALSE]
-    steps[[length(steps) + 1]] <- list(type = "sample", n = nrow(d))
-    code <- c(code, sprintf("set.seed(%s); df <- df[sample.int(nrow(df), %d), ]",
-                            as.character(prep$seed %||% "NULL"), nrow(d)))
-  }
-  list(steps = steps, nrow = nrow(d), ncol = ncol(d), code = code)
-}
-
-data_prepare <- function(df, prep) {
-  if (is.null(df)) return(df)
-  prep <- prep %||% list()
+  add_step <- function(s) steps[[length(steps) + 1L]] <<- s
+  add_code <- function(c) code <<- c(code, c)
   seed <- prep$seed
   if (!is.null(seed) && is.numeric(seed)) set.seed(as.integer(seed))
 
@@ -344,71 +213,115 @@ data_prepare <- function(df, prep) {
   for (t in prep$types %||% list()) {
     if (isTRUE(t$disabled)) next
     nm <- trimws(as.character(t$name %||% ""))
-    if (!nzchar(nm) || !nm %in% names(df)) next
-    x <- df[[nm]]
-    df[[nm]] <- switch(as.character(t$type %||% ""),
-      num  = suppressWarnings(as.numeric(x)),
-      chr  = as.character(x),
-      fct  = as.factor(x),
-      lgl  = suppressWarnings(as.logical(x)),
-      date = suppressWarnings(as.Date(x)),
-      x)
+    to <- as.character(t$type %||% "")
+    if (!nzchar(nm) || !nm %in% names(df) || !nzchar(to)) next
+    df[[nm]] <- switch(to,
+      num = suppressWarnings(as.numeric(df[[nm]])),
+      chr = as.character(df[[nm]]), fct = as.factor(df[[nm]]),
+      lgl = suppressWarnings(as.logical(df[[nm]])),
+      date = suppressWarnings(as.Date(df[[nm]])), df[[nm]])
+    if (collect) {
+      add_step(list(type = "type", name = nm, to = to))
+      fn <- c(num = "as.numeric", chr = "as.character", fct = "as.factor",
+              lgl = "as.logical", date = "as.Date")[[to]]
+      add_code(sprintf("df$%s <- %s(df$%s)", nm, fn, nm))
+    }
   }
 
-  # 文本清洗：去空格 / 大小写 / 替换
+  # 文本清洗：去空格 / 大小写 / 替换 / 拆分
   for (tx in prep$text %||% list()) {
     if (isTRUE(tx$disabled)) next
     nm <- trimws(as.character(tx$name %||% ""))
     if (!nzchar(nm) || !nm %in% names(df)) next
-    x <- as.character(df[[nm]])
+    x0 <- as.character(df[[nm]])
     op <- as.character(tx$op %||% "trim")
     if (identical(op, "split")) {
       sep <- as.character(tx$sep %||% ",")
       if (!nzchar(sep)) sep <- ","
-      parts <- strsplit(x, sep, fixed = TRUE)
+      parts <- strsplit(x0, sep, fixed = TRUE)
       i1 <- as.character(tx$into1 %||% paste0(nm, "_1"))
       i2 <- as.character(tx$into2 %||% paste0(nm, "_2"))
       df[[i1]] <- vapply(parts, function(p) if (length(p) >= 1) p[1] else NA_character_, "")
       df[[i2]] <- vapply(parts, function(p) if (length(p) >= 2) p[2] else NA_character_, "")
+      if (collect) {
+        add_step(list(type = "text", name = nm, op = "split", into1 = i1, into2 = i2))
+        add_code(sprintf("df <- tidyr::separate(df, %s, into = c(%s, %s), sep = %s, extra = 'drop')",
+                         deparse(nm), deparse(i1), deparse(i2), deparse(sep)))
+      }
       next
     }
-    df[[nm]] <- switch(op,
-      trim = trimws(x),
-      upper = toupper(x),
-      lower = tolower(x),
+    new <- switch(op,
+      trim = trimws(x0), upper = toupper(x0), lower = tolower(x0),
       replace = {
         from <- as.character(tx$from %||% "")
-        to <- as.character(tx$to %||% "")
-        if (nzchar(from)) gsub(from, to, x, fixed = TRUE) else x
-      },
-      x)
+        to2 <- as.character(tx$to %||% "")
+        if (nzchar(from)) gsub(from, to2, x0, fixed = TRUE) else x0
+      }, x0)
+    df[[nm]] <- new
+    if (collect) {
+      changed <- sum(!is.na(x0) & (is.na(new) | x0 != new))
+      add_step(list(type = "text", name = nm, op = op, changed = changed))
+      add_code(switch(op,
+        trim = sprintf("df$%s <- trimws(df$%s)", nm, nm),
+        upper = sprintf("df$%s <- toupper(df$%s)", nm, nm),
+        lower = sprintf("df$%s <- tolower(df$%s)", nm, nm),
+        replace = sprintf("df$%s <- gsub(%s, %s, df$%s, fixed = TRUE)", nm,
+                          deparse(as.character(tx$from %||% "")),
+                          deparse(as.character(tx$to %||% "")), nm)))
+    }
   }
 
   # 异常值：IQR / z-score，标记 / 删除 / 缩尾
   for (o in prep$outliers %||% list()) {
     if (isTRUE(o$disabled)) next
     r <- .apply_outlier_step(df, o)
-    if (!is.null(r)) df <- r$df
+    if (is.null(r)) next
+    df <- r$df
+    if (collect) {
+      add_step(list(type = "outlier", name = r$nm, method = r$method,
+                    action = r$action, n = r$n))
+      add_code(switch(r$action,
+        flag = sprintf("df$%s_outlier <- !is.na(df$%s) & (df$%s < %.6g | df$%s > %.6g)",
+                       r$nm, r$nm, r$nm, r$lo, r$nm, r$hi),
+        drop = sprintf("df <- df[!is.na(df$%s) & (df$%s < %.6g | df$%s > %.6g), , drop = FALSE]",
+                       r$nm, r$nm, r$lo, r$nm, r$hi),
+        winsor = sprintf("df$%s <- pmin(pmax(df$%s, %.6g), %.6g)", r$nm, r$nm, r$lo, r$hi)))
+    }
   }
 
   # 新增列（先于筛选，供筛选使用）
   for (m in prep$mutate %||% list()) {
     if (isTRUE(m$disabled)) next
-    if (is.null(m$name) || !nzchar(trimws(m$name))) next
-    expr <- trimws(as.character(m$expr %||% ""))
-    if (!nzchar(expr)) next
-    val <- tryCatch(eval(parse(text = expr, keep.source = FALSE), envir = df, enclos = parent.frame()),
-                    error = function(e) stop(sprintf("新增列 %s 出错: %s", m$name, conditionMessage(e))))
-    df[[m$name]] <- if (length(val) == 1L) rep(val, nrow(df)) else val
+    nm <- trimws(as.character(m$name %||% ""))
+    ex <- trimws(as.character(m$expr %||% ""))
+    if (!nzchar(nm) || !nzchar(ex)) next
+    val <- tryCatch(eval(parse(text = ex, keep.source = FALSE), envir = df, enclos = parent.frame()),
+                    error = function(e) e)
+    if (inherits(val, "error")) {
+      if (collect) { add_step(list(type = "mutate", name = nm, error = conditionMessage(val))); next }
+      stop(sprintf("新增列 %s 出错: %s", nm, conditionMessage(val)), call. = FALSE)
+    }
+    df[[nm]] <- if (length(val) == 1L) rep(val, nrow(df)) else val
+    if (collect) {
+      add_step(list(type = "mutate", name = nm))
+      add_code(sprintf("df$%s <- %s", nm, ex))
+    }
   }
 
   # 缺失值：按所选列删除（any = 任一缺失即删；all = 全部缺失才删）
   if (!isTRUE(prep$dropnaDisabled)) {
     cols <- intersect(as.character(unlist(prep$dropnaCols %||% list())), names(df))
     if (length(cols)) {
+      before <- nrow(df)
       miss <- is.na(df[, cols, drop = FALSE])
       drop <- if (identical(prep$dropnaHow, "all")) apply(miss, 1, all) else apply(miss, 1, any)
       df <- df[!drop, , drop = FALSE]
+      if (collect) {
+        add_step(list(type = "dropna", removed = before - nrow(df), nrow = nrow(df)))
+        add_code(sprintf("df <- df[!apply(is.na(df[, c(%s), drop = FALSE]), 1, %s), , drop = FALSE]",
+                         paste(sprintf('"%s"', cols), collapse = ", "),
+                         if (identical(prep$dropnaHow, "all")) "all" else "any"))
+      }
     }
   }
 
@@ -417,51 +330,103 @@ data_prepare <- function(df, prep) {
     if (isTRUE(f$disabled)) next
     nm <- trimws(as.character(f$name %||% ""))
     if (!nzchar(nm) || !nm %in% names(df)) next
-    x <- df[[nm]]
-    nas <- is.na(x)
+    x0 <- df[[nm]]
+    nas <- is.na(x0)
     if (!any(nas)) next
     m <- as.character(f$method %||% "constant")
     val <- switch(m,
       constant = f$value %||% "",
-      mean = mean(suppressWarnings(as.numeric(x)), na.rm = TRUE),
-      median = stats::median(suppressWarnings(as.numeric(x)), na.rm = TRUE),
+      mean = mean(suppressWarnings(as.numeric(x0)), na.rm = TRUE),
+      median = stats::median(suppressWarnings(as.numeric(x0)), na.rm = TRUE),
       mode = {
-        tab <- table(x)
+        tab <- table(x0)
         if (length(tab)) names(tab)[which.max(tab)] else NA
       }, NA)
-    if (is.character(x) || identical(m, "mode")) x[nas] <- as.character(val)
-    else x[nas] <- suppressWarnings(as.numeric(val))
-    df[[nm]] <- x
+    if (is.character(x0) || identical(m, "mode")) x0[nas] <- as.character(val)
+    else x0[nas] <- suppressWarnings(as.numeric(val))
+    df[[nm]] <- x0
+    if (collect) {
+      add_step(list(type = "fillna", name = nm, method = m, filled = sum(nas)))
+      # 生成代码必须与实际行为一致：数值列填非字符串常量（旧版填 "5" 会把整列变 character）
+      add_code(switch(m,
+        constant = if (is.character(x0) || identical(m, "mode"))
+          sprintf("df$%s[is.na(df$%s)] <- %s", nm, nm, deparse(as.character(f$value %||% "")))
+        else
+          sprintf("df$%s[is.na(df$%s)] <- %s", nm, nm, deparse(suppressWarnings(as.numeric(f$value %||% "")))),
+        mean = sprintf("df$%s[is.na(df$%s)] <- mean(df$%s, na.rm = TRUE)", nm, nm, nm),
+        median = sprintf("df$%s[is.na(df$%s)] <- median(df$%s, na.rm = TRUE)", nm, nm, nm),
+        mode = sprintf("df$%s[is.na(df$%s)] <- names(sort(table(df$%s), decreasing = TRUE))[1]", nm, nm, nm)))
+    }
   }
 
   # 行筛选
   flt <- trimws(as.character(prep$filter %||% ""))
   if (!isTRUE(prep$filterDisabled) && nzchar(flt)) {
+    before <- nrow(df)
     keep <- tryCatch(eval(parse(text = flt, keep.source = FALSE), envir = df, enclos = parent.frame()),
-                     error = function(e) stop(sprintf("筛选表达式出错: %s", conditionMessage(e))))
+                     error = function(e) e)
+    if (inherits(keep, "error")) {
+      if (collect) {
+        add_step(list(type = "filter", error = conditionMessage(keep)))
+        return(list(df = df, steps = steps, code = code))
+      }
+      stop(sprintf("筛选表达式出错: %s", conditionMessage(keep)), call. = FALSE)
+    }
     if (!is.logical(keep)) {
+      if (collect) return(list(df = df, steps = steps, code = code))  # 摘要模式：静默跳过
       stop(sprintf("筛选表达式必须返回 TRUE/FALSE，当前返回 %s（例如写 hwy > 20 而不是 hwy）",
-                   class(keep)[1]))
+                   class(keep)[1]), call. = FALSE)
     }
     keep <- keep & !is.na(keep)
     df <- df[keep, , drop = FALSE]
+    if (collect) {
+      add_step(list(type = "filter", removed = before - nrow(df), nrow = nrow(df)))
+      add_code(sprintf("df <- subset(df, %s)", flt))
+    }
   }
 
   # 去重（默认按全部列；可选指定列）
   if (isTRUE(prep$dedupEnabled)) {
     cols <- intersect(as.character(unlist(prep$dedupCols %||% list())), names(df))
     if (!length(cols)) cols <- setdiff(names(df), ".gg_rid")
-    if (length(cols)) df <- df[!duplicated(df[, cols, drop = FALSE]), , drop = FALSE]
+    if (length(cols)) {
+      before <- nrow(df)
+      df <- df[!duplicated(df[, cols, drop = FALSE]), , drop = FALSE]
+      if (collect) {
+        add_step(list(type = "dedup", removed = before - nrow(df), nrow = nrow(df)))
+        add_code(sprintf("df <- df[!duplicated(df[, c(%s), drop = FALSE]), , drop = FALSE]",
+                         paste(sprintf('"%s"', cols), collapse = ", ")))
+      }
+    }
   }
 
   # 抽样
   n <- prep$sample
   if (!isTRUE(prep$sampleDisabled) && !is.null(n) && is.numeric(n) && n > 0 && n < nrow(df)) {
     df <- df[sample.int(nrow(df), as.integer(n)), , drop = FALSE]
+    if (collect) {
+      add_step(list(type = "sample", n = nrow(df)))
+      add_code(sprintf("set.seed(%s); df <- df[sample.int(nrow(df), %d), ]",
+                       as.character(prep$seed %||% "NULL"), nrow(df)))
+    }
   }
+  if (collect) return(list(df = df, steps = steps, code = code))
   rownames(df) <- NULL
   df
 }
+
+data_prepare <- function(df, prep) {
+  .prep_run(df, prep, collect = FALSE)
+}
+
+# 数据准备摘要（步骤影响 + 可复现代码），界面展示用；与 data_prepare 同一引擎，保证一致
+data_prep_summary <- function(df, prep) {
+  r <- .prep_run(df, prep, collect = TRUE)
+  list(steps = r$steps, nrow = if (is.null(r$df)) 0 else nrow(r$df),
+       ncol = if (is.null(r$df)) 0 else ncol(r$df), code = r$code)
+}
+
+# （旧版 data_prepare 独立实现已删除——与 data_prep_summary 合并为下方单一引擎 .prep_run）
 
 # 汇总数据来源（内置 + 用户上传）
 data_sources <- function() {

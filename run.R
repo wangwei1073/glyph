@@ -70,6 +70,18 @@ if (!nzchar(DATA_DIR %||% "")) {
   cat(sprintf("工作区: %s\n", ws_layout$root))
 }
 
+# 0.0.0.0 = 关掉 Host 白名单 + 后端按字符串执行 R 代码 —— 局域网内任何机器都能远程执行任意 R。
+# 必须在启动时把后果说清楚（文档见 README「远程访问」一节）
+if (identical(HOST, "0.0.0.0")) {
+  cat("\n")
+  cat("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+  cat("!! 警告：服务绑定在 0.0.0.0 —— 局域网内任何机器都能调用本服务，\n")
+  cat("!!        包括执行任意 R 代码（/api/rawrender）。请只在可信网络使用，\n")
+  cat("!!        用完即关；日常使用请保持默认的 127.0.0.1。\n")
+  cat("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+  cat("\n")
+}
+
 t0 <- Sys.time()
 STATE <- list(
   version = "1.0.0",
@@ -104,6 +116,10 @@ cat(sprintf("注册表就绪: %d geoms / %d stats / %d scales / %d coords / %d �
             length(STATE$meta$geoms), length(STATE$meta$stats), length(STATE$meta$scales),
             length(STATE$meta$coords), length(STATE$meta$themeElements),
             as.numeric(difftime(Sys.time(), t0, units = "secs"))))
+# 补全词表在启动时预构建（扫描已安装包约 1-5s）：否则首个 /api/completions 请求
+# 会阻塞单线程事件循环几秒，期间连心跳都停
+cat("预构建编辑器补全词表 ...\n")
+STATE$completions <- tryCatch(ggspec_build_completions(STATE$meta), error = function(e) NULL)
 
 url <- sprintf("http://%s:%d", HOST, PORT)
 cat(sprintf("服务已启动: %s  (Ctrl+C 退出，或在界面左下角点退出按钮)\n", url))

@@ -173,6 +173,9 @@ onBeforeUnmount(() => {
 // 1.5s 一次的空请求开销可以忽略，实现却简单得多。
 let codePollTimer = null
 let codePolling = false
+// 后端失联检测：连续失败才提示（瞬时重启/卡顿不打扰），恢复时也告知一次
+let pollFails = 0
+let downNotified = false
 function startCodePoll() {
   if (codePollTimer) return
   codePollTimer = setInterval(async () => {
@@ -180,6 +183,11 @@ function startCodePoll() {
     codePolling = true
     try {
       const res = await takePendingCode()
+      pollFails = 0
+      if (downNotified) {
+        downNotified = false
+        ElMessage.success('已重新连接 Glyph 后端')
+      }
       if (res && res.ok && res.code) {
         // 走既有的 pendingCode 通道：AdvancedPanel 会把它填进编辑器
         spec.pendingCodeRun = !!res.run
@@ -189,7 +197,14 @@ function startCodePoll() {
           ? '已接收外部推送的代码并运行'
           : '已接收外部推送的代码，可在「高级」页查看并运行')
       }
-    } catch { /* 服务重启等瞬时错误忽略，下次再试 */ }
+    } catch {
+      pollFails++
+      if (pollFails >= 4 && !downNotified) {
+        downNotified = true
+        pollFails = 0
+        ElMessage.error('与 Glyph 后端失去联系（服务可能已退出）——请重新运行 run_app.bat 或 Rscript run.R')
+      }
+    }
     finally { codePolling = false }
   }, 1500)
 }
@@ -361,6 +376,10 @@ async function switchWorkspace() {
     // projectId 跟随工作区：同一目录在任何浏览器上都对应同一份图库视图
     if (res.workspace?.id) spec.setProjectId(res.workspace.id)
     pins.all = res.pins || []
+    // 画布来源的图库条目属于旧工作区：清掉，否则「存入图库」会去更新一条不在新项目里的旧图
+    //（后端会兜底新建，但标签对不上，用户看不出发生了什么）
+    spec.sourcePinId = ''
+    spec.sourcePinLabel = ''
     await data.load()
     // 目录变了，画布上引用旧数据源的图需要用户重新选择，这里只提示不自动改
     ElMessage.success(`工作区已切换到：${res.workspace.root}`)

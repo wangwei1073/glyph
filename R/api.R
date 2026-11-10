@@ -149,8 +149,12 @@ ggspec_api_app <- function(state) {
       on <- isTRUE(body$enabled)
       chk <- tryCatch({ ext_set_enabled(id, on); TRUE }, error = function(e) e)
       if (inherits(chk, "error")) return(json_error(conditionMessage(chk), 400))
-      # 开关改变了扫描范围 → 重建 meta
-      state$meta <- tryCatch(meta_build_lookup(ggspec_build_meta()), error = function(e) state$meta)
+      # 开关改变了扫描范围 → 重建 meta；失败时保留旧注册表并显式报错（不再吞掉装作成功）
+      m <- tryCatch(meta_build_lookup(ggspec_build_meta()), error = function(e) e)
+      if (inherits(m, "error")) {
+        return(json_error(paste0("注册表重建失败（保留旧注册表）：", conditionMessage(m)), 500))
+      }
+      state$meta <- m
       return(json_response(list(ok = TRUE, id = id, enabled = ext_is_enabled(id),
                                 meta = state$meta, extensions = ext_catalog())))
     }
@@ -639,7 +643,8 @@ ggspec_api_app <- function(state) {
       fname <- gsub("[^A-Za-z0-9_.-]", "", fname)
       full <- file.path(state$plot_dir, fname)
       disp <- d[, setdiff(names(d), ".gg_rid"), drop = FALSE]
-      readr::write_csv(disp, full)
+      # 带 BOM：否则中文 Windows 的 Excel 直接打开会乱码（write_csv 是无 BOM UTF-8）
+      readr::write_excel_csv(disp, full, bom = TRUE)
       return(json_response(list(ok = TRUE, url = paste0("/api/plotfile/", fname), filename = fname)))
     }
 
@@ -716,7 +721,10 @@ ggspec_api_app <- function(state) {
     if (path == "/api/rawrender" && method == "POST") {
       code <- body$code %||% ""
       spec <- body$spec %||% list()
-      state$raw_data <- tryCatch(ggspec_resolve_data(spec, state), error = function(e) NULL)
+      rr <- tryCatch(list(df = ggspec_resolve_data(spec, state), err = NULL),
+                     error = function(e) list(df = NULL, err = conditionMessage(e)))
+      state$raw_data <- rr$df
+      state$raw_data_err <- rr$err   # 供渲染失败时给出明确提示（见下）
       width <- clamp_px(body$width, 800, 16, 10000); height <- clamp_px(body$height, 500, 16, 10000)
       dpi <- clamp_px(body$dpi, 150, 24, 600)
       res <- tryCatch(ggspec_render_rawcode(code, state, width, height, dpi,
@@ -724,6 +732,11 @@ ggspec_api_app <- function(state) {
                       error = function(e) e)
       if (inherits(res, "error")) {
         msg <- if (inherits(res, "ggplot_error")) res$message else conditionMessage(res)
+        # 数据解析失败的常见表象是 eval 时「找不到 df」——附上解析错误，别让用户猜
+        if (!is.null(state$raw_data_err %||% NULL) &&
+            grepl("找不到对象|not found|could not find", msg, ignore.case = TRUE)) {
+          msg <- paste0(msg, "\n（当前数据源解析也失败了：", state$raw_data_err, "）")
+        }
         return(json_response(list(ok = FALSE, error = msg)))
       }
       return(json_response(res))
@@ -1090,9 +1103,11 @@ ggspec_api_app <- function(state) {
 
   list(
     call = function(req) {
+      # 守卫覆盖所有响应（含静态文件）：DNS rebinding 页面不能把 UI 本体也加载走。
+      # Content-Type 检查只对 POST 生效，静态 GET 不受影响
+      guard <- .request_guard(req, state)
+      if (!is.null(guard)) return(json_error(guard, 403))
       if (startsWith(req$PATH_INFO, "/api/")) {
-        guard <- .request_guard(req, state)
-        if (!is.null(guard)) return(json_error(guard, 403))
         parse_err <- NULL
         body <- tryCatch(parse_json_body(req),
                          error = function(e) {

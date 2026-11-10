@@ -103,7 +103,14 @@ ext_install_status <- function() {
 ext_install_meta <- function(state) {
   job <- EXT_INSTALL_STATE$job
   if (is.null(job) || !identical(job$status, "done") || isTRUE(EXT_INSTALL_STATE$rebuilt)) return(NULL)
-  state$meta <- tryCatch(meta_build_lookup(ggspec_build_meta()), error = function(e) state$meta)
+  m <- tryCatch(meta_build_lookup(ggspec_build_meta()), error = function(e) e)
   EXT_INSTALL_STATE$rebuilt <- TRUE
+  if (inherits(m, "error")) {
+    # 重建失败保留旧注册表，但把原因记到 job 上随状态轮询透出，不再吞掉装作成功。
+    # 注意 R 值语义：job 是 EXT_INSTALL_STATE$job 的副本，必须写回去
+    EXT_INSTALL_STATE$job$warning <- paste0("注册表重建失败，新装扩展可能不可见：", conditionMessage(m))
+  } else {
+    state$meta <- m
+  }
   state$meta
 }

@@ -106,21 +106,37 @@ db_test_connection <- function(opts) {
 db_connect <- function(opts) {
   r <- tryCatch(.db_connect_raw(opts), error = function(e) e)
   if (inherits(r, "error")) stop(.db_sanitize(conditionMessage(r), opts))
+  # 同参数重复连接：先断旧条目（连接只在内存里堆积，长会话会越积越多）
+  driver <- as.character(opts$driver %||% "")
+  host <- as.character(opts$host %||% "")
+  dbname <- as.character(opts$dbname %||% "")
+  user <- as.character(opts$user %||% "")
+  for (cid in names(DB_STATE$conns)) {
+    c0 <- DB_STATE$conns[[cid]]
+    if (identical(c0$driver, driver) && identical(c0$host, host) &&
+        identical(c0$dbname, dbname) && identical(c0$user, user)) {
+      try(DBI::dbDisconnect(c0$con), silent = TRUE)
+      DB_STATE$conns[[cid]] <- NULL
+    }
+  }
+  # 数量上限：超出时断开最早建立的（list 保持插入序，names()[1] 即最旧）
+  while (length(DB_STATE$conns) >= 8) {
+    old_id <- names(DB_STATE$conns)[1]
+    try(DBI::dbDisconnect(DB_STATE$conns[[old_id]]$con), silent = TRUE)
+    DB_STATE$conns[[old_id]] <- NULL
+  }
   id <- paste0("db-", sprintf("%08x", as.integer(stats::runif(1, 1, 2^31 - 1))))
   info <- tryCatch(DBI::dbGetInfo(r$con), error = function(e) list())
   DB_STATE$conns[[id]] <- list(
     id = id, con = r$con, readOnly = r$readOnly,
-    driver = as.character(opts$driver %||% ""),
-    host = as.character(opts$host %||% ""),
-    dbname = as.character(opts$dbname %||% ""),
-    user = as.character(opts$user %||% ""),
+    driver = driver, host = host, dbname = dbname, user = user,
     label = as.character(opts$label %||% ""),
     opened = Sys.time()
   )
-  list(connId = id, driver = DB_STATE$conns[[id]]$driver,
+  list(connId = id, driver = driver,
        readOnly = r$readOnly,
        version = as.character(info$db.version %||% ""),
-       host = DB_STATE$conns[[id]]$host, dbname = DB_STATE$conns[[id]]$dbname)
+       host = host, dbname = dbname)
 }
 
 .db_conn <- function(conn_id) {
@@ -247,7 +263,11 @@ db_import <- function(conn_id, schema = "", table = "", sql = "", label = NULL, 
   df <- ggspec_with_rid(df)
   origin <- list(kind = "db", driver = c$driver, host = c$host, database = c$dbname,
                  schema = as.character(schema %||% ""), table = table_name,
-                 sqlHash = if (nzchar(sql %||% "")) substr(paste0("q-", nchar(sql)), 1, 80) else NULL,
+                 # 旧实现只存查询长度（同长度的不同查询"哈希"相同，纯误导）；
+                 # 改存长度 + 去空白后的前 60 字符，足以辨认来源查询
+                 sqlHash = if (nzchar(sql %||% ""))
+                   substr(paste0("q-", nchar(sql), ":", gsub("\\s+", " ", trimws(sql))), 1, 80)
+                 else NULL,
                  importedAt = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ"))
   id <- DataStore$add(df, label %||% table_name %||% "查询结果", origin = origin)
   list(id = id, info = DataStore$info(id), columns = import_columns(df))

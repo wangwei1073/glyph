@@ -8,7 +8,8 @@ export const usePinStore = defineStore('pins', {
   state: () => ({
     all: [],          // 全部图库条目 [{id,label,project,t,src,srcType,layers}]
     loading: false,
-    saving: false
+    saving: false,
+    _loaded: false    // 本次会话是否已拉取过（EditorTabs 用 v-show 同时挂两个面板，防止重复请求）
   }),
   getters: {
     // 当前项目可见的条目（旧的全局条目也显示，避免升级后"图库突然空了"）
@@ -23,10 +24,12 @@ export const usePinStore = defineStore('pins', {
   },
   actions: {
     async load() {
+      if (this._loaded || this.loading) return
       this.loading = true
       try {
         const { pins } = await getPins()
         this.all = pins || []
+        this._loaded = true
       } finally {
         this.loading = false
       }

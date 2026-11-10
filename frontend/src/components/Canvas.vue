@@ -23,7 +23,6 @@ const zoom100 = ref(false)
 // 用户手动改画幅时自动关闭，避免设置被窗口尺寸覆盖。
 const fitToCanvas = ref(localStorage.getItem('gg-fit-canvas') !== '0')
 const canvasWrapEl = ref(null)
-let fitTimer = null
 let ro = null          // ResizeObserver：容器尺寸变化（窗口缩放 / 拖动左右面板）
 const exporting = ref(false)
 const sizePopover = ref(false)
@@ -132,14 +131,9 @@ function applyFitSize() {
       h: pxToMm(s.height, spec.renderOpts.dpi)
     }
   }
-  // 直接重渲染（App.vue 的 renderOpts watch 也会触发，但这里更即时且不会误判来源）
-  // renderNow 内部会判断当前画面是「代码图」还是「普通图」
-  scheduleRender()
-}
-
-function scheduleRender() {
-  clearTimeout(fitTimer)
-  fitTimer = setTimeout(() => { fitTimer = null; spec.renderNow() }, 320)
+  // 只改 renderOpts，不在这里触发渲染：App.vue 的 renderOpts watch 是唯一的渲染触发者。
+  // 此前两处各挂一个防抖（这里 320ms + App 550ms），每次 fit-size 变化都会打两次后端渲染。
+  // renderNow 内部会判断当前画面是「代码图」还是「普通图」，来源判断不依赖这里。
 }
 
 function toggleFit() {
@@ -265,7 +259,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onWinResize)
   if (ro) { ro.disconnect(); ro = null }
   clearTimeout(resizeTimer)
-  clearTimeout(fitTimer)
 })
 function setJournal(id) {
   journalId.value = id || ''
@@ -470,6 +463,16 @@ async function drawPlotly() {
     width: plotlyEl.value.clientWidth,
     autosize: false
   }, plotlyData.value.config)
+}
+
+// 关闭时清理 Plotly 实例：destroy-on-close 只删 DOM，不清 Plotly 内部注册表，反复开关会累积泄漏
+async function purgePlotly() {
+  plotlyData.value = null
+  if (!plotlyEl.value) return
+  try {
+    const Plotly = (await import('plotly.js-dist-min')).default
+    Plotly.purge(plotlyEl.value)
+  } catch { /* 忽略 */ }
 }
 </script>
 
@@ -778,7 +781,7 @@ async function drawPlotly() {
     </template>
   </el-dialog>
 
-  <el-dialog v-model="plotlyVisible" title="plotly 交互预览（部分 geom 不支持）" width="82%" destroy-on-close @opened="drawPlotly">
+  <el-dialog v-model="plotlyVisible" title="plotly 交互预览（部分 geom 不支持）" width="82%" destroy-on-close @opened="drawPlotly" @close="purgePlotly">
     <div v-loading="plotlyLoading" style="min-height:300px">
       <div ref="plotlyEl" />
     </div>

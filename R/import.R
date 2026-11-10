@@ -73,7 +73,8 @@ import_rows <- function(df, n = 50) {
       if (inherits(v, "Date")) return(format(v, "%Y-%m-%d"))
       if (inherits(v, "POSIXct")) return(format(v, "%Y-%m-%d %H:%M:%S"))
       if (is.factor(v)) return(as.character(v))
-      if (is.logical(v)) return(isTRUE(v))
+      # NA 保持 NA（JSON 里变 null，前端显示为空）；isTRUE 会把 NA 静默变成 FALSE
+      if (is.logical(v)) return(if (is.na(v)) NA else v)
       v
     })
     stats::setNames(vals, names(df))

@@ -15,7 +15,9 @@ const ui = useUiStore()
 
 // ---- 共用 ----
 const loading = ref(false)
-const error = ref('')
+const error = ref('')               // 列加载等共用错误（refreshColumns）
+// 各页签自己的执行错误：此前共用一个 error，回归页报错切到描述统计还挂着
+const tabError = ref({ desc: '', test: '', reg: '', t1: '' })
 const numericCols = ref([])
 const groupCols = ref([])
 const catCols = ref([])
@@ -161,21 +163,22 @@ async function loadRegColumns() {
     if (regY.value && !regYOptions.value.includes(regY.value)) regY.value = ''
     if (!regY.value && regYOptions.value.length) regY.value = regYOptions.value[0]
   } catch (e) {
-    error.value = e.message
+    tabError.value = { ...tabError.value, reg: e.message }
   }
 }
 
 async function runReg() {
   if (!canReg.value) { ElMessage.warning('请选择因变量与至少一个自变量'); return }
   regRunning.value = true
-  error.value = ''
+  tabError.value = { ...tabError.value, reg: '' }
   try {
     regResult.value = await regFit(source.value, prep.value, {
       y: regY.value, xs: regXs.value, method: regMethod.value
     })
     regCodeOpen.value = false
   } catch (e) {
-    error.value = e.message; regResult.value = null
+    tabError.value = { ...tabError.value, reg: e.message }
+    regResult.value = null
   } finally {
     regRunning.value = false
   }
@@ -242,7 +245,7 @@ async function loadT1Columns() {
     if (t1By.value && !t1Cols.value.groupable.includes(t1By.value)) t1By.value = ''
     if (!t1Vars.value.length) t1Vars.value = t1Cols.value.all.filter(v => v !== t1By.value)
   } catch (e) {
-    error.value = e.message
+    tabError.value = { ...tabError.value, t1: e.message }
   }
 }
 
@@ -254,12 +257,13 @@ const t1Opts = () => ({
 async function runT1() {
   if (!canT1.value) { ElMessage.warning('请至少选择一个变量'); return }
   t1Running.value = true
-  error.value = ''
+  tabError.value = { ...tabError.value, t1: '' }
   try {
     t1Result.value = await table1Build(source.value, prep.value, t1Opts())
     t1CodeOpen.value = false
   } catch (e) {
-    error.value = e.message; t1Result.value = null
+    tabError.value = { ...tabError.value, t1: e.message }
+    t1Result.value = null
   } finally {
     t1Running.value = false
   }
@@ -382,11 +386,12 @@ async function refreshColumns() {
 async function runDesc() {
   if (!canRunDesc.value) { ElMessage.warning('先选择数据与至少一个数值列'); return }
   descRunning.value = true
-  error.value = ''
+  tabError.value = { ...tabError.value, desc: '' }
   try {
     result.value = await statsSummary(source.value, prep.value, vars.value, groupBy.value)
   } catch (e) {
-    error.value = e.message; result.value = null
+    tabError.value = { ...tabError.value, desc: e.message }
+    result.value = null
   } finally {
     descRunning.value = false
   }
@@ -396,16 +401,18 @@ async function runDesc() {
 async function runTest() {
   if (!canRunTest.value) { ElMessage.warning('请先选择检验所需的变量'); return }
   testRunning.value = true
-  error.value = ''
+  tabError.value = { ...tabError.value, test: '' }
   try {
     testResult.value = await statsTest(source.value, prep.value, {
-      y: isCorr.value ? testY.value : testY.value,
+      // 旧代码是 `isCorr.value ? testY.value : testY.value`（两支相同，已简化）
+      y: testY.value,
       x: isCorr.value ? testX.value : '',
       group: isCorr.value ? '' : testGroup.value,
       method: testMethod.value
     })
   } catch (e) {
-    error.value = e.message; testResult.value = null
+    tabError.value = { ...tabError.value, test: e.message }
+    testResult.value = null
   } finally {
     testRunning.value = false
   }
@@ -482,14 +489,26 @@ function copyText(text, okMsg) {
 }
 
 let timer = null
-watch(() => `${data.srcKey}|${prep.value.filter}|${prep.value.sample}|${(prep.value.mutate || []).map(m => m.expr).join('|')}`,
-  () => { clearTimeout(timer); timer = setTimeout(refreshColumns, 400) },
+// 只在抽屉打开时才请求：此前 immediate:true 让「从未打开过的抽屉」也在开机与每次映射
+// 变化时打后端。key 用整个 prep 序列化，覆盖 types/text/outliers/fillna/dropna/dedup
+// （旧 key 漏了这些字段，做过相应加工后统计列会停留在旧状态）
+watch(() => `${data.srcKey}|${JSON.stringify(prep.value)}`,
+  () => {
+    if (!ui.statsOpen) return
+    clearTimeout(timer); timer = setTimeout(refreshColumns, 400)
+  },
   { immediate: true })
 
-// 图层 x/y 映射变化时，重新规划显著性标注
+// 抽屉打开那一刻也要加载一次（watcher 平时被 statsOpen 挡住）
+watch(() => ui.statsOpen, (v) => { if (v) refreshColumns() })
+
+// 图层 x/y 映射变化时，重新规划显著性标注（同样只在抽屉打开时）
 let sigTimer = null
 watch(() => JSON.stringify((spec.spec.layers || []).map(l => [l.geom, l.aes?.x?.map, l.aes?.y?.map])),
-  () => { clearTimeout(sigTimer); sigTimer = setTimeout(loadSigPlan, 350) },
+  () => {
+    if (!ui.statsOpen) return
+    clearTimeout(sigTimer); sigTimer = setTimeout(loadSigPlan, 350)
+  },
   { immediate: true })
 watch(tab, (v) => {
   if (v === 'mark') loadSigPlan()
@@ -571,7 +590,7 @@ watch(tab, (v) => {
           </aside>
 
           <section class="sd-result">
-            <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon />
+            <el-alert v-if="error || tabError.desc" type="error" :title="tabError.desc || error" :closable="false" show-icon />
             <template v-if="result && result.summary && result.summary.length">
               <div class="res-head">
                 <span class="gg-mono">
@@ -675,7 +694,7 @@ watch(tab, (v) => {
           </aside>
 
           <section class="sd-result">
-            <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon />
+            <el-alert v-if="error || tabError.test" type="error" :title="tabError.test || error" :closable="false" show-icon />
             <template v-if="testResult">
               <div class="test-card" :class="sigClass">
                 <div class="test-title">
@@ -861,7 +880,7 @@ watch(tab, (v) => {
           </aside>
 
           <section class="sd-result">
-            <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon />
+            <el-alert v-if="error || tabError.reg" type="error" :title="tabError.reg || error" :closable="false" show-icon />
             <template v-if="regResult">
               <!-- 拟合优度 -->
               <div class="reg-fit">
@@ -1000,7 +1019,7 @@ watch(tab, (v) => {
           </aside>
 
           <section class="sd-result">
-            <el-alert v-if="error" type="error" :title="error" :closable="false" show-icon />
+            <el-alert v-if="error || tabError.t1" type="error" :title="tabError.t1 || error" :closable="false" show-icon />
             <template v-if="t1Result">
               <div class="res-head">
                 <span class="gg-mono">

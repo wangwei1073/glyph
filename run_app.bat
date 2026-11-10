@@ -6,11 +6,9 @@ title Glyph - ggplot2 GUI
 setlocal
 cd /d "%~dp0"
 set "PORT=4321"
-set "PYTHONIOENCODING=utf-8"
 
-rem ---- 探测 Rscript：优先 R-4.6.1，其次已安装的各版本 ----
+rem ---- 探测 Rscript：先查常见安装目录与 PATH（本机自定义路径交给下方的 for 通配覆盖） ----
 set "RSCRIPT="
-if exist "D:\R\R-4.6.1\bin\Rscript.exe" set "RSCRIPT=D:\R\R-4.6.1\bin\Rscript.exe"
 if not defined RSCRIPT (
   for /d %%D in ("C:\Program Files\R\R-*") do if not defined RSCRIPT set "RSCRIPT=%%D\bin\Rscript.exe"
 )
@@ -26,6 +24,8 @@ if not defined RSCRIPT (
 
 echo 使用 R: %RSCRIPT%
 echo 启动 Glyph (http://127.0.0.1:%PORT%) ...
-start "" /b cmd /c "timeout /t 4 /nobreak >nul & start http://127.0.0.1:%PORT%"
+rem 浏览器等端口真正可连后再打开（最多等 20 秒），避免服务还没起来就弹错误页；
+rem PowerShell 后台轮询，R 退出后这些子进程自然结束
+start "" /b powershell -NoProfile -Command "for($i=0; $i -lt 40; $i++){ try { $c = New-Object Net.Sockets.TcpClient('127.0.0.1', %PORT%); $c.Close(); Start-Process 'http://127.0.0.1:%PORT%'; exit } catch { Start-Sleep -Milliseconds 500 } }"
 "%RSCRIPT%" run.R --port %PORT%
 pause

@@ -5,7 +5,8 @@
 | [IMPORT_DIALOG_V2.md](IMPORT_DIALOG_V2.md) | 导入弹层 v2 设计（文件/SQLite/远程库/剪贴板） | 活文档（已实现） |
 | [CODE_PLOT_DESIGN.md](CODE_PLOT_DESIGN.md) | 代码绘图纳入图库/项目体系的设计 | 活文档（已实现，状态头已更新） |
 | [manual/](manual/) | 用户手册（PDF + HTML + 截图），由 `tools/manual_build.mjs` 等脚本生成 | 随版本重新生成 |
-| [history/](history/) | 一次性评估/走查快照（2026-11 从仓库根目录移入） | 历史记录，仅供回溯 |
+| [history/](history/) | 一次性评估/走查快照（2026-11 从仓库根目录移入），含 `review_findings.R` 与旧版 UI 截图 `ui-shots/` | 历史记录，仅供回溯 |
+| 工具脚本 | 见 [tools/README.md](../tools/README.md)（哪些是维护中的、哪些是一次性手工检查） | — |
 
 ## 根目录文档导航
 
