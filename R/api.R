@@ -296,10 +296,9 @@ ggspec_api_app <- function(state) {
     ## 供前端编辑器做静态补全。结果缓存在 state 上，避免每次重算。
     if (path == "/api/completions" && method == "GET") {
       if (is.null(state$completions)) {
-        state$completions <- tryCatch(
-          ggspec_build_completions(state$meta),
-          error = function(e) list(error = conditionMessage(e))
-        )
+        comp <- tryCatch(ggspec_build_completions(state$meta), error = function(e) NULL)
+        # 失败不缓存：一次瞬时错误不该永久禁用补全，下次请求重试
+        if (!is.null(comp)) state$completions <- comp
       }
       return(json_response(list(ok = TRUE, completions = state$completions)))
     }
@@ -675,8 +674,8 @@ ggspec_api_app <- function(state) {
     ## ---- 渲染 ----
     if (path == "/api/render" && method == "POST") {
       spec <- body$spec %||% list()
-      width <- as.integer(body$width %||% 800); height <- as.integer(body$height %||% 500)
-      dpi <- as.integer(body$dpi %||% 150)
+      width <- clamp_px(body$width, 800, 16, 10000); height <- clamp_px(body$height, 500, 16, 10000)
+      dpi <- clamp_px(body$dpi, 150, 24, 600)
       res <- tryCatch(ggspec_render_preview(spec, state$meta, state, width, height, dpi,
                                             png_dir = state$plot_dir),
                       error = function(e) e)
@@ -718,8 +717,8 @@ ggspec_api_app <- function(state) {
       code <- body$code %||% ""
       spec <- body$spec %||% list()
       state$raw_data <- tryCatch(ggspec_resolve_data(spec, state), error = function(e) NULL)
-      width <- as.integer(body$width %||% 800); height <- as.integer(body$height %||% 500)
-      dpi <- as.integer(body$dpi %||% 150)
+      width <- clamp_px(body$width, 800, 16, 10000); height <- clamp_px(body$height, 500, 16, 10000)
+      dpi <- clamp_px(body$dpi, 150, 24, 600)
       res <- tryCatch(ggspec_render_rawcode(code, state, width, height, dpi,
                                             png_dir = state$plot_dir),
                       error = function(e) e)
@@ -753,8 +752,8 @@ ggspec_api_app <- function(state) {
     if (path == "/api/bundle" && method == "POST") {
       spec <- body$spec %||% list()
       format <- body$format %||% "png"
-      width <- as.integer(body$width %||% 1600); height <- as.integer(body$height %||% 1000)
-      dpi <- as.integer(body$dpi %||% 300)
+      width <- clamp_px(body$width, 1600, 16, 10000); height <- clamp_px(body$height, 1000, 16, 10000)
+      dpi <- clamp_px(body$dpi, 300, 24, 600)
       journal <- body$journal %||% NULL
       res <- tryCatch(ggspec_bundle(spec, state$meta, state, width, height, dpi, format,
                                     journal = journal, project_id = body$projectId %||% NULL,
@@ -769,8 +768,8 @@ ggspec_api_app <- function(state) {
     if (path == "/api/export/check" && method == "POST") {
       spec <- body$spec %||% list()
       format <- body$format %||% "png"
-      width <- as.integer(body$width %||% 1600); height <- as.integer(body$height %||% 1000)
-      dpi <- as.integer(body$dpi %||% 300)
+      width <- clamp_px(body$width, 1600, 16, 10000); height <- clamp_px(body$height, 1000, 16, 10000)
+      dpi <- clamp_px(body$dpi, 300, 24, 600)
       journal <- body$journal %||% NULL
       res <- tryCatch(ggspec_export_check(spec, state$meta, state, width, height, dpi, format,
                                           journal = journal,
@@ -782,8 +781,8 @@ ggspec_api_app <- function(state) {
     if (path == "/api/export" && method == "POST") {
       spec <- body$spec %||% list()
       format <- body$format %||% "png"
-      width <- as.integer(body$width %||% 1600); height <- as.integer(body$height %||% 1000)
-      dpi <- as.integer(body$dpi %||% 300)
+      width <- clamp_px(body$width, 1600, 16, 10000); height <- clamp_px(body$height, 1000, 16, 10000)
+      dpi <- clamp_px(body$dpi, 300, 24, 600)
       code <- as.character(body$code %||% "")
       # 有代码（代码图）就从代码导出，否则按 spec 导出
       res <- tryCatch({
@@ -825,7 +824,7 @@ ggspec_api_app <- function(state) {
     ## ---- plotly ----
     if (path == "/api/plotly" && method == "POST") {
       spec <- body$spec %||% list()
-      width <- as.integer(body$width %||% 800); height <- as.integer(body$height %||% 500)
+      width <- clamp_px(body$width, 800, 16, 10000); height <- clamp_px(body$height, 500, 16, 10000)
       res <- tryCatch(ggspec_to_plotly(spec, state$meta, state, width, height), error = function(e) e)
       if (inherits(res, "error")) return(json_error(conditionMessage(res), 400))
       # plotly JSON 可能很大：落盘后由前端 GET 拉取
@@ -877,18 +876,29 @@ ggspec_api_app <- function(state) {
       return(json_response(list(ok = TRUE)))
     }
     ## 项目载入时批量恢复手工编辑（跟随数据一起内嵌在项目文件里）
+    ## 与 /api/edits/add 一致：先在副本上整链预演（含 prep 与已有编辑链），坏 op 直接拒绝 ——
+    ## 否则旧项目文件/手改 JSON 的坏编辑会在这里入库，之后 preview/render/stats 全部 400 且无法自救
     if (path == "/api/edits/import" && method == "POST") {
       src <- body$source %||% list()
       ops <- body$ops %||% list()
       key <- .keyof(src)
-      imported <- 0L
-      for (op in ops) {
-        if (is.list(op) && !is.null(op$kind)) {
-          state$edit_store$add(key, op)
-          imported <- imported + 1L
+      valid_ops <- Filter(function(op) is.list(op) && !is.null(op$kind), ops)
+      if (length(valid_ops)) {
+        probe <- tryCatch(
+          withCallingHandlers({
+            d <- resolve_source_df(paste0((src$type %||% "none"), ":", src_id_of(src)), state)
+            d <- data_prepare(d, body$prep %||% list())
+            apply_data_edits(d, state$edit_store$get(key))   # 与 edits/add 一致：先套已有编辑链
+            apply_data_edits(d, valid_ops)
+            TRUE
+          }, warning = function(w) stop(conditionMessage(w), call. = FALSE)),
+          error = function(e) e)
+        if (inherits(probe, "error")) {
+          return(json_error(paste0("编辑记录校验失败：", conditionMessage(probe)), 400))
         }
+        for (op in valid_ops) state$edit_store$add(key, op)
       }
-      return(json_response(list(ok = TRUE, imported = imported,
+      return(json_response(list(ok = TRUE, imported = length(valid_ops),
                                 count = state$edit_store$count(key))))
     }
     ## ---- 图库（pins）----

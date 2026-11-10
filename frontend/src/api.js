@@ -122,7 +122,9 @@ export const pasteData = (text, label = null) => post('/api/data/paste', label ?
 // 项目文件内嵌数据：拿上传数据的 CSV 快照（内置数据集不需要）
 export const snapshotData = (source) => post('/api/data/snapshot', { source })
 export const getEdits = (key) => api(`/api/edits?key=${encodeURIComponent(key)}`)
-export const importEdits = (source, ops) => post('/api/edits/import', { source, ops })
+// prep：与 edits/add 的校验语义一致——先把加工步骤应用到原始数据（行锚基于加工后的行序）
+export const importEdits = (source, ops, prep) =>
+  post('/api/edits/import', prep ? { source, ops, prep } : { source, ops })
 
 export const renderPlot = (spec, { width = 800, height = 500, dpi = 150 } = {}) =>
   post('/api/render', { spec, width, height, dpi }, T_HEAVY)

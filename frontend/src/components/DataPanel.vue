@@ -26,7 +26,6 @@ const prepVisible = ref(false)     // 加工对话框
 const uploading = ref(false)
 const fileInput = ref(null)
 const filterInput = ref(null)      // el-input 实例（含内部 textarea）
-const mutateRefs = ref([])
 const activeExpr = ref(null)       // 'filter' | {type:'mutate', idx}
 watch(prepVisible, (v) => { if (!v) activeExpr.value = null })
 const dragging = ref(false)

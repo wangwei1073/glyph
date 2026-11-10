@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import {
   getImportDrivers, importUpload, importPreview, importCommit,
   sqliteTables, sqlitePreview, sqliteCommit,
-  installExtension, getInstallStatus
+  installExtension, getInstallStatus, MAX_UPLOAD_BYTES
 } from '../api'
 import { useRemoteDbStore } from '../stores/remoteDb'
 import RemoteDbPane from './RemoteDbPane.vue'
@@ -84,7 +84,11 @@ async function onFilePicked(e) {
   const f = e.target.files?.[0]
   e.target.value = ''
   if (!f) return
-  if (f.size > 100 * 1024 * 1024) return ElMessage.error('文件超过 100 MB，请先拆分')
+  // 与 api.js uploadData / 后端请求体上限（50MB，base64 膨胀 4/3）对齐，
+  // 否则大文件能进预览却死在提交，报晦涩的服务端错误
+  if (f.size > MAX_UPLOAD_BYTES) {
+    return ElMessage.error(`文件超过 ${MAX_UPLOAD_BYTES / 1048576} MB（后端请求体上限），请先拆分`)
+  }
   fileLoading.value = true
   try {
     const res = await importUpload(f.name, extOf(f.name), await toBase64(f))

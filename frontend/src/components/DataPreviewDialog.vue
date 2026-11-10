@@ -2,7 +2,7 @@
 // 数据预览与列操作弹窗：服务端分页 + 排序 + 表头列菜单（映射/插入表达式/统计）+ CSV 导出
 import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useDataStore } from '../stores/data'
+import { useDataStore, buildPrep } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { previewData, exportPreparedCSV, editAdd, editUndo } from '../api'
 import ColumnActions from './ColumnActions.vue'
@@ -62,12 +62,9 @@ async function load() {
   loading.value = true
   try {
     const src = cur.type === 'dataset' ? { type: 'dataset', name: cur.name } : { type: 'user', id: cur.name }
-    const d = await previewData(src, {
-      filter: spec.spec.data.filter || '', mutate: spec.spec.data.mutate || [],
-      sample: spec.spec.data.sample, seed: spec.spec.data.seed,
-      filterDisabled: !!spec.spec.data.filterDisabled, sampleDisabled: !!spec.spec.data.sampleDisabled, types: spec.spec.data.types || [], outliers: spec.spec.data.outliers || [], fillna: spec.spec.data.fillna || [], dropnaCols: spec.spec.data.dropnaCols || [], dropnaHow: spec.spec.data.dropnaHow || 'any', dropnaDisabled: !!spec.spec.data.dropnaDisabled, dedupCols: spec.spec.data.dedupCols || [], dedupEnabled: !!spec.spec.data.dedupEnabled
-    }, { start: (page.value - 1) * pageSize.value + 1, length: pageSize.value,
-         sortCol: sortCol.value || null, asc: sortAsc.value })
+    const d = await previewData(src, buildPrep(spec.spec.data),
+      { start: (page.value - 1) * pageSize.value + 1, length: pageSize.value,
+        sortCol: sortCol.value || null, asc: sortAsc.value })
     rows.value = d.rows || []
     cols.value = d.columns || []
     total.value = d.nrow || 0
@@ -126,11 +123,7 @@ const srcObj = computed(() => {
   if (!c || c.type === 'none') return { type: 'none' }
   return c.type === 'dataset' ? { type: 'dataset', name: c.name } : { type: 'user', id: c.name }
 })
-const prepObj = computed(() => ({
-  filter: spec.spec.data.filter || '', mutate: spec.spec.data.mutate || [],
-  sample: spec.spec.data.sample, seed: spec.spec.data.seed,
-  filterDisabled: !!spec.spec.data.filterDisabled, sampleDisabled: !!spec.spec.data.sampleDisabled, types: spec.spec.data.types || [], outliers: spec.spec.data.outliers || [], fillna: spec.spec.data.fillna || [], dropnaCols: spec.spec.data.dropnaCols || [], dropnaHow: spec.spec.data.dropnaHow || 'any', dropnaDisabled: !!spec.spec.data.dropnaDisabled, dedupCols: spec.spec.data.dedupCols || [], dedupEnabled: !!spec.spec.data.dedupEnabled
-}))
+const prepObj = computed(() => buildPrep(spec.spec.data))
 
 function scheduleRender() {
   clearTimeout(scheduleTimer.value)
@@ -229,11 +222,7 @@ async function doExport() {
   exporting.value = true
   try {
     const src = c.type === 'dataset' ? { type: 'dataset', name: c.name } : { type: 'user', id: c.name }
-    const { blob, filename } = await exportPreparedCSV(src, {
-      filter: spec.spec.data.filter || '', mutate: spec.spec.data.mutate || [],
-      sample: spec.spec.data.sample, seed: spec.spec.data.seed,
-      filterDisabled: !!spec.spec.data.filterDisabled, sampleDisabled: !!spec.spec.data.sampleDisabled, types: spec.spec.data.types || [], outliers: spec.spec.data.outliers || [], fillna: spec.spec.data.fillna || [], dropnaCols: spec.spec.data.dropnaCols || [], dropnaHow: spec.spec.data.dropnaHow || 'any', dropnaDisabled: !!spec.spec.data.dropnaDisabled, dedupCols: spec.spec.data.dedupCols || [], dedupEnabled: !!spec.spec.data.dedupEnabled
-    })
+    const { blob, filename } = await exportPreparedCSV(src, buildPrep(spec.spec.data))
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = filename

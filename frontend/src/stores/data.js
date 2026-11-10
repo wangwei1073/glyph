@@ -3,6 +3,21 @@ import { defineStore } from 'pinia'
 import { getSources, getColumns, uploadData, pasteData, deleteData, previewData } from '../api'
 import { useSpecStore } from './spec'
 
+// ---- prep 构造唯一入口 ----
+// spec.spec.data → 后端 data_prepare 的参数。列面板/预览/统计/导出统一从这里取，
+// 新增加工字段只改这里（此前 7 处手抄曾漏掉 text 字段，导致文本变换后统计/预览不同步）
+export function buildPrep(sd = {}) {
+  return {
+    filter: sd.filter || '', mutate: sd.mutate || [],
+    sample: sd.sample, seed: sd.seed,
+    filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled,
+    types: sd.types || [], text: sd.text || [], outliers: sd.outliers || [],
+    fillna: sd.fillna || [], dropnaCols: sd.dropnaCols || [],
+    dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled,
+    dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled
+  }
+}
+
 export const useDataStore = defineStore('data', {
   state: () => ({
     sources: [],
@@ -56,11 +71,7 @@ export const useDataStore = defineStore('data', {
       const token = ++this._refreshSeq
       try {
         const sd = useSpecStore().spec.data
-        const prep = {
-          filter: sd.filter || '', mutate: sd.mutate || [],
-          sample: sd.sample, seed: sd.seed,
-          filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled, types: sd.types || [], outliers: sd.outliers || [], fillna: sd.fillna || [], dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled
-        }
+        const prep = buildPrep(sd)
         const source = c.type === 'dataset'
           ? { type: 'dataset', name: c.name }
           : { type: 'user', id: c.name }
@@ -96,7 +107,7 @@ export const useDataStore = defineStore('data', {
           : { type: 'user', id: c.name }
         // 数据加工参数以 spec.data 为准（单一事实来源）
         const sd = useSpecStore().spec.data
-        const prep = { filter: sd.filter || '', mutate: sd.mutate || [], sample: sd.sample, seed: sd.seed, filterDisabled: !!sd.filterDisabled, sampleDisabled: !!sd.sampleDisabled, types: sd.types || [], outliers: sd.outliers || [], fillna: sd.fillna || [], dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any', dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [], dedupEnabled: !!sd.dedupEnabled }
+        const prep = buildPrep(sd)
         const res = await previewData(src, prep)
         if (token !== this._previewSeq) return
         this.preview = res

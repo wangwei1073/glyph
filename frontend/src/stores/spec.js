@@ -108,12 +108,7 @@ export const useSpecStore = defineStore('spec', {
     }
   },
   actions: {
-    setProjectId(id) {
-      if (id && String(id).trim()) {
-        this.projectId = String(id).trim()
-        try { localStorage.setItem(PROJECT_ID_KEY, this.projectId) } catch { /* 忽略 */ }
-      }
-    },
+    // setProjectId 只在下方「项目」区定义（对象字面量重复键会被后者静默覆盖，勿在此重复）
     reset() {
       this.spec = defaultSpec()
       this.ensureDefaultTheme()

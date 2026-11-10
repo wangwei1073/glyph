@@ -3,7 +3,7 @@
 // 两者都基于「数据加工 + 手工编辑后」的数据（与画布一致），并给出可复现 R 代码。
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useDataStore } from '../stores/data'
+import { useDataStore, buildPrep } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
 import { useUiStore } from '../stores/ui'
 import { statsColumns, statsSummary, statsSuggest, statsTest, sigPlan, regColumns, regFit, table1Columns, table1Build, table1Export, downloadBlob } from '../api'
@@ -24,10 +24,7 @@ const tab = ref('desc')
 
 const hasSource = computed(() => !!data.current && data.current.type !== 'none')
 
-const prep = computed(() => {
-  const d = spec.spec.data || {}
-  return { filter: d.filter || '', mutate: d.mutate || [], sample: d.sample, seed: d.seed, filterDisabled: !!d.filterDisabled, sampleDisabled: !!d.sampleDisabled, types: d.types || [], outliers: d.outliers || [], fillna: d.fillna || [], dropnaCols: d.dropnaCols || [], dropnaHow: d.dropnaHow || 'any', dropnaDisabled: !!d.dropnaDisabled, dedupCols: d.dedupCols || [], dedupEnabled: !!d.dedupEnabled }
-})
+const prep = computed(() => buildPrep(spec.spec.data || {}))
 const source = computed(() => {
   const c = data.current
   if (!c || c.type === 'none') return { type: 'none' }

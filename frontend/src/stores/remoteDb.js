@@ -149,8 +149,9 @@ export const useRemoteDbStore = defineStore('remoteDb', {
     },
     enterSql() {
       this.sqlMode = true
-      this.preview = null
+      // 先取预览里保存的 SQL 再清 preview（原顺序永远读到空串）
       this.sql = this.preview?.sql || ''
+      this.preview = null
     },
     async runSql() {
       if (!this.connId || !this.sql.trim()) return

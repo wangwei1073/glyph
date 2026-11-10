@@ -157,6 +157,14 @@ json_error <- function(msg, status = 400L) {
   json_response(list(ok = FALSE, error = enc2utf8(as.character(msg))), status)
 }
 
+## 渲染尺寸/dpi 钳制：客户端 bug 或恶意请求传 1e5×1e5 时，
+## 避免 agg_png 直接分配数十 GB 位图把单线程后端打挂
+clamp_px <- function(v, def, lo, hi) {
+  v <- suppressWarnings(as.integer(v %||% def))
+  if (is.na(v)) v <- as.integer(def)
+  max(as.integer(lo), min(v, as.integer(hi)))
+}
+
 ## 供后续扩展使用：安全执行表达式并捕获错误
 safe_eval <- function(expr, env) {
   tryCatch(eval(expr, envir = env),

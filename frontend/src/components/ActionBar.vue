@@ -2,7 +2,7 @@
 // 底部工具区：保存状态 / 项目操作 / 暗色模式 / 退出服务
 // 渲染与自动/手动切换已移到画布顶栏（Canvas.vue），此处不再重复。
 // compact=true 时用于左栏收起后的侧边浮层。
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
 import { shutdownServer } from '../api'
@@ -28,7 +28,7 @@ function toggleDark() {
 function cmd(c) { emit('project', c) }
 
 // 退出服务：先确认，再请求后端优雅停止；成功后页面变成「已退出」提示页
-const quitting = computed(() => false)
+const quitting = ref(false)
 async function quitApp() {
   const dirtyTip = spec.dirty ? '\n\n注意：项目有未保存的改动，退出后会丢失。' : ''
   try {
@@ -38,6 +38,7 @@ async function quitApp() {
       { type: 'warning', confirmButtonText: '退出', cancelButtonText: '取消' }
     )
   } catch { return }
+  quitting.value = true
   try {
     await shutdownServer()
     document.body.classList.add('gg-quit')
@@ -51,6 +52,7 @@ async function quitApp() {
     document.title = 'Glyph 已退出'
   } catch (e) {
     // 服务可能已经先一步退出（请求未及返回），这种情况同样视为成功
+    quitting.value = false
     document.getElementById('app').innerHTML =
       '<div class="gg-quit-screen">'
       + '<div class="gg-quit-title">Glyph 已退出</div>'

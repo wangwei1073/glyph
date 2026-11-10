@@ -1,15 +1,14 @@
 <script setup>
-// 高级面板：原始代码模式 / plotly / 扩展状态
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+// 高级面板：原始代码模式 / plotly / 存入图库（扩展管理在 ExtensionsPanel.vue）
+import { ref, computed, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useSpecStore } from '../stores/spec'
-import { useMetaStore } from '../stores/meta'
 import { usePinStore } from '../stores/pins'
+import { buildPrep } from '../stores/data'
 import { rawRender, formatCode } from '../api'
 import CodeEditor from './CodeEditor.vue'
 
 const spec = useSpecStore()
-const meta = useMetaStore()
 const pins = usePinStore()
 const saveVisible = ref(false)
 const saveLabel = ref('')
@@ -90,15 +89,7 @@ async function saveToGallery() {
       code: rawCode.value,
       packages: packagesFromCode(rawCode.value),
       source: sd.source,
-      prep: {
-        filter: sd.filter || '', filterDisabled: !!sd.filterDisabled,
-        mutate: sd.mutate || [], sample: sd.sample, sampleDisabled: !!sd.sampleDisabled,
-        seed: sd.seed, types: sd.types || [], text: sd.text || [],
-        outliers: sd.outliers || [], fillna: sd.fillna || [],
-        dropnaCols: sd.dropnaCols || [], dropnaHow: sd.dropnaHow || 'any',
-        dropnaDisabled: !!sd.dropnaDisabled, dedupCols: sd.dedupCols || [],
-        dedupEnabled: !!sd.dedupEnabled
-      },
+      prep: buildPrep(sd),
       renderOpts: { ...spec.renderOpts },
       pngUrl: spec.last.pngUrl
     })
@@ -172,82 +163,6 @@ function toggleCommentLines(view) {
   })
 }
 function doComment() { toggleCommentLines(editorView) }
-
-// 扩展清单：来自后端 /api/meta 的 extensionCatalog（含安装/启用状态与说明）
-// 开关只对「已安装」的扩展可用；关闭后后端会重建注册表，其组件从各面板消失
-const extToggling = ref('')
-
-async function toggleExt(ext, on) {
-  if (!ext.installed) return
-  extToggling.value = ext.id
-  try {
-    const res = await toggleExtension(ext.id, on)
-    // 后端已返回重建后的 meta，直接套用避免二次请求
-    if (res.meta) meta.applyMeta(res.meta)
-    ElMessage.success(`${ext.label} 已${on ? '启用' : '关闭'}`)
-    // 组件来源变了，需要重渲染以反映标度/主题等变化
-    spec.renderNow()
-  } catch (e) {
-    ElMessage.error('切换失败: ' + e.message)
-  } finally {
-    extToggling.value = ''
-  }
-}
-
-// 「入口」说明：按扩展提供的组件类型推导
-function extWhere(e) {
-  const map = {
-    geom: '图层', scale: '标度', theme: '主题', guide: '标签 · 图例', annotation: '注释'
-  }
-  const parts = (e.kind || []).map(k => map[k]).filter(Boolean)
-  if (e.id === 'patchwork') return '拼图（先「存入图库」）'
-  if (e.id === 'plotly') return '画布「交互预览」'
-  return parts.length ? [...new Set(parts)].join(' · ') : '—'
-}
-
-// ---- 一键安装（后台任务 + 轮询）----
-const installing = ref('')       // 正在安装的包名
-let installTimer = null
-
-async function pollInstall() {
-  installTimer = null
-  try {
-    const res = await getInstallStatus()
-    const job = res.job || {}
-    if (job.status === 'running') {
-      installTimer = setTimeout(pollInstall, 1200)
-      return
-    }
-    installing.value = ''
-    if (job.status === 'done') {
-      if (res.meta) meta.applyMeta(res.meta)
-      ElMessage.success(`${job.pkg} 安装完成，扩展已可用`)
-    } else if (job.status === 'failed') {
-      ElMessageBox.alert(
-        (job.message ? job.message + '\n\n' : '') + (job.log || '（无日志）'),
-        `${job.pkg} 安装失败`, { customClass: 'install-log-box', confirmButtonText: '知道了' }
-      )
-    }
-  } catch (e) {
-    installing.value = ''
-    ElMessage.error('查询安装状态失败：' + e.message)
-  }
-}
-
-async function installPkg(pkg) {
-  if (installing.value) return
-  installing.value = pkg
-  try {
-    await installExtension(pkg)
-    ElMessage.info(`开始安装 ${pkg}，完成后会自动刷新`)
-    pollInstall()
-  } catch (e) {
-    installing.value = ''
-    ElMessage.error('安装失败：' + e.message)
-  }
-}
-
-onBeforeUnmount(() => { if (installTimer) clearTimeout(installTimer) })
 </script>
 
 <template>

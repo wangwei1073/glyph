@@ -325,28 +325,42 @@ ggspec_export_check <- function(spec, meta, state, width = 1600, height = 1000,
     return(list(ok = FALSE, issues = issues, info = info))
   }
 
-  # 0) 试渲染：图对象能构造 ≠ 能画出来（stat/scale 错误常发生在 print 时）
+  # 0) 试渲染：图对象能构造 ≠ 能画出来（stat/scale 错误常发生在 print 时）。
+  #    缺 ragg/png 这类可选包只跳过对应检查（info 级），不算失败 ——
+  #    实际渲染管线有 grDevices 回退，图能画就不该被自己的预检拦住。
+  has_ragg <- requireNamespace("ragg", quietly = TRUE)
+  has_png <- requireNamespace("png", quietly = TRUE)
   render_err <- NULL
   alpha_ok <- TRUE
-  tmp_png <- tempfile(fileext = ".png")
-  tryCatch({
-    ragg::agg_png(tmp_png, width = 160, height = 160, units = "px", res = 72, background = "white")
-    tryCatch(print(plot), error = function(e) { render_err <<- conditionMessage(e) })
-    grDevices::dev.off()
-    if (is.null(render_err) && identical(format, "png")) {
-      img <- png::readPNG(tmp_png)
-      if (length(dim(img)) >= 3 && dim(img)[3] == 4) alpha_ok <- min(img[, , 4]) >= 1
+  alpha_checked <- FALSE
+  if (!has_ragg) {
+    add("render", "info", "跳过试渲染", "未安装 ragg 包，无法预先验证图形可渲染性（不影响实际导出）。")
+  } else {
+    tmp_png <- tempfile(fileext = ".png")
+    tryCatch({
+      ragg::agg_png(tmp_png, width = 160, height = 160, units = "px", res = 72, background = "white")
+      tryCatch(print(plot), error = function(e) { render_err <<- conditionMessage(e) })
+      grDevices::dev.off()
+      if (is.null(render_err) && identical(format, "png")) {
+        if (!has_png) {
+          add("alpha", "info", "跳过透明像素检查", "未安装 png 包，无法检查透明通道。")
+        } else {
+          alpha_checked <- TRUE
+          img <- png::readPNG(tmp_png)
+          if (length(dim(img)) >= 3 && dim(img)[3] == 4) alpha_ok <- min(img[, , 4]) >= 1
+        }
+      }
+    }, error = function(e) {
+      render_err <<- conditionMessage(e)
+      try(grDevices::dev.off(), silent = TRUE)
+    })
+    unlink(tmp_png)
+    if (!is.null(render_err)) {
+      add("render", "fail", "图形无法渲染", render_err)
+      return(list(ok = FALSE, issues = issues, info = info))
     }
-  }, error = function(e) {
-    render_err <<- conditionMessage(e)
-    try(grDevices::dev.off(), silent = TRUE)
-  })
-  unlink(tmp_png)
-  if (!is.null(render_err)) {
-    add("render", "fail", "图形无法渲染", render_err)
-    return(list(ok = FALSE, issues = issues, info = info))
   }
-  if (!alpha_ok) {
+  if (alpha_checked && !alpha_ok) {
     add("alpha", "fail", "存在透明像素", "导出 PNG 含透明通道；期刊通常要求不透明白底。")
   }
 

@@ -3,7 +3,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useMetaStore } from './stores/meta'
-import { useDataStore } from './stores/data'
+import { useDataStore, buildPrep } from './stores/data'
 import { useSpecStore } from './stores/spec'
 import { usePinStore } from './stores/pins'
 import { useUiStore } from './stores/ui'
@@ -194,11 +194,6 @@ function startCodePoll() {
   }, 1500)
 }
 
-function toggleDark() {
-  spec.dark = !spec.dark
-  document.documentElement.classList.toggle('dark', spec.dark)
-}
-
 // ---- 项目操作 ----
 // 项目文件 = { app, format, savedAt, spec, data? }
 // data 仅在数据源为「上传/粘贴」时内嵌：CSV 快照 + 手工编辑 ops，
@@ -275,7 +270,8 @@ function loadProjectClick() {
         if (!newId) throw new Error(res.error || '内嵌数据恢复失败')
         project.spec.data.source = { type: 'user', id: newId }
         if (Array.isArray(embedded.edits) && embedded.edits.length) {
-          await importEdits(project.spec.data.source, embedded.edits)
+          // 带上当前加工参数：行锚基于「原始数据 + prep」的行序，校验语义与编辑时一致
+          await importEdits(project.spec.data.source, embedded.edits, buildPrep(spec.spec.data))
         }
         await data.load()
       }
