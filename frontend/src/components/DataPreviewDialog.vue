@@ -275,7 +275,7 @@ function scrollFocus() {
 
 <template>
   <el-dialog :model-value="visible" @update:model-value="emit('update:visible', $event)"
-    :title="`数据预览 · ${title}`" width="94%" top="4vh" destroy-on-close append-to-body class="pvd-dialog">
+    :title="`数据预览 · ${title}`" width="min(1180px, 92vw)" top="5vh" destroy-on-close append-to-body class="pvd-dialog">
     <div v-loading="loading" class="pvd-body">
       <div class="pvd-bar">
         <div class="pvd-chips">
