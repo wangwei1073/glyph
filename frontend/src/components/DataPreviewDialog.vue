@@ -40,6 +40,13 @@ const dotBase = {
   logical: '#8d3fb0', date: '#c55a11', datetime: '#c55a11'
 }
 const total_pages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const q = ref('')
+const visibleCols = computed(() => {
+  const kw = q.value.trim().toLowerCase()
+  if (!kw) return cols.value
+  const hit = cols.value.filter(c => String(c.name).toLowerCase().includes(kw))
+  return hit.length ? hit : cols.value
+})
 const prepChips = computed(() => {
   const chips = []
   if ((spec.spec.data.filter || '').trim()) chips.push('筛选')
@@ -145,7 +152,7 @@ async function commitOp(op) {
 
 function startEdit(ri, ci, curVal, colName) {
   if (!editMode.value) return
-  const c = cols.value[ci]
+  const c = cols.value.find(x => x.name === colName) || cols.value[ci]
   editing.value = { ri, ci, value: fmt(curVal), col: colName, type: c.type }
 }
 function cancelEdit() { editing.value = null }
@@ -268,16 +275,21 @@ function scrollFocus() {
 
 <template>
   <el-dialog :model-value="visible" @update:model-value="emit('update:visible', $event)"
-    :title="`数据预览 · ${title}`" width="94%" top="4vh" destroy-on-close class="pvd-dialog">
+    :title="`数据预览 · ${title}`" width="94%" top="4vh" destroy-on-close append-to-body class="pvd-dialog">
     <div v-loading="loading" class="pvd-body">
       <div class="pvd-bar">
-        <el-tag v-for="(c, i) in prepChips" :key="i" size="small" type="info" :disable-transitions="true">{{ c }}</el-tag>
-        <el-tag v-if="editCount" size="small" type="warning" :disable-transitions="true">手工编辑 {{ editCount }} 条</el-tag>
-        <span style="flex:1" />
-        <el-select v-model="pageSize" size="small" style="width:92px">
+        <div class="pvd-chips">
+          <el-tag v-for="(c, i) in prepChips" :key="i" size="small" type="info" :disable-transitions="true">{{ c }}</el-tag>
+          <el-tag v-if="editCount" size="small" type="warning" :disable-transitions="true">手工编辑 {{ editCount }} 条</el-tag>
+        </div>
+        <span class="pvd-grow" />
+        <el-input v-model="q" size="small" clearable placeholder="搜索列…" style="width:150px">
+          <template #prefix><el-icon><Search /></el-icon></template>
+        </el-input>
+        <el-select v-model="pageSize" size="small" style="width:100px">
           <el-option v-for="n in [25, 50, 100, 200]" :key="n" :value="n" :label="n + ' 行/页'" />
         </el-select>
-        <el-button size="small" :loading="exporting" @click="doExport">
+        <el-button size="small" @click="doExport" :loading="exporting">
           <el-icon class="el-icon--left"><Download /></el-icon>导出 CSV
         </el-button>
       </div>
@@ -289,12 +301,11 @@ function scrollFocus() {
         <table class="pvd-table">
           <thead>
             <tr>
-              <th v-for="h in cols" :key="h.name" :data-col="h.name"
+              <th v-for="h in visibleCols" :key="h.name" :data-col="h.name"
                 :class="{ focus: h.name === focusCol, sorted: sortCol === h.name }">
                 <div class="th-in">
                   <span class="dot" :style="{ background: dotFor(h) }" />
-                  <span class="th-name" :title="h.name">{{ h.name }}</span>
-                  <span class="th-n" :title="`唯一值 ${h.nUnique} · 缺失 ${h.nMissing}`">{{ h.nUnique }}</span>
+                  <span class="th-name" :title="`${h.name} · 唯一值 ${h.nUnique} · 缺失 ${h.nMissing}`">{{ h.name }}</span>
                   <el-button size="small" text class="pvd-sort" :class="{ on: sortCol === h.name }"
                     :title="`按 ${h.name} 排序`" @click="setSort(h.name)">
                     <el-icon><component :is="sortCol === h.name && !sortAsc ? 'ArrowDown' : 'ArrowUp'" /></el-icon>
@@ -333,8 +344,8 @@ function scrollFocus() {
                   </template>
                 </el-popconfirm>
               </td>
-              <td v-for="(h, ci) in cols" :key="h.name"
-                :class="{ 'pvd-editable': editMode }"
+              <td v-for="(h, ci) in visibleCols" :key="h.name"
+                :class="{ 'pvd-editable': editMode, num: h.type === 'num' }"
                 :title="editMode ? '双击编辑' : fmt(r[h.name])"
                 @dblclick="startEdit(i, ci, r[h.name], h.name)">
                 <el-input v-if="editing && editing.ri === i && editing.ci === ci"
@@ -355,18 +366,17 @@ function scrollFocus() {
             <el-icon><RefreshLeft /></el-icon>
           </el-button>
         </el-tooltip>
-        <el-pagination layout="prev, pager, next, jumper" :total="total" :page-size="pageSize"
-          v-model:current-page="page" :page-count="total_pages" background small />
+        <el-button v-if="editMode" size="small" text @click="addRow">
+          <el-icon><Plus /></el-icon>添加行
+        </el-button>
+        <span class="pvd-grow" />
         <span class="gg-mono pvd-pos">
           {{ (page - 1) * pageSize + 1 }}–{{ Math.min(page * pageSize, total) }} / {{ total }}
         </span>
-        <span style="flex:1" />
-        <el-button v-if="editMode" size="small" @click="addRow">
-          <el-icon><Plus /></el-icon>添加行
-        </el-button>
-        <span style="font-size:11px;color:var(--el-text-color-secondary)">
-          映射目标：第 {{ spec.selectedLayer + 1 }} 层（右栏选中）
-        </span>
+        <el-pagination layout="prev, pager, next" :total="total" :page-size="pageSize"
+          v-model:current-page="page" :page-count="total_pages" background small />
+        <span class="pvd-grow" />
+        <span class="pvd-map">映射：第 {{ spec.selectedLayer + 1 }} 层</span>
       </div>
     </div>
   </el-dialog>
@@ -375,12 +385,15 @@ function scrollFocus() {
 <style scoped>
 /* 紧凑排版：行高压到 ~19px，11 列数据一屏能看到更多行 */
 .pvd-body { display: flex; flex-direction: column; min-height: 360px; }
-.pvd-bar { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; }
-.pvd-scroll { flex: 1; min-height: 240px; max-height: calc(90vh - 168px); border: 1px solid var(--gg-border); border-radius: 6px; }
+.pvd-bar { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; flex-wrap: nowrap; }
+.pvd-chips { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.pvd-grow { flex: 1 1 auto; min-width: 8px; }
+.pvd-scroll { flex: 1; min-height: 240px; max-height: calc(90vh - 190px); border: 1px solid var(--gg-border); border-radius: 6px; }
 .pvd-table { border-collapse: collapse; font-size: 12px; width: 100%; }
 .pvd-table th {
   position: sticky; top: 0; z-index: 2; background: var(--gg-panel);
   border-bottom: 1px solid var(--gg-border); text-align: left; white-space: nowrap;
+  height: 30px;
 }
 .pvd-table th.focus { outline: 2px solid var(--gg-accent); outline-offset: -2px; background: rgba(47, 111, 191,.08); }
 .pvd-table th.sorted { background: rgba(47, 111, 191,.12); }
@@ -395,10 +408,12 @@ function scrollFocus() {
 .pvd-table th:hover .pvd-sort, .pvd-table th:hover .pvd-menu { opacity: 1; }
 .pvd-sort.on { color: var(--gg-accent); opacity: 1; }
 .pvd-table td {
-  padding: 1px 7px; line-height: 17px; border-bottom: 1px solid var(--gg-border);
+  padding: 3px 8px; line-height: 20px; border-bottom: 1px solid var(--gg-border);
   white-space: nowrap; max-width: 148px; overflow: hidden; text-overflow: ellipsis;
 }
-.pvd-table tbody tr:hover td { background: rgba(47, 111, 191,.06); }
+.pvd-table tbody tr:nth-child(even) td { background: #fafbfd; }
+.pvd-table tbody tr:hover td { background: rgba(47, 111, 191,.08); }
+.pvd-table td.num, .pvd-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pvd-stat { color: var(--el-text-color-secondary); font-size: 11px; padding: 2px 0; }
 .pvd-prev { display: flex; gap: 4px; flex-wrap: wrap; }
 .pvd-prev code {
@@ -406,7 +421,9 @@ function scrollFocus() {
   font-size: 11px; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pvd-editrow { display: flex; gap: 6px; padding-top: 5px; margin-top: 5px; border-top: 1px dashed var(--gg-border); }
-.pvd-foot { display: flex; align-items: center; gap: 8px; padding-top: 6px; flex-wrap: wrap; font-size: 12px; }
+.pvd-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; flex-wrap: nowrap; font-size: 12px; }
+.pvd-pos { font-size: 11px; color: var(--gg-text-3, #6b7480); }
+.pvd-map { font-size: 11px; color: var(--gg-text-4, #97a0ab); white-space: nowrap; }
 .pvd-editable { cursor: cell; }
 .pvd-redit { width: 28px; }
 </style>
