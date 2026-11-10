@@ -165,7 +165,19 @@ GEOM_META <- list(
   gm("diagonal_wide", "对角网格（宽）", "特殊", "ggforce：宽对角线分格"),
   gm("autopoint",     "自动点",      "点与线", "ggforce：为 facet_matrix 自动定位"),
   gm("autodensity",   "自动密度",    "分布",   "ggforce：为 facet_matrix 自动定位的密度"),
-  gm("autohistogram", "自动直方",    "分布",   "ggforce：为 facet_matrix 自动定位的直方图")
+  gm("autohistogram", "自动直方",    "分布",   "ggforce：为 facet_matrix 自动定位的直方图"),
+  # ---- 第四批扩展（科研绘图 A 级）----
+  gm("rain",             "雨云图",       "分布", "ggrain：半小提琴 + 抖动点 + 箱线合一，多组分布对比"),
+  gm("pointdensity",     "点密度散点",   "分布", "ggpointdensity：散点与二维密度合体，大数据不再糊成一团"),
+  gm("point_rast",       "栅格化散点",   "特殊", "ggrastr：点层转位图，其余保持矢量（大点阵导出优化）"),
+  gm("line_rast",        "栅格化折线",   "特殊", "ggrastr：线层转位图"),
+  gm("tile_rast",        "栅格化瓦片",   "特殊", "ggrastr：瓦片层转位图"),
+  gm("boxplot_jitter",   "栅格化箱线抖动", "特殊", "ggrastr：箱线 + 抖动点整体转位图"),
+  gm("violin_rast",      "栅格化小提琴", "特殊", "ggrastr：小提琴层转位图"),
+  gm("quasirandom_rast", "栅格化准随机点", "特殊", "ggrastr：准随机排布点转位图"),
+  gm("jitter_rast",      "栅格化抖动点", "特殊", "ggrastr：抖动点转位图"),
+  gm("beeswarm_rast",    "栅格化蜂群",   "特殊", "ggrastr：蜂群点转位图"),
+  gm("dl",               "直接标注",     "文本与标签", "directlabels：把组名直接标在线/点簇旁，替代图例")
 )
 GEOM_META <- setNames(GEOM_META, vapply(GEOM_META, function(x) x$name, character(1)))
 

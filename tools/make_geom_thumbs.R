@@ -265,7 +265,21 @@ T <- list(
   diagonal_wide = list(aes = c(x = "x", y = "y", group = "cat"), data = "diag"),
   autopoint     = list(aes = c(x = "x", y = "y"), data = "scatter"),
   autodensity   = list(aes = c(x = "y"), data = "d"),
-  autohistogram = list(aes = c(x = "x"))
+  autohistogram = list(aes = c(x = "x")),
+  # ---- 第四批扩展（科研绘图 A 级）----
+  rain          = list(aes = c(x = "cat", y = "y", fill = "cat"), data = "scatter",
+                       noBlank = TRUE),
+  pointdensity  = list(aes = c(x = "x", y = "y"), data = "scatter"),
+  point_rast    = list(aes = c(x = "x", y = "y", colour = "cat"), data = "scatter"),
+  line_rast     = list(aes = c(x = "x", y = "y", colour = "cat"), data = "d"),
+  tile_rast     = list(aes = c(x = "x", y = "y", fill = "y")),
+  boxplot_jitter= list(aes = c(x = "cat", y = "y")),
+  violin_rast   = list(aes = c(x = "cat", y = "y")),
+  quasirandom_rast = list(aes = c(x = "cat", y = "y", colour = "cat")),
+  jitter_rast   = list(aes = c(x = "cat", y = "y", colour = "cat")),
+  beeswarm_rast = list(aes = c(x = "cat", y = "y", colour = "cat")),
+  dl            = list(aes = c(x = "x", y = "y", label = "lab", colour = "cat"),
+                       params = list(method = list(expr = "list('first.points')")))
 )
 # ggside 的 36 个边际 geom：统一用「主图散点 + 边际层」示意，
 # 否则只有边际图层会因缺少主图而看不出效果。
@@ -304,6 +318,9 @@ SKIP <- c("map", "sf", "sf_label", "sf_text", "blank", "hex",
           # bar_connector 需要特定的 stat 参数组合；vridgeline 需要 height 与方向对齐，
           # 合成数据难以通用示意，用占位图
           "bar_connector", "vridgeline",
+          # ggrastr 的 line_rast 在小尺寸栅格设备下输出空文件，用占位图
+          # （功能本身可用，已由 A 级扩展探针验证）
+          "line_rast",
           # regon / diagonal / parallel_sets 需要特定拓扑的数据组织方式，
           # 合成数据无法通用示意；功能本身可用（见 test_ext_batch3）
           "regon", "diagonal", "diagonal_wide", "parallel_sets",
@@ -332,6 +349,8 @@ build_spec <- function(key) {
                 aes = aes_list, params = cfg$params %||% list(), aesParams = list())
   # 垫一层不可见的 geom_blank：为「参考线 / 函数曲线」这类不吃数据的 geom 建立坐标范围。
   # 必须沿用主图层的 x/y 列（例如柱状图的 x 是离散列），否则两层的标度类型会冲突。
+  # 例外：自带复杂 stat 的扩展 geom（如 ggrain 的 stat_half_ydensity）会被 blank 层
+  # 干扰 orientation 推断而报错 —— 配置 noBlank = TRUE 跳过垫层。
   col_of <- function(nm, default) {
     if (!is.null(names(aes_map)) && nm %in% names(aes_map)) as.character(aes_map[[nm]]) else default
   }
@@ -339,7 +358,7 @@ build_spec <- function(key) {
                     y = list(map = col_of("y", "y")))
   blank <- list(geom = "blank", stat = "", position = list(type = "", params = list()),
                 aes = blank_aes, params = list(), aesParams = list())
-  layers <- list(blank, layer)
+  layers <- if (isTRUE(cfg$noBlank)) list(layer) else list(blank, layer)
   # ggside 的边际 geom 必须配一个主图图层，否则看不出「边际」效果
   # （它们画在面板外侧，单独存在时是一片空白）
   if (isTRUE(cfg$side)) {
