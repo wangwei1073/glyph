@@ -1,6 +1,6 @@
 <script setup>
 // 数据面板：数据源管理 / 列交互（快速映射·详情·插入表达式）/ 加工对话框 / 预览
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useDataStore } from '../stores/data'
 import { useSpecStore } from '../stores/spec'
@@ -41,19 +41,17 @@ try { Object.assign(collapsed.value, JSON.parse(localStorage.getItem(KEY) || '{}
 watch(collapsed, (v) => { try { localStorage.setItem(KEY, JSON.stringify(v)) } catch { /* */ } }, { deep: true })
 
 // ---- 数据源 ----
-const groupedSources = computed(() => {
-  const ds = data.sources.filter(s => s.type === 'dataset')
-  const us = data.sources.filter(s => s.type === 'user')
-  const out = [{ label: '内置数据集', options: ds }]
-  if (us.length) out.push({ label: '我的数据', options: us })
-  return out.filter(g => g.options.length)
-})
+// 说明：数据源改成一个分组下拉后，这里的分组/排序就是唯一的展示顺序依据。
+// 组顺序：我的数据 → 内置数据集。下拉打开时默认高亮第一项，用户数据在前，
+//         回车选中的就是自己的数据集，不会误选内置数据。
+// 组内顺序：我的数据按编号倒序 —— 刚导入的排最前（原先是 u1、u2… 插入顺序，
+//         最新的沉在底部）。编号要按数值比，否则 u10 会排到 u9 前面。
+function userSeq(s) {
+  const m = String(s.name || '').match(/(\d+)\s*$/)
+  return m ? Number(m[1]) : 0
+}
 async function onSelect(key) {
   await data.select(key)
-  nextTick(() => {
-    const el = srcCardsEl.value?.querySelector('.src-card.on')
-    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' })
-  })
   const src = data.current
   if (src) {
     spec.setSource(src.type === 'dataset' ? { type: 'dataset', name: src.name }
@@ -103,8 +101,17 @@ async function doPaste() {
 }
 const userItems = computed(() => data.sources.filter(s => s.type === 'user'))
 const datasetSources = computed(() => data.sources.filter(s => s.type === 'dataset'))
-const datasetKey = computed(() => (data.srcKey || '').startsWith('dataset:') ? data.srcKey : '')
-const srcCardsEl = ref(null)
+// 分组下拉的数据：我的数据在前（组内按编号倒序），内置数据集在后
+const srcGroups = computed(() => {
+  const us = userItems.value.slice().sort((a, b) => userSeq(b) - userSeq(a))
+  const out = []
+  if (us.length) out.push({ label: '我的数据', options: us })
+  if (datasetSources.value.length) out.push({ label: '内置数据集', options: datasetSources.value })
+  return out
+})
+// 下拉的绑定值：只在 user:/dataset: 两类里有对应选项；
+// 未选数据时 srcKey 是 none:__none__，直接绑会显示成 "none" 这种原始值。
+const srcValue = computed(() => /^(user|dataset):/.test(data.srcKey || '') ? data.srcKey : '')
 const numericColumns = computed(() => data.columns.filter(c => c.type === 'num'))
 
 function originLabel(s) {
@@ -329,37 +336,37 @@ function openPreview(colName = '') {
       </el-button>
     </div>
 
-    <!-- 我的数据：卡片列表，点击切换活动数据集 -->
-    <div v-if="userItems.length" ref="srcCardsEl" class="dp-src-cards">
-      <div class="dp-subhead">我的数据</div>
-      <div v-for="u in userItems" :key="u.id" class="src-card"
-        :class="{ on: data.srcKey === `user:${u.name}` }" @click="onSelect(`user:${u.name}`)">
-        <span class="sc-ic"><el-icon><component :is="originIcon(u)" /></el-icon></span>
-        <span class="sc-main">
-          <span class="sc-name">{{ u.label }}</span>
-          <span class="sc-meta">{{ originLabel(u) }} · {{ u.nrow }}×{{ u.ncol }}</span>
-        </span>
-        <el-tooltip content="数据准备：筛选 / 新增列 / 抽样" placement="top">
-          <el-button class="sc-act" text size="small" @click.stop="prepareSource(u)">
-            <el-icon><Setting /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-popconfirm :title="`删除 ${u.label}？`" width="190" @confirm="removeUser(u.name)">
-          <template #reference>
-            <el-button class="sc-del" text size="small" type="danger" @click.stop>
-              <el-icon><Delete /></el-icon>
-            </el-button>
-          </template>
-        </el-popconfirm>
-      </div>
-    </div>
-
-    <div style="padding: 6px 10px 2px">
-      <div class="dp-subhead" style="padding-left:0">内置数据集</div>
-      <el-select :model-value="datasetKey" class="src-select" filterable placeholder="选择内置数据集"
-        style="width:100%" @change="onSelect">
-        <el-option v-for="s in datasetSources" :key="`dataset:${s.name}`" :value="`dataset:${s.name}`"
-          :label="`${s.label}（${s.nrow}×${s.ncol}）`" />
+    <!-- 数据源：一个分组下拉管两组（我的数据 / 内置数据集）
+         相比原先「两份标题 + 卡片 + 下拉」的纵向堆叠省约 96px，
+         省出来的高度留给下面的「列」列表。 -->
+    <div class="dp-src">
+      <div class="dp-subhead">数据源</div>
+      <el-select :model-value="srcValue" class="src-select" filterable
+        placeholder="选择数据集" style="width:100%" @change="onSelect">
+        <el-option-group v-for="g in srcGroups" :key="g.label" :label="g.label">
+          <el-option v-for="s in g.options" :key="`${s.type}:${s.name}`"
+            :value="`${s.type}:${s.name}`" :label="s.label">
+            <div class="src-opt">
+              <span class="so-ic"><el-icon><component :is="originIcon(s)" /></el-icon></span>
+              <span class="so-name" :title="s.label">{{ s.label }}</span>
+              <span class="so-meta">{{ s.nrow }}×{{ s.ncol }}</span>
+              <span v-if="s.type === 'user'" class="so-acts">
+                <el-tooltip content="数据准备：筛选 / 新增列 / 抽样" placement="top">
+                  <el-button class="so-act" text size="small" @click.stop="prepareSource(s)">
+                    <el-icon><Setting /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-popconfirm :title="`删除 ${s.label}？`" width="190" @confirm="removeUser(s.name)">
+                  <template #reference>
+                    <el-button class="so-act" text size="small" type="danger" @click.stop>
+                      <el-icon><Delete /></el-icon>
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+              </span>
+            </div>
+          </el-option>
+        </el-option-group>
       </el-select>
     </div>
 
@@ -724,23 +731,21 @@ function openPreview(colName = '') {
   background: #fff; color: var(--gg-accent); border-radius: 999px;
   font-size: 11px; padding: 0 5px; margin-left: 5px; font-weight: 600;
 }
-.dp-src-cards {
-  padding: 6px 10px 2px; display: flex; flex-direction: column; gap: 4px;
-  max-height: 220px; overflow: auto;
-}
-.src-card {
-  display: flex; align-items: center; gap: 8px; border: 1px solid var(--gg-border);
-  border-radius: 6px; padding: 6px 8px; cursor: pointer; background: #fff;
-}
-.src-card:hover { border-color: var(--gg-brand); }
-.src-card.on { border-color: var(--gg-brand); background: var(--gg-brand-2, #eaf1fb); }
-.sc-ic { color: var(--gg-brand); display: flex; flex-shrink: 0; }
-.sc-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.sc-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-meta { font-size: 10.5px; color: var(--gg-text-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-del, .sc-act { opacity: 0; flex-shrink: 0; }
-.src-card:hover .sc-del, .src-card.on .sc-del,
-.src-card:hover .sc-act, .src-card.on .sc-act { opacity: 1; }
+/* 数据源：分组下拉（我的数据 / 内置数据集） */
+.dp-src { padding: 6px 10px 4px; }
+.dp-src .dp-subhead { margin-bottom: 5px; }
+
+/* 下拉选项内部布局：图标 + 名称 + 维度 + 操作（仅我的数据） */
+.src-opt { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.so-ic { display: flex; flex-shrink: 0; color: var(--gg-brand); }
+.so-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.so-meta { flex-shrink: 0; font-size: 10.5px; color: var(--gg-text-4); }
+.so-acts { display: flex; gap: 2px; flex-shrink: 0; opacity: 0; }
+/* 悬停选项或已被选中时才露出操作按钮，避免下拉列表过于嘈杂 */
+.el-select-dropdown__item:hover .so-acts,
+.el-select-dropdown__item.is-selected .so-acts { opacity: 1; }
+.so-act { padding: 0 4px; height: 20px; }
+
 
 .prep-summary { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; }
 .ps-raw { color: var(--gg-text-3); }
