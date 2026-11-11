@@ -116,6 +116,11 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
 .ggspec_param_schema <- function(name, default_value = NULL) {
   w <- .ggspec_ipw(name, default_value)
   out <- w
+  # 高频参数的中文说明（registry_meta.R 的 PARAM_DESC；pv() 已带 desc 的以原 desc 为准）
+  if (is.null(out$desc)) {
+    d <- PARAM_DESC[[name]]
+    if (!is.null(d)) out$desc <- d
+  }
   if (is.null(out$default) && !is.null(default_value) &&
       (is.character(default_value) || is.numeric(default_value) || is.logical(default_value))) {
     out$default <- default_value

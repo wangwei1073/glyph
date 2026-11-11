@@ -109,6 +109,13 @@ dscatter$cat <- factor(sample(c("A", "B"), 45, TRUE))
 dscatter$group <- dscatter$cat; dscatter$lab <- "p"; dscatter$sample <- 1
 dscatter$xmin <- 0; dscatter$xmax <- 1; dscatter$ymin <- 0; dscatter$ymax <- 1
 dscatter$z <- 1; dscatter$radius <- 0.3
+# real：三组不同均值/方差的正态混合，给箱线/小提琴/密度/雨云「真实数据形状」
+set.seed(42)
+dreal <- data.frame(
+  y = c(rnorm(40, 10, 1.2), rnorm(40, 14, 2.2), rnorm(40, 12, 0.9)),
+  cat = factor(rep(c("A", "B", "C"), each = 40))
+)
+dreal$lab <- paste0("p", seq_len(nrow(dreal)))
 # diag：对角线网格需要 group 且每格有对角端点
 ddiag <- do.call(rbind, lapply(1:3, function(i) {
   data.frame(x = c(i, i + 0.8), y = c(i, i + 0.8), cat = factor(LETTERS[i]))
@@ -149,11 +156,11 @@ T <- list(
   histogram      = list(aes = c(x = "x")),
   freqpoly       = list(aes = c(x = "x", colour = "cat")),
   dotplot        = list(aes = c(x = "x")),
-  density        = list(aes = c(x = "x", colour = "cat")),
+  density        = list(aes = c(x = "y", colour = "cat"), data = "real"),
   area           = list(aes = c(x = "x", y = "y", fill = "cat")),
-  boxplot        = list(aes = c(x = "cat", y = "y", fill = "cat")),
-  violin         = list(aes = c(x = "cat", y = "y", fill = "cat")),
-  tufteboxplot   = list(aes = c(x = "cat", y = "y")),
+  boxplot        = list(aes = c(x = "cat", y = "y", fill = "cat"), data = "real"),
+  violin         = list(aes = c(x = "cat", y = "y", fill = "cat"), data = "real"),
+  tufteboxplot   = list(aes = c(x = "cat", y = "y"), data = "real"),
   crossbar       = list(aes = c(x = "x", y = "y", ymin = "ymin", ymax = "ymax")),
   errorbar       = list(aes = c(x = "x", ymin = "ymin", ymax = "ymax")),
   errorbarh      = list(aes = c(y = "y", xmin = "xmin", xmax = "xmax")),
@@ -267,7 +274,7 @@ T <- list(
   autodensity   = list(aes = c(x = "y"), data = "d"),
   autohistogram = list(aes = c(x = "x")),
   # ---- 第四批扩展（科研绘图 A 级）----
-  rain          = list(aes = c(x = "cat", y = "y", fill = "cat"), data = "scatter",
+  rain          = list(aes = c(x = "cat", y = "y", fill = "cat"), data = "real",
                        noBlank = TRUE),
   pointdensity  = list(aes = c(x = "x", y = "y"), data = "scatter"),
   point_rast    = list(aes = c(x = "x", y = "y", colour = "cat"), data = "scatter"),
@@ -336,7 +343,7 @@ pick_data <- function(key) {
   switch(if (is.null(T[[key]]$data)) "d" else T[[key]]$data,
          d = d, grid = dg, poly = dpoly, many = dmany,
          ridge = dridge, ridge2 = dridge2, prop = dprop, arcbar = darcbar,
-         rad = drad, scatter = dscatter, diag = ddiag, pset = dpset)
+         rad = drad, scatter = dscatter, diag = ddiag, pset = dpset, real = dreal)
 }
 
 build_spec <- function(key) {
@@ -373,7 +380,8 @@ build_spec <- function(key) {
     layers = layers,
     scales = list(),
     labs = list(),
-    theme = list(base = cfg$theme %||% "void", args = list(base_size = 8),
+    # minimal + 坐标轴：保留轴语境，图形更像「一张图」而不是悬浮形状
+    theme = list(base = cfg$theme %||% "minimal", args = list(base_size = 9),
                   elements = list(legend.position = "none"))
   )
 }
@@ -389,7 +397,8 @@ make_placeholder <- function(path) {
                                   aesParams = list())),
                theme = list(base = "void", args = list(), elements = list()))
   gen <- spec_to_code(spec, META, STATE, include_data = FALSE, with_final = TRUE)
-  rf <- ggspec_render_file(gen$eval_code, data.frame(), width = 96, height = 72, dpi = 96, format = "png")
+  # 与主渲染同尺寸（192×144），避免占位图与真图混排时尺寸不一致
+  rf <- ggspec_render_file(gen$eval_code, data.frame(), width = 192, height = 144, dpi = 96, format = "png")
   file.copy(rf$path, path, overwrite = TRUE); unlink(rf$path)
 }
 
@@ -408,8 +417,9 @@ for (g in META$geoms) {
   res <- tryCatch({
     spec <- build_spec(key)
     gen <- spec_to_code(spec, META, STATE, include_data = FALSE, with_final = TRUE)
+    # 192×144 @96dpi：显示仍约 96×72，但 2x 分辨率让复杂几何不再发糊
     rf <- ggspec_render_file(gen$eval_code, pick_data(key),
-                             width = 96, height = 72, dpi = 96, format = "png")
+                             width = 192, height = 144, dpi = 96, format = "png")
     file.copy(rf$path, dst, overwrite = TRUE)
     unlink(rf$path)
     TRUE

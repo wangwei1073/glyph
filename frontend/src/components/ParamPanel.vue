@@ -1,10 +1,13 @@
 <script setup>
 // 参数面板：选中图层的 geom 参数 / stat 参数 / position 参数。
 // 由 LayerPanel 手风琴在展开的图层卡片内嵌使用（原独立页签已撤销）。
+// 每行 label 带「?」说明图标：geom/stat/position 参数说明来自 registry PARAM_DESC，
+// 常量美学来自 AES_META（与美学面板同源）。
 import { computed } from 'vue'
 import { useMetaStore } from '../stores/meta'
 import { useSpecStore } from '../stores/spec'
 import ParamControl from './ParamControl.vue'
+import ParamLabel from './ParamLabel.vue'
 
 const meta = useMetaStore()
 const spec = useSpecStore()
@@ -64,7 +67,7 @@ const aesParamSchema = (name) => {
       该 geom 无额外参数
     </div>
     <div v-for="p in usedParams" :key="p.name" class="p-row">
-      <label :title="p.name">{{ p.label }}</label>
+      <ParamLabel :label="p.label" :name="p.name" :desc="p.desc" :def="p.default" />
       <ParamControl :schema="p" :model-value="getP(spec.curLayer.params, p.name)"
         @update:model-value="setParam(p.name, $event)" />
     </div>
@@ -96,7 +99,7 @@ const aesParamSchema = (name) => {
     </div>
     <template v-if="positionParams.length">
       <div v-for="p in positionParams" :key="p.name" class="p-row">
-        <label :title="p.name">{{ p.label }}</label>
+        <ParamLabel :label="p.label" :name="p.name" :desc="p.desc" :def="p.default" />
         <ParamControl :schema="p"
           :model-value="getP(spec.curLayer.position?.params, p.name)"
           @update:model-value="(v) => {
@@ -109,7 +112,8 @@ const aesParamSchema = (name) => {
 
     <div class="gg-subhead" style="margin-top:10px">常量美学（不进入 aes）</div>
     <div v-for="name in usedAesParams" :key="name" class="p-row">
-      <label>{{ meta.aesByName[name]?.label || name }}</label>
+      <ParamLabel :label="meta.aesByName[name]?.label || name" :name="name"
+        :desc="meta.aesByName[name]?.desc" />
       <ParamControl :schema="aesParamSchema(name)"
         :model-value="getP(spec.curLayer.aesParams, name)"
         @update:model-value="setAesParam(name, $event)" />

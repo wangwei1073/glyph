@@ -78,6 +78,18 @@ const kindWidget = (kind) => {
   }
 }
 
+// 当前 geom 的一句话简介（registry GEOM_META.desc，与选择器 tooltip 同源）
+const geomDesc = computed(() => {
+  const l = spec.curLayer
+  if (!l) return ''
+  return meta.geomByName[l.geom]?.desc || ''
+})
+
+// aes 行的说明：registry AES_META.desc；未收录的回退空
+function aesDesc(name) {
+  return meta.aesByName[name]?.desc || ''
+}
+
 // 常量值 schema（用于 ParamControl）
 const constSchema = computed(() => (kind) => ({
   name: 'aes', widget: kind === 'auto' ? 'text' : kindWidget(kind), label: '', exprOk: true
@@ -90,9 +102,19 @@ watch(() => spec.selectedLayer, () => { afterStatHint.value = ''; mode.value = {
 
 <template>
   <div v-if="spec.curLayer" class="aes-embedded">
+    <!-- 当前 geom 的一句话简介，帮助理解这个图层画的是什么 -->
+    <div v-if="geomDesc" class="aes-geom-desc" :title="meta.geomByName[spec.curLayer.geom]?.fn">
+      {{ geomDesc }}
+    </div>
     <div v-for="row in aesRows" :key="row.name" class="aes-row">
       <label class="aes-lab" :title="row.name">
-        {{ row.label }}<span v-if="row.required" class="req">*</span>
+        <span>{{ row.label }}</span><span v-if="row.required" class="req">*</span>
+        <el-tooltip v-if="aesDesc(row.name)" placement="top" effect="light">
+          <template #content>
+            <div style="max-width:220px">{{ aesDesc(row.name) }}</div>
+          </template>
+          <el-icon class="aes-help"><QuestionFilled /></el-icon>
+        </el-tooltip>
       </label>
       <el-radio-group size="small" class="mode-sw"
         :model-value="curMode(row.name)" @update:model-value="setMode(row.name, $event)">
@@ -172,11 +194,18 @@ watch(() => spec.selectedLayer, () => { afterStatHint.value = ''; mode.value = {
 
 <style scoped>
 .aes-embedded { padding: 2px 0 4px; }
+.aes-geom-desc {
+  padding: 4px 12px 2px; font-size: 11px; line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
 .aes-row {
   display: flex; align-items: center; gap: 7px;
   padding: 4px 12px; min-height: 36px;
 }
-.aes-lab { width: 96px; flex-shrink: 0; font-size: 12px; }
+.aes-lab { width: 96px; flex-shrink: 0; font-size: 12px;
+  display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+.aes-help { color: var(--el-text-color-secondary); cursor: help; font-size: 12px; }
+.aes-help:hover { color: var(--gg-accent); }
 .req { color: #e8734a; margin-left: 2px; font-weight: 700; }
 .mode-sw { flex-shrink: 0; }
 .mode-sw .el-radio-button__inner { padding: 4px 8px; font-size: 11px; }

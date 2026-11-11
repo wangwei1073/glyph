@@ -319,6 +319,65 @@ AES_META <- list(
   list(name = "group",     label = "group 分组", kind = "auto",   desc = "分组变量")
 )
 
+# ---- geom/stat/position 高频参数说明 ------------------------------------------
+# 命中的参数在 tooltip 里显示中文说明 + 默认值；未命中只显示默认值。
+# 只收录语义容易误解或高频的参数，保持手工表可维护。
+PARAM_DESC <- list(
+  # 分箱（直方图 / 密度 / bin 类）
+  binwidth    = "分箱宽度（数值轴的单位宽度；与 bins 二选一）",
+  bins        = "分箱数量（不设 binwidth 时自动按此数分箱）",
+  boundary    = "第一个分箱的边界位置",
+  center      = "某个分箱的中心位置",
+  pad         = "两端各加一个空箱，让图形不贴边",
+  # 平滑 / 拟合
+  method      = "拟合方法（lm/glm/gam/loess 或自定义函数）",
+  formula     = "拟合公式，如 y ~ x 或 y ~ poly(x, 2)",
+  se          = "是否绘制置信区间带",
+  level       = "置信水平（默认 0.95）",
+  span        = "loess 平滑度：越大越平滑（0-1）",
+  n           = "拟合/估计的采样点数",
+  fullrange   = "拟合线延伸到整个坐标轴范围（默认只在数据范围内）",
+  orientation = "计算方向：x 或 y（自动推断失败时手动指定）",
+  na.rm       = "跳过缺失值（FALSE 时缺失会报错提示）",
+  # 密度 / 分布
+  kernel      = "核密度函数类型（gaussian 等）",
+  adjust      = "带宽调整倍数：>1 更平滑，<1 更灵敏",
+  bw          = "带宽（不设时自动估计）",
+  ngrid       = "网格采样点数",
+  draws       = "抽样生成的分布样本数",
+  # 箱线 / 小提琴
+  coef        = "须长系数：超出 Q1/Q2 ± coef×IQR 判为离群点",
+  varwidth    = "箱宽 ∝ 组样本量",
+  notch       = "显示中位数凹口",
+  notchwidth  = "凹口宽度（相对箱体的比例）",
+  outlier.shape = "离群点形状（NA 隐藏）",
+  outlier.size  = "离群点大小",
+  outlier.colour = "离群点颜色",
+  outlier.fill   = "离群点填充色",
+  trim         = "小提琴是否修剪到数据实际范围（FALSE 时画完整密度）",
+  scale        = "组间面积/宽度缩放方式（area/count/width）",
+  # 条形 / 柱
+  width       = "元素宽度（0-1 相对单位；dodge 时缩小可留缝）",
+  just        = "对齐锚点：0.5=居中",
+  position    = "位置调整（dodge/stack/fill…）",
+  # 文本 / 标签
+  check_overlap = "跳过相互重叠的文字（丢弃而非避让）",
+  parse         = "把文字按 plotmath 表达式解析",
+  nudge_x     = "水平偏移量",
+  nudge_y     = "垂直偏移量",
+  label.padding = "文字与背景框的内边距",
+  label.r       = "背景框圆角半径",
+  label.size    = "背景框描边宽",
+  # 形状 / 端点
+  lineend       = "线端样式（butt/square/round）",
+  linejoin      = "折角样式（mitre/round/bevel）",
+  arrow         = "箭头规格：arrow(angle, length, ends, type)",
+  # 其它
+  bounds        = "数值裁剪范围 c(下, 上)",
+  refresher     = "刷新辅助图层",
+  geom          = "底层几何（stat 计算后转用哪个 geom 展示）"
+)
+
 # ---- 参数控件提示（按参数名匹配；未命中默认 text） --------------------------
 PARAM_WIDGETS <- list(
   alpha       = pv("alpha", "number", "透明度", min = 0, max = 1, step = 0.05),
