@@ -152,8 +152,8 @@
   lo <- rng[1]
   span <- top - lo
   if (!is.finite(span) || span <= 0) span <- abs(top) * 0.2 + 0.5
-  pad <- span * 0.06
-  sprintf("scale_y_continuous(limits = c(%s, %s), expand = expansion(mult = c(0.02, 0.02)))",
+  pad <- span * 0.15   # 给顶部 p 值文字留足高度，避免被画布裁掉
+  sprintf("scale_y_continuous(limits = c(%s, %s), expand = expansion(mult = c(0.02, 0.08)))",
           format(lo - span * 0.02, trim = TRUE),
           format(top + pad, trim = TRUE))
 }
