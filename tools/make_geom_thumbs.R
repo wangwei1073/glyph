@@ -545,7 +545,12 @@ build_spec <- function(key) {
     labs = list(),
     # minimal + 坐标轴：保留轴语境，图形更像「一张图」而不是悬浮形状
     theme = list(base = cfg$theme %||% "minimal", args = list(base_size = 9),
-                  elements = list(legend.position = "none"))
+                  elements = list(
+                    legend.position = "none",
+                    axis.title = list(blank = TRUE),
+                    axis.text = list(type = "text", props = list(size = 6, colour = "#8a94a0")),
+                    plot.margin = list(margins = list(t = 2, r = 2, b = 2, l = 2))
+                  ))
   )
 }
 
@@ -596,7 +601,7 @@ for (g in META$geoms) {
     rf <- if (!is.null(T[[key]]$code)) {
       code <- T[[key]]$code
       if (!grepl("legend.position", code, fixed = TRUE)) {
-        code <- sub("; p$", " + theme(legend.position = 'none'); p", code)
+        code <- sub("; p$", " + theme(legend.position = 'none', axis.title = element_blank(), axis.text = element_text(size = 6, colour = '#8a94a0'), plot.margin = margin(2, 2, 2, 2)); p", code)
       }
       ggspec_render_file(code, pick_data(key),
                          width = 192, height = 144, dpi = 96, format = "png")
