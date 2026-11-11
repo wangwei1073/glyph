@@ -8,6 +8,7 @@ MIME_MAP <- c(
   woff2 = "font/woff2", woff = "font/woff", ttf = "font/ttf",
   map = "application/json", txt = "text/plain; charset=utf-8", wasm = "application/wasm",
   csv = "text/csv; charset=utf-8", zip = "application/zip",
+  tiff = "image/tiff", tif = "image/tiff", emf = "image/emf",
   md = "text/markdown; charset=utf-8", r = "text/plain; charset=utf-8"
 )
 
@@ -155,6 +156,7 @@ ggspec_api_app <- function(state) {
         return(json_error(paste0("注册表重建失败（保留旧注册表）：", conditionMessage(m)), 500))
       }
       state$meta <- m
+      state$completions <- NULL   # 扩展开关会改变可用函数，补全词表需重建
       return(json_response(list(ok = TRUE, id = id, enabled = ext_is_enabled(id),
                                 meta = state$meta, extensions = ext_catalog())))
     }
@@ -170,6 +172,7 @@ ggspec_api_app <- function(state) {
     if (path == "/api/extensions/install/status" && method == "GET") {
       st <- ext_install_status()
       meta <- ext_install_meta(state)
+      state$completions <- NULL   # 安装完成后可能有新函数可补全
       return(json_response(list(ok = TRUE, job = st, meta = meta,
                                 extensions = ext_catalog())))
     }
