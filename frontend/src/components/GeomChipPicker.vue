@@ -8,7 +8,7 @@ const emit = defineEmits(['pick'])
 const q = ref('')
 
 const base = import.meta.env.BASE_URL || '/'
-const thumb = (name) => `${base}geom-thumbs/${name}.png?v=7`
+const thumb = (name) => `${base}geom-thumbs/${name}.png?v=8`
 
 // 分组模式记忆（默认图形族）
 const MODE_KEY = 'ggplotgui-geom-mode'

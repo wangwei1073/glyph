@@ -507,6 +507,10 @@ T$diagonal$code <- sub("; p$", " + coord_fixed(); p", T$diagonal$code)
 T$diagonal_wide$code <- sub("; p$", " + coord_fixed(); p", T$diagonal_wide$code)
 T$bezier$code <- sub("; p$", " + coord_fixed(); p", T$bezier$code)
 T$regon$code <- sub("; p$", " + coord_fixed(); p", T$regon$code)
+# marquee_repel：ggrepel 0.9.8+ 提供，需要 marquee 包支持富文本标签
+T$marquee_repel$code <- "p <- ggplot(df, aes(x, y, label = lab)) + ggrepel::geom_marquee_repel(size = 2.6, min.segment.length = 0, box.padding = .35); p"
+T$marquee_repel$data <- "mark"
+SKIP <- setdiff(SKIP, "marquee_repel")
 pick_data <- function(key) {
   switch(if (is.null(T[[key]]$data)) "d" else T[[key]]$data,
          d = d, grid = dg, poly = dpoly, many = dmany,
