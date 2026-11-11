@@ -77,6 +77,13 @@ function labelFor(pair) {
   return starOf(p)
 }
 
+// 切换「标注形态」后，已添加的标注也同步（括号 <-> 文字）
+watch(sigKind, (k) => {
+  const marks = spec.spec.sigMarks || []
+  if (!marks.length) return
+  marks.forEach(m => { m.kind = k })
+  spec.renderNow()
+})
 // 切换「标签内容」后，已添加的标注同步更新（之前只对新加的生效）
 watch([sigLabelMode, sigCustomLabel, () => props.testResult], () => {
   const marks = spec.spec.sigMarks || []
