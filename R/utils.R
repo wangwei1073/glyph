@@ -15,6 +15,17 @@ glog <- function(...) {
 ##   NULL                       -> NULL
 is_expr_spec <- function(x) is.list(x) && !is.null(x$expr)
 
+# 前端颜色控件偶尔会给出 CSS 写法 rgb(r,g,b)（甚至带脏尾巴），
+# 转成 R 认识的 #RRGGBB；不是这种格式则原样返回 NULL
+.css_color_to_hex <- function(s) {
+  if (length(s) != 1 || is.na(s)) return(NULL)
+  m <- regmatches(s, regexec("^rgba?\\(\\s*([0-9]{1,3})\\s*,\\s*([0-9]{1,3})\\s*,\\s*([0-9]{1,3})",
+                             s, ignore.case = TRUE))[[1]]
+  if (length(m) < 4) return(NULL)
+  v <- suppressWarnings(as.numeric(m[2:4]))
+  if (any(is.na(v)) || any(v < 0 | v > 255)) return(NULL)
+  grDevices::rgb(v[1], v[2], v[3], maxColorValue = 255)
+}
 r_literal <- function(x) {
   if (is.null(x)) return("NULL")
   if (is_expr_spec(x)) return(enc2utf8(as.character(x$expr)))
@@ -25,7 +36,11 @@ r_literal <- function(x) {
     out <- format(x, digits = 15, trim = TRUE, scientific = FALSE)
     return(as.character(out))
   }
-  if (is.character(x) || is.factor(x)) return(r_string(as.character(x)))
+  if (is.character(x) || is.factor(x)) {
+    s <- as.character(x)
+    hex <- .css_color_to_hex(s)
+    return(r_string(if (is.null(hex)) s else hex))
+  }
   if (is.list(x) && !is.null(x$map)) return(r_string(x$map))  # 防御
   # 数组（jsonlite simplifyVector=FALSE 时为 list）
   if (is.list(x)) {

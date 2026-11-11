@@ -50,8 +50,17 @@ const strModel = computed({
   set: (v) => set(v)
 })
 const boolModel = computed({
-  get: () => rawVal.value === true,
-  set: (v) => set(v ? true : null)
+  // 参数缺失时回落到 schema 默认值（例如 boxplot 的 outliers 默认 TRUE），
+  // 关闭开关必须写入 false，而不是删掉参数（删掉会回到默认 TRUE）
+  get: () => {
+    const v = rawVal.value
+    if (v === null || v === undefined || v === '') {
+      const d = props.schema?.default
+      return d === true || d === 1 || String(d).toUpperCase() === 'TRUE'
+    }
+    return v === true || v === 1 || String(v).toUpperCase() === 'TRUE'
+  },
+  set: (v) => emit('update:modelValue', !!v)
 })
 const colorModel = computed({
   get: () => (/^#[0-9a-fA-F]{3,8}$/.test(String(rawVal.value)) ? String(rawVal.value) : ''),
