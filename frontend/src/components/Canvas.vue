@@ -731,14 +731,26 @@ async function purgePlotly() {
       class="ft-warn" :disable-transitions="true">{{ spec.last.warnings.length }} 条警告</el-tag>
     <span class="ft-spacer" />
 
-    <!-- 图库：编辑自某条时是「更新」，否则是「存入」 -->
-    <el-tooltip :content="spec.sourcePinId
-      ? `更新图库条目「${spec.sourcePinLabel || spec.sourcePinId}」（标签不变）`
-      : '把当前图存入图库（用于拼图组合）'">
+    <!-- 图库：编辑自某条时默认「更新」，下拉里可「另存为新条目」；否则直接存入 -->
+    <el-dropdown v-if="spec.sourcePinId" split-button size="small" type="primary" plain
+      :disabled="!spec.spec.layers.length || spec.composeActive || pins.saving"
+      @click="pinCurrent('update')" @command="pinCurrent">
+      <el-icon style="margin-right:4px"><Refresh /></el-icon>
+      <span class="ft-label">更新图库</span>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item command="update">
+            更新到「{{ spec.sourcePinLabel || spec.sourcePinId }}」
+          </el-dropdown-item>
+          <el-dropdown-item command="new" divided>另存为新条目</el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+    <el-tooltip v-else content="把当前图存入图库（用于拼图组合）">
       <el-button size="small" text :disabled="!spec.spec.layers.length || spec.composeActive || pins.saving"
-        @click="pinCurrent">
+        @click="pinCurrent('new')">
         <el-icon class="el-icon--left"><StarFilled /></el-icon>
-        <span class="ft-label">{{ spec.sourcePinId ? '更新图库' : '存入图库' }}</span>
+        <span class="ft-label">存入图库</span>
       </el-button>
     </el-tooltip>
     <el-tooltip :content="plotlyOn ? '生成可缩放、可悬停的交互图' : 'plotly 扩展已在「高级 → 扩展管理」中关闭'">
