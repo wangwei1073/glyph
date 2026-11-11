@@ -201,10 +201,10 @@ T <- list(
 
   # ---- 扩展包 geom（第二批）----
   # ggridges：density_ridges 只需 x/y（自动算密度）；ridgeline 还需 height
-  density_ridges         = list(aes = c(x = "y", y = "cat")),
-  density_ridges2        = list(aes = c(x = "y", y = "cat")),
-  density_ridges_gradient = list(aes = c(x = "y", y = "cat", fill = "y")),
-  density_line           = list(aes = c(x = "y", y = "cat")),
+  density_ridges         = list(aes = c(x = "y", y = "cat", fill = "cat"), data = "real", noBlank = TRUE),
+  density_ridges2        = list(aes = c(x = "y", y = "cat", fill = "cat"), data = "real", noBlank = TRUE),
+  density_ridges_gradient = list(aes = c(x = "y", y = "cat", fill = "y"), data = "real", noBlank = TRUE),
+  density_line           = list(aes = c(x = "y", y = "cat", fill = "cat"), data = "real", noBlank = TRUE),
   ridgeline              = list(aes = c(x = "x", y = "y", height = "h"), data = "ridge"),
   ridgeline_gradient     = list(aes = c(x = "x", y = "y", height = "h", fill = "h"), data = "ridge"),
   vridgeline             = list(aes = c(y = "x", x = "cat"), data = "ridge2"),
@@ -512,6 +512,9 @@ T$regon$code <- sub("; p$", " + coord_fixed(); p", T$regon$code)
 T$marquee_repel$code <- "p <- ggplot(df, aes(x, y, label = lab)) + ggrepel::geom_marquee_repel(size = 2.6, min.segment.length = 0, box.padding = .35); p"
 T$marquee_repel$data <- "mark"
 SKIP <- setdiff(SKIP, "marquee_repel")
+# density_line：ggridges 的填充脊线在小图上会糊成整块，改用“线条脊线”表现
+T$density_line$code <- "p <- ggplot(df, aes(x = y, y = cat, colour = cat)) + ggridges::geom_density_ridges(fill = NA, scale = .9, rel_min_height = .01) + theme(legend.position = 'none'); p"
+T$density_line$data <- "real"
 pick_data <- function(key) {
   switch(if (is.null(T[[key]]$data)) "d" else T[[key]]$data,
          d = d, grid = dg, poly = dpoly, many = dmany,
