@@ -57,19 +57,39 @@ watch(() => JSON.stringify((spec.spec.layers || []).map(l => [l.geom, l.aes?.x?.
 watch(() => props.active, (v) => { if (v) loadSigPlan() })
 
 // 依据 L2 的检验结果或统一模板生成标注文字（逻辑与原 StatsPanel 完全一致）
+function starOf(p) {
+  if (p === null || p === undefined || Number.isNaN(Number(p))) return 'n.s.'
+  const n = Number(p)
+  if (n < 0.001) return '***'
+  if (n < 0.01) return '**'
+  if (n < 0.05) return '*'
+  return 'n.s.'
+}
+
 function labelFor(pair) {
   if (sigLabelMode.value === 'custom') return sigCustomLabel.value || '*'
-  if (sigLabelMode.value === 'p' && props.testResult) {
-    const p = props.testResult.p
+  const p = props.testResult?.p
+  if (sigLabelMode.value === 'p') {
     if (p === null || p === undefined) return 'p = ?'
     return p < 0.0001 ? 'p < 0.0001' : `p = ${Number(p).toFixed(4)}`
   }
-  // stars：用同一套阈值，但这里没有逐对 p，给最常用的三档
-  return '***'
+  // stars：当前只有整体检验 p，没有逐对 p，先按同一阈值显示星号
+  return starOf(p)
 }
+
+// 切换「标签内容」后，已添加的标注同步更新（之前只对新加的生效）
+watch([sigLabelMode, sigCustomLabel, () => props.testResult], () => {
+  const marks = spec.spec.sigMarks || []
+  if (!marks.length) return
+  marks.forEach(m => { m.label = labelFor(`${m.group1}||${m.group2}`) })
+  spec.renderNow()
+})
 
 function addPicked() {
   if (!sigPick.value.length) { ElMessage.warning('先选择要比较的分组对'); return }
+  if (sigLabelMode.value === 'p' && !props.testResult) {
+    ElMessage.warning('还没有检验结果：先到「统计检验」运行一次，p 值会显示为 p = ?')
+  }
   const start = sigPlan_.value?.yStart ?? 0
   const step = sigPlan_.value?.yStep ?? 1
   let n = (spec.spec.sigMarks || []).length
