@@ -61,14 +61,49 @@
 
 ## ---- y 位置计算 -------------------------------------------------------------
 # 依据 y 列取值范围推算标注起点与步进
-.ggspec_sig_positions <- function(d, y_col, n_marks) {
+# 箱线图隐藏离群点时，标注应贴着「须线」而不是被极端值顶高
+.ggspec_hide_outliers <- function(spec) {
+  for (ly in spec$layers %||% list()) {
+    if (!identical(ly$geom %||% "", "boxplot")) next
+    p <- ly$params %||% list()
+    ov <- p$outliers
+    if (isFALSE(ov) || identical(as.character(ov), "FALSE")) return(TRUE)
+    sh <- p[["outlier.shape"]]
+    if (!is.null(sh)) {
+      if (is.na(suppressWarnings(as.numeric(sh)))) return(TRUE)
+    }
+  }
+  FALSE
+}
+
+.ggspec_sig_visible_range <- function(d, y_col, spec = NULL, x_col = NULL) {
+  v <- d[[y_col]]
+  v <- v[is.finite(v)]
+  if (!length(v)) return(NULL)
+  if (is.null(spec) || !.ggspec_hide_outliers(spec)) return(range(v))
+  whisk <- function(z) {
+    z <- z[is.finite(z)]
+    if (!length(z)) return(c(NA_real_, NA_real_))
+    st <- tryCatch(grDevices::boxplot.stats(z)$stats, error = function(e) NULL)
+    if (is.null(st) || length(st) < 5) return(range(z))
+    c(st[1], st[5])
+  }
+  if (!is.null(x_col) && x_col %in% names(d)) {
+    g <- as.character(d[[x_col]])
+    rs <- lapply(split(v, g), whisk)
+    lo <- min(vapply(rs, `[`, numeric(1), 1), na.rm = TRUE)
+    hi <- max(vapply(rs, `[`, numeric(1), 2), na.rm = TRUE)
+  } else {
+    r <- whisk(v); lo <- r[1]; hi <- r[2]
+  }
+  if (!is.finite(lo) || !is.finite(hi)) range(v) else c(lo, hi)
+}
+.ggspec_sig_positions <- function(d, y_col, n_marks, spec = NULL, x_col = NULL) {
   if (is.null(d) || is.null(y_col) || !y_col %in% names(d) || !n_marks) {
     return(list(start = 0, step = 1))
   }
-  v <- d[[y_col]]
-  v <- v[is.finite(v)]
-  if (!length(v)) return(list(start = 0, step = 1))
-  rng <- range(v)
+  rng <- .ggspec_sig_visible_range(d, y_col, spec, x_col)
+  if (is.null(rng) || !all(is.finite(rng))) return(list(start = 0, step = 1))
   span <- diff(rng)
   if (!is.finite(span) || span <= 0) span <- max(abs(rng), 1) * 0.2
   step <- span * 0.12                      # 每级括号的间距
@@ -82,13 +117,14 @@
   marks <- marks %||% list()
   if (!length(marks)) return(character(0))
   y_col <- .ggspec_sig_y_column(spec)
-  pos <- .ggspec_sig_positions(d, y_col, length(marks))
+  x_col <- .ggspec_sig_x_column(spec)
+  pos <- .ggspec_sig_positions(d, y_col, length(marks), spec = spec, x_col = x_col)
 
   marks_lines <- .ggspec_sig_mark_lines(spec, marks, d, pos)
 
   # 关键：标注 y 若超出面板范围，几何体会被画到绘图区外，进而挤压标题区。
   # 因此把所有标注都纳入 y 轴范围，并在最高标注之上再留 4% 余量。
-  expand <- .ggspec_sig_y_limit(d, y_col, marks, pos)
+  expand <- .ggspec_sig_y_limit(d, y_col, marks, pos, spec = spec, x_col = x_col)
   if (is.null(expand)) return(marks_lines)
   c(expand, marks_lines)
 }
@@ -96,11 +132,10 @@
 # 生成 y 轴范围语句，使标注完整落在绘图区内
 # 注意：必须与 .ggspec_sig_mark_lines 使用同一套 y 推算规则（无 yPos 时按 start/step 递增），
 # 否则上限会算小、把高位标注裁掉（曾出现第 3 条括号被裁的问题）。
-.ggspec_sig_y_limit <- function(d, y_col, marks, pos) {
+.ggspec_sig_y_limit <- function(d, y_col, marks, pos, spec = NULL, x_col = NULL) {
   if (is.null(d) || is.null(y_col) || !y_col %in% names(d)) return(NULL)
-  v <- d[[y_col]]
-  v <- v[is.finite(v)]
-  if (!length(v)) return(NULL)
+  rng <- .ggspec_sig_visible_range(d, y_col, spec, x_col)
+  if (is.null(rng) || !all(is.finite(rng))) return(NULL)
 
   # 与图层生成一致的 y 序列：显式 yPos 优先，缺失则按序号递增
   ys <- vapply(seq_along(marks), function(i) {
@@ -113,8 +148,8 @@
   }, numeric(1))
   if (!length(ys)) ys <- pos$start
 
-  top <- max(c(max(v), max(ys)))
-  lo <- min(v)
+  top <- max(c(rng[2], max(ys)))
+  lo <- rng[1]
   span <- top - lo
   if (!is.finite(span) || span <= 0) span <- abs(top) * 0.2 + 0.5
   pad <- span * 0.06
@@ -205,7 +240,7 @@
   xv <- d[[x_col]]
   discrete <- is.factor(xv) || is.character(xv) || is.logical(xv)
   levels_x <- if (discrete) unique(as.character(xv[!is.na(xv)])) else NULL
-  pos <- .ggspec_sig_positions(d, y_col, 1)
+  pos <- .ggspec_sig_positions(d, y_col, 1, spec = spec, x_col = x_col)
 
   pairs <- list()
   if (discrete && length(levels_x) >= 2 && length(levels_x) <= 12) {

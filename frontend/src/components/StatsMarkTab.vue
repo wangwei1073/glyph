@@ -54,6 +54,15 @@ watch(() => JSON.stringify((spec.spec.layers || []).map(l => [l.geom, l.aes?.x?.
     clearTimeout(sigTimer); sigTimer = setTimeout(loadSigPlan, 350)
   },
   { immediate: true })
+// 箱线图隐藏/显示离群点后，重新规划标注高度（否则括号停在被极端值顶高的位置）
+watch(() => JSON.stringify((spec.spec.layers || []).map(l => [l.params?.outliers, l.params?.['outlier.shape']])),
+  async () => {
+    if (!ui.statsOpen) return
+    const marks = spec.spec.sigMarks || []
+    if (!marks.length) return
+    await loadSigPlan()
+    resetY()
+  })
 watch(() => props.active, (v) => { if (v) loadSigPlan() })
 
 // 依据 L2 的检验结果或统一模板生成标注文字（逻辑与原 StatsPanel 完全一致）
