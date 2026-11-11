@@ -188,8 +188,10 @@ db_tables <- function(conn_id) {
       "AND c.relkind IN ('r','p','v','m') ",
       "ORDER BY n.nspname, c.relname")
   } else if (driver == "mysql") {
-    q <- paste0("SELECT table_schema AS schema, table_name AS name, table_type AS type, ",
-                "COALESCE(table_rows, 0) AS rows FROM information_schema.tables ",
+    # MySQL 里 schema / rows 都是保留字，别名必须加反引号，否则 1064 语法错误
+    q <- paste0("SELECT table_schema AS `schema`, table_name AS `name`, ",
+                "table_type AS `type`, COALESCE(table_rows, 0) AS `rows` ",
+                "FROM information_schema.tables ",
                 "WHERE table_schema = DATABASE() ORDER BY table_name")
   } else {
     tabs <- tryCatch(DBI::dbListTables(c$con), error = function(e) character(0))
