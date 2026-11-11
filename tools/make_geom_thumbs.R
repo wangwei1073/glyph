@@ -343,6 +343,7 @@ SKIP <- c("map", "sf", "sf_label", "sf_text", "blank", "hex",
 for (k in c("density", "freqpoly", "histogram", "dotplot", "qq", "qq_line",
             "density_ridges", "density_ridges2", "density_ridges_gradient", "density_line",
             "likert", "likert_text", "pyramid", "pyramid_text", "proportion", "proportion_text",
+            "prop_bar", "prop_text", "prop_connector",
             "bin_2d", "bin2d", "hex", "density_2d", "density_2d_filled",
             "density2d", "density2d_filled")) {
   if (!is.null(T[[k]])) T[[k]]$noBlank <- TRUE
