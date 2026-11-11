@@ -101,7 +101,7 @@
 .stats_result <- function(method, stat = NA_real_, df = NA_real_, p = NA_real_,
                           estimate = NA_real_, estimate_name = "", n = NA_integer_,
                           groups = character(0), notes = character(0), code = character(0),
-                          extra = list(), vars = character(0)) {
+                          extra = list(), vars = character(0), pairs = list()) {
   list(
     method = method$id %||% "",
     methodLabel = method$label %||% "",
@@ -117,10 +117,33 @@
     vars = as.list(vars),
     notes = as.list(notes),
     code = paste(code, collapse = "\n"),
+    pairs = pairs,
     extra = extra
   )
 }
 
+# 多组两两比较的 p 值（供图上标注按对取值）
+.stats_pairwise <- function(x, g, method = c("t", "wilcox")) {
+  method <- match.arg(method)
+  tab <- tryCatch({
+    if (identical(method, "t")) {
+      stats::pairwise.t.test(x, g, p.adjust.method = "none", pool.sd = FALSE)$p.value
+    } else {
+      suppressWarnings(stats::pairwise.wilcox.test(x, g, p.adjust.method = "none"))$p.value
+    }
+  }, error = function(e) NULL)
+  if (is.null(tab)) return(list())
+  out <- list()
+  for (i in seq_len(nrow(tab))) {
+    for (j in seq_len(ncol(tab))) {
+      pv <- tab[i, j]
+      if (!is.na(pv)) out[[length(out) + 1L]] <- list(group1 = rownames(tab)[i],
+                                                       group2 = colnames(tab)[j],
+                                                       p = as.numeric(pv))
+    }
+  }
+  out
+}
 ## ---- 主入口 -----------------------------------------------------------------
 # 参数：
 #   y       : 数值列名（因变量）
@@ -270,6 +293,7 @@
           n = sum(vapply(groups_list, length, integer(1))),
           groups = sprintf("%s (n=%d)", lv, vapply(groups_list, length, integer(1))),
           notes = notes, vars = c(y, group),
+          pairs = .stats_pairwise(dy, factor(dg), "t"),
           code = c("# 单因素方差分析",
                    sprintf("fit <- aov(%s ~ %s, data = df)", y, group),
                    "summary(fit)")
@@ -282,6 +306,7 @@
         n = length(dy),
         groups = sprintf("%s (n=%d)", lv, vapply(groups_list, length, integer(1))),
         vars = c(y, group),
+        pairs = .stats_pairwise(dy, factor(dg), "wilcox"),
         notes = c("非参数检验，比较各组分布位置"),
         code = c("# Kruskal-Wallis 检验",
                  sprintf("kruskal.test(%s ~ %s, data = df)", y, group))

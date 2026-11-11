@@ -68,12 +68,16 @@ function starOf(p) {
 
 function labelFor(pair) {
   if (sigLabelMode.value === 'custom') return sigCustomLabel.value || '*'
-  const p = props.testResult?.p
+  const [g1, g2] = String(pair || '').split('||')
+  const hit = (props.testResult?.pairs || []).find(x =>
+    (String(x.group1) === g1 && String(x.group2) === g2) ||
+    (String(x.group1) === g2 && String(x.group2) === g1))
+  const p = hit ? hit.p : props.testResult?.p
   if (sigLabelMode.value === 'p') {
     if (p === null || p === undefined) return 'p = ?'
     return p < 0.0001 ? 'p < 0.0001' : `p = ${Number(p).toFixed(4)}`
   }
-  // stars：当前只有整体检验 p，没有逐对 p，先按同一阈值显示星号
+  // stars：优先用两两比较的 p；没有则退回整体检验 p
   return starOf(p)
 }
 
