@@ -339,17 +339,180 @@ SKIP <- c("map", "sf", "sf_label", "sf_text", "blank", "hex",
           # 功能本身可用，已由 test_ext_batch3 与专项验证覆盖
           "circle", "ellipse", "arc", "spiro")
 
+# ---- 第二轮：把能画出来的 geom 从占位图里捞回来，并修正统计变换类的坐标范围 ----
+for (k in c("density", "freqpoly", "histogram", "dotplot",
+            "bin_2d", "bin2d", "hex", "density_2d", "density_2d_filled",
+            "density2d", "density2d_filled")) {
+  if (!is.null(T[[k]])) T[[k]]$noBlank <- TRUE
+}
+T$interval <- list(aes = c(x = "y", y = "cat"), params = list(.width = 0.5), noBlank = TRUE)
+T$pointinterval <- list(aes = c(x = "y", y = "cat"), params = list(.width = 0.5), noBlank = TRUE)
+T$vridgeline <- list(aes = c(x = "cat", y = "y", height = "h"), data = "ridge2", noBlank = TRUE)
+T$arc_bar <- list(aes = c(r0 = "r0", r = "r", start = "start", end = "end", fill = "cat"),
+                  data = "arcbar", noBlank = TRUE)
+T$circle <- list(aes = c(x0 = "x", y0 = "cat", r = "radius"), data = "rad", noBlank = TRUE)
+T$ellipse <- list(aes = c(x0 = "x", y0 = "cat", a = "radius", b = "radius"), data = "rad", noBlank = TRUE)
+T$arc <- list(aes = c(x0 = "x", y0 = "cat", r = "radius", start = "start", end = "end"), data = "rad", noBlank = TRUE)
+T$spiro <- list(aes = c(x0 = "x", y0 = "cat", r = "radius"), data = "rad", noBlank = TRUE)
+T$diagonal <- list(aes = c(x = "x", y = "y", group = "cat"), data = "diag", noBlank = TRUE)
+T$diagonal_wide <- list(aes = c(x = "x", y = "y", group = "cat"), data = "diag", noBlank = TRUE)
+T$regon <- list(aes = c(x = "x", y = "y", group = "group"), data = "poly", noBlank = TRUE)
+T$parallel_sets <- list(aes = c(x = "x", y = "cat", group = "key"), data = "pset", noBlank = TRUE)
+T$parallel_sets_axes <- list(aes = c(x = "x", y = "cat", group = "key"), data = "pset", noBlank = TRUE)
+T$parallel_sets_labels <- list(aes = c(x = "x", y = "cat", group = "key"), data = "pset", noBlank = TRUE)
+T$bracket <- list(aes = c(x = "cat", y = "y"),
+                  params = list(comparisons = list(c("A", "B")), y.position = 11), noBlank = TRUE)
+T$bar_connector <- list(aes = c(x = "cat", y = "y"), noBlank = TRUE)
+T$autopoint <- list(aes = c(x = "x", y = "y"), data = "scatter", noBlank = TRUE)
+T$autodensity <- list(aes = c(x = "y"), data = "real", noBlank = TRUE)
+T$autohistogram <- list(aes = c(x = "y"), data = "real", noBlank = TRUE)
+T$line_rast <- list(aes = c(x = "x", y = "y", colour = "cat"), data = "d", noBlank = TRUE)
+SKIP <- setdiff(SKIP, c("bracket", "bar_connector", "vridgeline", "line_rast", "map", "sf", "sf_label", "sf_text", "hex", "blank",
+                        "regon", "diagonal", "diagonal_wide", "parallel_sets",
+                        "parallel_sets_axes", "parallel_sets_labels", "arc_bar",
+                        "autopoint", "autodensity", "autohistogram",
+                        "interval", "pointinterval",
+                        "circle", "ellipse", "arc", "spiro"))
+# 自定义渲染代码（专用数据/stat 的 geom 走这里，避免空图）
+dbz <- data.frame(
+  x = c(1, 2, 4, 5,   1, 3, 3, 5,   1, 2, 4, 5),
+  y = c(1, 3, 3, 1,   2, 2, 4, 4,   4, 5, 5, 4),
+  cat = factor(rep(c("A", "B", "C"), each = 4))
+)
+dmark <- d[1:6, ]
+ddiag4 <- do.call(rbind, lapply(1:3, function(i) {
+  data.frame(x = c(i, i + 0.8, i + 0.8, i),
+             y = c(i, i, i + 0.8, i + 0.8),
+             cat = factor(LETTERS[i]))
+}))
+T$slab$code <- "p <- ggplot(df, aes(x = y, y = cat)) + ggdist::stat_slab(); p"
+T$slab$data <- "real"
+T$slabinterval$code <- "p <- ggplot(df, aes(x = y, y = cat)) + ggdist::stat_slabinterval(); p"
+T$slabinterval$data <- "real"
+T$spike$code <- "p <- ggplot(df, aes(x = y, y = cat)) + ggdist::stat_spike(); p"
+T$spike$data <- "real"
+T$bezier$code <- "p <- ggplot(df, aes(x, y, group = cat, colour = cat)) + ggforce::geom_bezier(); p"
+T$bezier$data <- "bz"
+T$mark_circle$code <- "h <- df[chull(df$x, df$y), ]; p <- ggplot(df, aes(x, y, label = lab)) + geom_polygon(data = h, aes(x, y), fill = NA, colour = '#2f6fbf', size = .7) + geom_point(size = 1.4, colour = '#2f6fbf') + geom_text(size = 2, nudge_y = .25); p"
+T$mark_circle$data <- "mark"
+T$mark_rect$code <- "xr <- range(df$x); yr <- range(df$y); p <- ggplot(df, aes(x, y, label = lab)) + annotate('rect', xmin = xr[1] - .2, xmax = xr[2] + .2, ymin = yr[1] - .2, ymax = yr[2] + .2, fill = NA, colour = '#2f6fbf', size = .7) + geom_point(size = 1.4, colour = '#2f6fbf') + geom_text(size = 2, nudge_y = .25); p"
+T$mark_rect$data <- "mark"
+T$bracket$code <- "p <- ggplot(df, aes(cat, y)) + geom_boxplot(width = .5) + ggpubr::geom_bracket(xmin = 'A', xmax = 'B', y.position = 17, label = 'p < 0.05'); p"
+T$bracket$data <- "real"
+T$interval$code <- "p <- ggplot(df, aes(x = y, y = cat)) + ggdist::stat_interval(); p"
+T$interval$data <- "real"
+T$pointinterval$code <- "p <- ggplot(df, aes(x = y, y = cat)) + ggdist::stat_pointinterval(); p"
+T$pointinterval$data <- "real"
+T$circle$code <- "p <- ggplot(df, aes(x0 = x, y0 = as.numeric(cat), r = radius)) + ggforce::geom_circle() + coord_fixed(); p"
+T$circle$data <- "rad"
+T$ellipse$code <- "p <- ggplot(df, aes(x0 = x, y0 = as.numeric(cat), a = radius, b = radius)) + ggforce::geom_ellipse() + coord_fixed(); p"
+T$ellipse$data <- "rad"
+T$arc$code <- "p <- ggplot(df, aes(x0 = x, y0 = as.numeric(cat), r = radius, start = start, end = end)) + ggforce::geom_arc() + coord_fixed(); p"
+T$arc$data <- "rad"
+T$arc_bar$code <- "p <- ggplot(df, aes(x0 = 0, y0 = 0, r0 = 0, r = 1, start = start, end = end, fill = cat)) + ggforce::geom_arc_bar() + coord_fixed(); p"
+T$arc_bar$data <- "arcbar"
+T$diagonal$code <- "p <- ggplot(df, aes(x, y, group = cat)) + ggforce::geom_diagonal_wide(fill = '#9ec5fe'); p"
+T$diagonal$data <- "diag4"
+T$diagonal_wide$code <- "p <- ggplot(df, aes(x, y, group = cat)) + ggforce::geom_diagonal_wide(fill = '#c8e6c9'); p"
+T$diagonal_wide$data <- "diag4"
+T$regon$code <- "p <- ggplot(df, aes(x0 = x, y0 = y, r = .45, sides = 6)) + ggforce::geom_regon(fill = '#9ec5fe'); p"
+T$regon$data <- "grid"
+T$line_rast$code <- "p <- ggplot(df, aes(x, y, colour = cat)) + ggrastr::rasterise(geom_line(size = .9), dpi = 300); p"
+T$line_rast$data <- "d"
+# 图形近似（原包缺依赖或 geom 在小尺寸下不出图时，用等效图形示意）
+dmark2 <- data.frame(x = c(2, 2.5, 2.2, 2.8), y = c(3, 3.4, 3.8, 3.5), lab = c("a","b","c","d"))
+T$mark_circle$code <- "h <- df[chull(df$x, df$y), ]; p <- ggplot(df, aes(x, y, label = lab)) + geom_polygon(data = h, aes(x, y), fill = NA, colour = '#2f6fbf', size = .7) + geom_point(size = 1.4, colour = '#2f6fbf') + geom_text(size = 2, nudge_y = .25); p"
+T$mark_circle$data <- "mark2"
+T$mark_rect$code <- "xr <- range(df$x); yr <- range(df$y); p <- ggplot(df, aes(x, y, label = lab)) + annotate('rect', xmin = xr[1] - .2, xmax = xr[2] + .2, ymin = yr[1] - .2, ymax = yr[2] + .2, fill = NA, colour = '#2f6fbf', size = .7) + geom_point(size = 1.4, colour = '#2f6fbf') + geom_text(size = 2, nudge_y = .25); p"
+T$mark_rect$data <- "mark"
+T$ellipse$code <- "p <- ggplot(df, aes(x0 = x, y0 = as.numeric(cat), a = radius, b = radius * .6, angle = 0)) + ggforce::geom_ellipse() + coord_fixed(); p"
+T$ellipse$data <- "rad"
+T$link$code <- "p <- ggplot(df, aes(x, y, xend = xend, yend = yend, colour = cat)) + ggforce::geom_link(); p"
+T$link$data <- "d"
+T$link0$code <- "p <- ggplot(df, aes(x, y, xend = xend, yend = yend, colour = cat)) + ggforce::geom_link0(); p"
+T$link0$data <- "d"
+T$link2$code <- "p <- ggplot(df, aes(x, y, xend = xend, yend = yend, colour = cat)) + ggforce::geom_link2(); p"
+T$link2$data <- "d"
+T$vridgeline$code <- "p <- ggplot(df, aes(x = y, fill = cat)) + geom_density(alpha = .55, colour = NA) + coord_flip() + theme(legend.position = 'none'); p"
+T$vridgeline$data <- "real"
+T$parallel_sets$code <- "p <- ggplot(df, aes(x = x, y = cat, group = key, colour = key)) + geom_line(size = .7) + geom_point(size = 1.6) + theme(legend.position = 'none'); p"
+T$parallel_sets$data <- "pset"
+T$parallel_sets_axes$code <- T$parallel_sets$code
+T$parallel_sets_axes$data <- "pset"
+T$parallel_sets_labels$code <- T$parallel_sets$code
+T$parallel_sets_labels$data <- "pset"
+T$autopoint$code <- "p <- ggplot(df, aes(x = x, y = y, colour = cat)) + geom_point(size = 1.4) + theme(legend.position = 'none'); p"
+T$autopoint$data <- "d"
+T$autodensity$code <- "p <- ggplot(df, aes(x = y, fill = cat)) + geom_density(alpha = .5, colour = NA) + theme(legend.position = 'none'); p"
+T$autodensity$data <- "real"
+T$autohistogram$code <- "p <- ggplot(df, aes(x = y, fill = cat)) + geom_histogram(bins = 12, alpha = .6, colour = 'white') + theme(legend.position = 'none'); p"
+T$autohistogram$data <- "real"
+T$bar_connector$code <- "p <- ggplot(df, aes(x = cat, y = y, fill = cat)) + geom_col(width = .5, alpha = .45) + geom_point(size = 1.6) + geom_segment(aes(x = cat, xend = cat, y = 0, yend = y), colour = '#2f6fbf') + theme(legend.position = 'none'); p"
+T$bar_connector$data <- "real"
+T$regon$code <- "p <- ggplot(df, aes(x, y, group = group)) + geom_polygon(fill = '#9ec5fe', colour = '#2f6fbf'); p"
+T$regon$data <- "poly"
+T$spiro$code <- "df2 <- data.frame(t = seq(0, 6 * pi, length.out = 120)); df2$x <- df2$t * cos(df2$t); df2$y <- df2$t * sin(df2$t); p <- ggplot(df2, aes(x, y)) + geom_path(colour = '#2f6fbf') + coord_fixed(); p"
+T$spiro$data <- "d"
+T$line_rast$code <- "p <- ggplot(df, aes(x, y, colour = cat)) + ggrastr::rasterise(geom_line(size = .9), dpi = 300); p"
+T$line_rast$data <- "d"
+# 收尾：自定义代码统一隐藏图例；拼图轴/标签做区分；bracket 下移避免出界
+T$bracket$code <- "p <- ggplot(df, aes(cat, y)) + geom_boxplot(width = .5) + ggpubr::geom_bracket(xmin = 'A', xmax = 'B', y.position = 15, label = 'p < 0.05'); p"
+T$parallel_sets_axes$code <- "p <- ggplot(df, aes(x = x, y = cat)) + geom_vline(xintercept = c(1, 2, 3), colour = '#c8d3e0') + geom_text(data = subset(df, x == 1), aes(x = x, y = cat, label = cat), nudge_x = -.12, size = 2.4, colour = '#6b7480', inherit.aes = FALSE) + theme(legend.position = 'none'); p"
+T$parallel_sets_labels$code <- "p <- ggplot(df, aes(x = x, y = cat, group = key, colour = key)) + geom_line(size = .7, linetype = 'dashed') + geom_point(size = 1.6) + geom_text(data = subset(df, x == 3), aes(x = x, y = cat, label = key), nudge_x = .15, size = 2.2, inherit.aes = FALSE) + theme(legend.position = 'none'); p"
+# 无 sf/hexbin 时的示意：地图块面 / 六边形网格
+dmap <- do.call(rbind, lapply(1:3, function(i) {
+  a <- seq(0, 2 * pi, length.out = 8)
+  data.frame(x = i * 2.2 + cos(a) * (1 + 0.2 * i),
+             y = 1 + sin(a) * (0.8 + 0.1 * i), group = factor(i))
+}))
+dhex <- do.call(rbind, lapply(1:12, function(i) {
+  cx <- ((i - 1) %% 4) * 1.5; cy <- ((i - 1) %/% 4) * 1.3
+  a <- seq(0, 2 * pi, length.out = 7)
+  data.frame(x = cx + cos(a) * .5, y = cy + sin(a) * .45, group = factor(i))
+}))
+dmark3 <- d[1:10, ]
+T$mark_circle$data <- "mark"
+T$mark_rect$code <- "xr <- range(df$x); yr <- range(df$y); p <- ggplot(df, aes(x, y, label = lab)) + annotate('rect', xmin = xr[1] - .2, xmax = xr[2] + .2, ymin = yr[1] - .2, ymax = yr[2] + .2, fill = NA, colour = '#2f6fbf', size = .7) + geom_point(size = 1.4, colour = '#2f6fbf') + geom_text(size = 2, nudge_y = .25); p"
+T$mark_rect$data <- "mark3"
+T$map$code <- "p <- ggplot(df, aes(x, y, group = group, fill = group)) + geom_polygon(colour = 'white', size = .4) + coord_fixed() + theme_void() + theme(legend.position = 'none'); p"
+T$map$data <- "map"
+T$sf$code <- "p <- ggplot(df, aes(x, y, group = group, fill = group)) + geom_polygon(colour = 'white', size = .4) + geom_point(size = .8, colour = '#4a5560') + coord_fixed() + theme_void() + theme(legend.position = 'none'); p"
+T$sf$data <- "map"
+T$sf_text$code <- "p <- ggplot(df, aes(x, y, group = group, fill = group)) + geom_polygon(colour = 'white', size = .4) + geom_text(aes(label = group), size = 2.6, colour = '#4a5560') + coord_fixed() + theme_void() + theme(legend.position = 'none'); p"
+T$sf_text$data <- "map"
+T$sf_label$code <- "p <- ggplot(df, aes(x, y, group = group, fill = group)) + geom_polygon(colour = 'white', size = .4) + geom_label(aes(label = group), size = 2.2, label.size = .1, fill = 'white') + coord_fixed() + theme_void() + theme(legend.position = 'none'); p"
+T$sf_label$data <- "map"
+T$hex$code <- "p <- ggplot(df, aes(x, y, group = group, fill = as.numeric(group))) + geom_polygon(colour = 'white', size = .3) + coord_fixed() + theme_void() + theme(legend.position = 'none'); p"
+T$hex$data <- "hex"
+T$blank$code <- "p <- ggplot(df, aes(x, y)) + geom_blank() + theme_void(); p"
+T$blank$data <- "d"
+
+# 别名/同族几何做视觉区分
+T$line$code <- "p <- ggplot(df, aes(x, y, colour = cat)) + geom_line(size = .8); p"
+T$line$data <- "d"
+T$path$code <- "p <- ggplot(df, aes(x, y, colour = cat)) + geom_path(arrow = arrow(type = 'closed', length = unit(.07, 'inches')), size = .8); p"
+T$path$data <- "d"
+T$xsideline$code <- "p <- ggplot(df, aes(x, y)) + geom_point(size = 1) + ggside::geom_xsideline(aes(colour = cat)); p"
+T$xsideline$data <- "d"
+T$xsidepath$code <- "p <- ggplot(df, aes(x, y)) + geom_point(size = 1) + ggside::geom_xsidepath(aes(colour = cat)); p"
+T$xsidepath$data <- "d"
+T$dots$code <- "p <- ggplot(df, aes(x = y, fill = cat)) + ggdist::stat_dots(); p"
+T$dots$data <- "real"
+T$dotsinterval$code <- "p <- ggplot(df, aes(x = y, y = cat)) + ggdist::stat_dotsinterval(.width = .5); p"
+T$dotsinterval$data <- "real"
 pick_data <- function(key) {
   switch(if (is.null(T[[key]]$data)) "d" else T[[key]]$data,
          d = d, grid = dg, poly = dpoly, many = dmany,
          ridge = dridge, ridge2 = dridge2, prop = dprop, arcbar = darcbar,
-         rad = drad, scatter = dscatter, diag = ddiag, pset = dpset, real = dreal)
+         rad = drad, scatter = dscatter, diag = ddiag, pset = dpset, real = dreal,
+         bz = dbz, mark = dmark, mark2 = dmark2, mark3 = dmark3, diag4 = ddiag4,
+         map = dmap, hex = dhex)
 }
 
 build_spec <- function(key) {
   # ggside 的边际 geom 定义在 GG_SIDE_THUMBS 里
   cfg <- T[[key]] %||% GG_SIDE_THUMBS[[key]] %||% list()
-  aes_map <- cfg$aes %||% c(x = "x", y = "y")
+  aes_map <- if (isTRUE(cfg$noaes)) list() else (cfg$aes %||% c(x = "x", y = "y"))
   aes_list <- lapply(aes_map, function(col) list(map = as.character(col)))
   layer <- list(geom = key, stat = "",
                 position = list(type = cfg$position %||% "", params = list()),
@@ -365,7 +528,7 @@ build_spec <- function(key) {
                     y = list(map = col_of("y", "y")))
   blank <- list(geom = "blank", stat = "", position = list(type = "", params = list()),
                 aes = blank_aes, params = list(), aesParams = list())
-  layers <- if (isTRUE(cfg$noBlank)) list(layer) else list(blank, layer)
+  layers <- if (isTRUE(cfg$noBlank) || isTRUE(cfg$noaes)) list(layer) else list(blank, layer)
   # ggside 的边际 geom 必须配一个主图图层，否则看不出「边际」效果
   # （它们画在面板外侧，单独存在时是一片空白）
   if (isTRUE(cfg$side)) {
@@ -402,6 +565,21 @@ make_placeholder <- function(path) {
   file.copy(rf$path, path, overwrite = TRUE); unlink(rf$path)
 }
 
+# 命名占位：画不出的 geom 也给出不同缩略图（名字 + 浅底），避免几十个条目共用一张灰图
+make_named_fallback <- function(key, path) {
+  d <- data.frame(x = 0, y = 0, label = key)
+  code <- paste(
+    "p <- ggplot(df, aes(x, y, label = label)) +",
+    "  geom_text(size = 5, colour = '#6b7480') +",
+    "  theme_void() +",
+    "  theme(plot.background = element_rect(fill = '#f7f9fc', colour = NA),",
+    "        plot.margin = margin(6, 6, 6, 6)) +",
+    "  coord_cartesian(xlim = c(-1, 1), ylim = c(-1, 1))",
+    sep = "\n")
+  rf <- ggspec_render_file(code, list(df = d), width = 192, height = 144, dpi = 96, format = "png")
+  file.copy(rf$path, path, overwrite = TRUE)
+  unlink(rf$path)
+}
 # ---- 批量渲染 ---------------------------------------------------------------
 make_placeholder(file.path(out_dir, "_placeholder.png"))
 
@@ -410,21 +588,29 @@ for (g in META$geoms) {
   key <- g$name
   dst <- file.path(out_dir, paste0(key, ".png"))
   if (key %in% SKIP || (is.null(T[[key]]) && is.null(GG_SIDE_THUMBS[[key]]))) {
-    file.copy(file.path(out_dir, "_placeholder.png"), dst, overwrite = TRUE)
+    make_named_fallback(key, dst)
     cat(sprintf("  [占位] %s\n", key))
     next
   }
   res <- tryCatch({
-    spec <- build_spec(key)
-    gen <- spec_to_code(spec, META, STATE, include_data = FALSE, with_final = TRUE)
-    # 192×144 @96dpi：显示仍约 96×72，但 2x 分辨率让复杂几何不再发糊
-    rf <- ggspec_render_file(gen$eval_code, pick_data(key),
-                             width = 192, height = 144, dpi = 96, format = "png")
+    rf <- if (!is.null(T[[key]]$code)) {
+      code <- T[[key]]$code
+      if (!grepl("legend.position", code, fixed = TRUE)) {
+        code <- sub("; p$", " + theme(legend.position = 'none'); p", code)
+      }
+      ggspec_render_file(code, pick_data(key),
+                         width = 192, height = 144, dpi = 96, format = "png")
+    } else {
+      spec <- build_spec(key)
+      gen <- spec_to_code(spec, META, STATE, include_data = FALSE, with_final = TRUE)
+      ggspec_render_file(gen$eval_code, pick_data(key),
+                         width = 192, height = 144, dpi = 96, format = "png")
+    }
     file.copy(rf$path, dst, overwrite = TRUE)
     unlink(rf$path)
     TRUE
   }, error = function(e) { cat(sprintf("  [失败] %s: %s\n", key, conditionMessage(e))); FALSE })
-  if (isTRUE(res)) ok <- ok + 1L else { fail <- fail + 1L; file.copy(file.path(out_dir, "_placeholder.png"), dst, overwrite = TRUE) }
+  if (isTRUE(res)) ok <- ok + 1L else { fail <- fail + 1L; make_named_fallback(key, dst) }
 }
 
 cat(sprintf("\n生成完成: %d 张示意图 / %d 失败 -> %s\n", ok, fail, normalizePath(out_dir)))
