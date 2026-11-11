@@ -172,7 +172,7 @@
       lab <- vapply(texts, function(m) r_string(as.character(m$label %||% "")), character(1))
       # label 直接内联（不走 p 的格式化），保证显示与用户设定一致
       lines <- c(lines, sprintf(
-        "ggpubr::stat_pvalue_manual(data.frame(group1 = c(%s), group2 = c(%s), label = c(%s), y.position = c(%s)), label = \"label\", size = 3.4, vjust = 0)",
+        "ggpubr::stat_pvalue_manual(data.frame(group1 = c(%s), group2 = c(%s), label = c(%s), y.position = c(%s)), label = \"label\", size = 3.4, vjust = 0, remove.bracket = TRUE)",
         paste(g1, collapse = ", "), paste(g2, collapse = ", "),
         paste(lab, collapse = ", "), paste(yv, collapse = ", ")))
     } else {
