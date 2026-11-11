@@ -62,9 +62,23 @@ const boolModel = computed({
   },
   set: (v) => emit('update:modelValue', !!v)
 })
+function toHexColor(v) {
+  const s = String(v ?? '').trim()
+  if (!s) return ''
+  if (/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(s)) return s.slice(0, 7)
+  if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+    return '#' + s.slice(1).split('').map(c => c + c).join('')
+  }
+  const m = s.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i)
+  if (m) {
+    const hex = [m[1], m[2], m[3]].map(n => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, '0'))
+    return '#' + hex.join('')
+  }
+  return ''
+}
 const colorModel = computed({
-  get: () => (/^#[0-9a-fA-F]{3,8}$/.test(String(rawVal.value)) ? String(rawVal.value) : ''),
-  set: (v) => set(v || null)
+  get: () => toHexColor(rawVal.value),
+  set: (v) => set(toHexColor(v) || null)
 })
 const selectModel = computed({
   get: () => (rawVal.value === null || rawVal.value === undefined ? '' : String(rawVal.value)),
