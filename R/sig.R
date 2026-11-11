@@ -143,7 +143,7 @@
         format(as.numeric(y), trim = TRUE)
       }, character(1))
       lines <- c(lines, sprintf(
-        "ggsignif::geom_signif(comparisons = list(%s), annotations = c(%s), y_position = c(%s), tip_length = 0.015, vjust = 0.4, textsize = 3.4)",
+        "ggsignif::geom_signif(comparisons = list(%s), annotations = c(%s), y_position = c(%s), tip_length = 0.015, vjust = -0.35, textsize = 3.4)",
         paste(cmp, collapse = ", "), paste(ann, collapse = ", "), paste(ys, collapse = ", ")))
     } else {
       # 无 ggsignif：退化为文字标注
