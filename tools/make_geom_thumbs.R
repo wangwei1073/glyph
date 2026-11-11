@@ -500,6 +500,11 @@ T$dots$code <- "p <- ggplot(df, aes(x = y, fill = cat)) + ggdist::stat_dots(); p
 T$dots$data <- "real"
 T$dotsinterval$code <- "p <- ggplot(df, aes(x = y, y = cat)) + ggdist::stat_dotsinterval(.width = .5); p"
 T$dotsinterval$data <- "real"
+# 几何类图强制等比例，避免斜线/多边形被拉扁
+T$diagonal$code <- sub("; p$", " + coord_fixed(); p", T$diagonal$code)
+T$diagonal_wide$code <- sub("; p$", " + coord_fixed(); p", T$diagonal_wide$code)
+T$bezier$code <- sub("; p$", " + coord_fixed(); p", T$bezier$code)
+T$regon$code <- sub("; p$", " + coord_fixed(); p", T$regon$code)
 pick_data <- function(key) {
   switch(if (is.null(T[[key]]$data)) "d" else T[[key]]$data,
          d = d, grid = dg, poly = dpoly, many = dmany,
