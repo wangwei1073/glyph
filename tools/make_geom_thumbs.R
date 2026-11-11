@@ -153,9 +153,9 @@ T <- list(
   bar            = list(aes = c(x = "cat", fill = "cat")),
   col            = list(aes = c(x = "cat", y = "y", fill = "cat")),
   count          = list(aes = c(x = "x", y = "y")),
-  histogram      = list(aes = c(x = "x")),
-  freqpoly       = list(aes = c(x = "x", colour = "cat")),
-  dotplot        = list(aes = c(x = "x")),
+  histogram      = list(aes = c(x = "y"), data = "real"),
+  freqpoly       = list(aes = c(x = "y", colour = "cat"), data = "real"),
+  dotplot        = list(aes = c(x = "cat"), data = "d"),
   density        = list(aes = c(x = "y", colour = "cat"), data = "real"),
   area           = list(aes = c(x = "x", y = "y", fill = "cat")),
   boxplot        = list(aes = c(x = "cat", y = "y", fill = "cat"), data = "real"),
@@ -340,7 +340,9 @@ SKIP <- c("map", "sf", "sf_label", "sf_text", "blank", "hex",
           "circle", "ellipse", "arc", "spiro")
 
 # ---- 第二轮：把能画出来的 geom 从占位图里捞回来，并修正统计变换类的坐标范围 ----
-for (k in c("density", "freqpoly", "histogram", "dotplot",
+for (k in c("density", "freqpoly", "histogram", "dotplot", "qq", "qq_line",
+            "density_ridges", "density_ridges2", "density_ridges_gradient", "density_line",
+            "likert", "likert_text", "pyramid", "pyramid_text", "proportion", "proportion_text",
             "bin_2d", "bin2d", "hex", "density_2d", "density_2d_filled",
             "density2d", "density2d_filled")) {
   if (!is.null(T[[k]])) T[[k]]$noBlank <- TRUE
