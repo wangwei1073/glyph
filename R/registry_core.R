@@ -37,6 +37,24 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
   NULL
 }
 
+# 取出一个 geom_* 函数产出的【所有】图层。
+# 有些 geom_* 返回的是多层列表而不是单个 LayerInstance，例如
+#   ggrain::geom_rain()  = list(violin, boxplot, points)
+# 旧实现只认单个 LayerInstance，遇到列表就判定「拿不到 geom」，
+# 于是美学退化成只有 x/y、参数面板之外再也给不出 colour/fill（雨云图曾如此）。
+.ggspec_layers_of <- function(f) {
+  if (is.character(f)) f <- get(f, envir = .ggspec_ns())
+  if (is.null(f)) return(list())
+  l <- tryCatch(suppressWarnings(f()), error = function(e) NULL)
+  if (is.null(l)) return(list())
+  if (inherits(l, "LayerInstance")) return(list(l))
+  if (is.list(l)) {
+    out <- Filter(function(x) inherits(x, "LayerInstance"), l)
+    return(as.list(out))
+  }
+  list()
+}
+
 # 兜底：从函数体提取 geom = "xxx" 字符串，再按去符号名匹配 Geom 对象
 .ggspec_geom_obj_fallback <- function(fn, geom_objs) {
   f <- get(fn, envir = .ggspec_ns())
@@ -193,8 +211,34 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
 }
 
 .ggspec_aes_list <- function(obj) {
-  aes_all <- tryCatch(obj$aesthetics(), error = function(e) character(0))
-  req <- tryCatch(as.character(obj$required_aes), error = function(e) character(0))
+  # 有些 geom_* 返回的是「多层列表」而不是单个 geom 对象，例如
+  #   ggrain::geom_rain()  = list(violin, boxplot, points)
+  #   ggdist / gghalves 家族的若干实现同理
+  # 列表没有 $aesthetics()，直接取会全部退化成空 —— 表现为界面上只有 x/y、
+  # 没有颜色/填充可映射（雨云图曾经如此）。
+  # 这里先归一化成「对象列表」，再逐层取并集。
+  objs <- if (is.list(obj) && !inherits(obj, "ggproto")) obj else list(obj)
+
+  collect <- function(fn) {
+    out <- unlist(lapply(objs, function(o) tryCatch(fn(o), error = function(e) character(0))))
+    unique(as.character(out %||% character(0)))
+  }
+  aes_all <- collect(function(o) o$aesthetics())
+
+  # required 的口径随层数变化：
+  #   单层 → 就是它自己的 required_aes；
+  #   多层 → 取【第一层（主层）】的必填。多层 geom 是组合图
+  #          （雨云图 = 小提琴 + 箱线 + 点），各层 required_aes 写法并不统一
+  #          （有点写 "x|y"、有的把 identity 模式的 lower/middle 也算进 required），
+  #          取交集会连 x/y 一起丢，取并集又会挂一排红星。
+  #          主层（小提琴/密度/箱体）代表这张图的必填项，最贴近用户心智。
+  per_layer_req <- lapply(objs, function(o) {
+    r <- tryCatch(as.character(o$required_aes), error = function(e) character(0))
+    r <- (r %||% character(0))
+    r[!is.na(r) & nzchar(r)]
+  })
+  req <- character(0)
+  for (r in per_layer_req) { if (length(r)) { req <- r; break } }
   req <- req[!grepl("^\\|", req)]  # 形如 "x|y" 的二选一拆开显示
   req_expanded <- unique(unlist(strsplit(req, "|", fixed = TRUE)))
   list(required = as.list(req_expanded),
@@ -588,9 +632,13 @@ ggspec_build_meta <- function() {
     for (g in .ggspec_scan_pkg_geoms(pkg, NULL)) {
       f <- tryCatch(get(g$fn, envir = asNamespace(pkg)), error = function(e) NULL)
       if (is.null(f)) next
-      layer <- tryCatch(suppressWarnings(f()), error = function(e) NULL)
-      geom_obj <- if (!is.null(layer)) layer$geom else NULL
-      aes_info <- if (!is.null(geom_obj)) .ggspec_aes_list(geom_obj) else list(required = list("x", "y"), optional = list())
+      layers <- .ggspec_layers_of(f)
+      layer <- if (length(layers)) layers[[1]] else NULL
+      # 注意：变量名不要用 geoms —— 外层同名累加器会被覆盖，导致注册表整表错乱
+      layer_geoms <- lapply(layers, function(x) x$geom)
+      # 多层 geom（如 geom_rain = 小提琴 + 箱线 + 点）取各层美学的并集，
+      # 否则界面上只能设 x/y，设不了颜色与填充
+      aes_info <- if (length(layer_geoms)) .ggspec_aes_list(layer_geoms) else list(required = list("x", "y"), optional = list())
       g$aes <- aes_info
       g$params <- lapply(setdiff(names(formals(f)), c("mapping", "data", "stat", "position", "...",
                                                       "show.legend", "inherit.aes")),

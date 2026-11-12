@@ -3,12 +3,16 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useMetaStore } from '../stores/meta'
+import { useUiStore } from '../stores/ui'
 import { useSpecStore, saveUserDefault, clearUserDefault } from '../stores/spec'
 import ParamControl from './ParamControl.vue'
 import EmptyState from './EmptyState.vue'
 
 const meta = useMetaStore()
 const spec = useSpecStore()
+const ui = useUiStore()
+// 跳到「标度」页签（数据配色在那里设）
+function goScales() { ui.setTab('scale') }
 
 function saveDefault() {
   saveUserDefault({
@@ -83,8 +87,16 @@ function dispLabel(e) {
   return (!l || l === e.name) ? e.name : l
 }
 // 有中文标签时，把英文元素名作为次要信息跟在后面
-function hasAltName(e) {
-  const l = (e.label || '').trim()
+// 主题参数标签：ggprism 的 palette 名字太容易误解（以为是数据配色），单独改掉。
+// 它只驱动主题元素颜色（轴线 / 刻度文字 / 轴标题 / 页面背景），不改变点、柱、线的颜色。
+function argLabel(p) {
+  if (spec.spec.theme.base === 'prism' && p.name === 'palette') {
+    return 'Prism 主题配色'
+  }
+  return p.label
+}
+// 有中文标签时，把英文元素名作为次要信息跟在后面
+function hasAltName(e) {  const l = (e.label || '').trim()
   return !!l && l !== e.name
 }
 function setElement(name, val) {
@@ -168,7 +180,7 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
     </EmptyState>
     <template v-if="spec.spec.theme.base">
       <div v-for="p in themeArgs" :key="p.name" class="p-row">
-        <label>{{ p.label }}</label>
+        <label>{{ argLabel(p) }}</label>
         <ParamControl v-if="p.widget === 'number'" :schema="p"
           :model-value="spec.spec.theme.args[p.name] ?? null"
           @update:model-value="setArg(p.name, $event)" />
@@ -195,6 +207,15 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
         </el-select>
         <el-input v-else :model-value="String(spec.spec.theme.args[p.name] ?? '')" size="small"
           @update:model-value="setArg(p.name, $event || null)" />
+      </div>
+      <!-- ggprism 的 palette 只管主题元素，数据颜色要另去标度页设；
+           这里给一条说明 + 直达入口，避免「选了调色板却没变化」的困惑 -->
+      <div v-if="spec.spec.theme.base === 'prism'" class="prism-hint">
+        <el-icon class="ph-ico"><InfoFilled /></el-icon>
+        <span class="ph-txt">主题配色只影响轴线、文字与背景。点、柱、线等设置请至标度页。</span>
+        <el-button text type="primary" size="small" class="ph-go" @click="goScales">
+          去设置 →
+        </el-button>
       </div>
     </template>
 
@@ -394,6 +415,20 @@ const marginKeys = [['t', '上'], ['r', '右'], ['b', '下'], ['l', '左']]
   padding: 26px 18px; text-align: center; font-size: 12px; color: var(--gg-text-3); line-height: 1.9;
 }
 .th-empty-sub { font-size: 11px; color: var(--gg-text-4); }
+
+/* ggprism palette 的说明条：告诉用户它不管数据颜色 */
+.prism-hint {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin: 2px 0 8px; padding: 7px 9px;
+  background: var(--gg-brand-weak, #eaf1f9);
+  border: 1px solid rgba(47, 111, 191, .18);
+  border-radius: 6px; font-size: 11px; line-height: 1.55;
+  color: var(--gg-text-2);
+}
+.prism-hint .ph-ico { flex-shrink: 0; margin-top: 2px; color: var(--gg-brand); }
+.prism-hint .ph-txt { flex: 1; min-width: 0; }
+.prism-hint .ph-txt b { color: var(--gg-text-1); font-weight: 600; }
+.prism-hint .ph-go { flex-shrink: 0; padding: 0 2px; height: 18px; font-size: 11px; }
 </style>
 <style scoped>
 .th-default-row {
