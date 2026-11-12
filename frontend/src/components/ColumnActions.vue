@@ -5,11 +5,15 @@ import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useMetaStore } from '../stores/meta'
 import { useSpecStore } from '../stores/spec'
-import { insertExpr } from '../exprInsert'
 
+// 列操作面板：映射到当前图层 / 插入列名 / 类型统计 / 取值预览
+// 左栏列列表（点击列展开）与数据预览弹窗的列菜单共用同一份，避免两处实现漂移
 const props = defineProps({
   col: { type: Object, required: true },
   compact: { type: Boolean, default: false },
+  // 插入列名的处理函数。只有「数据准备」对话框里的用法会传（它知道当前聚焦的
+  // 表达式框）；数据预览弹窗是只读查看，没有可插入的目标，所以不传 ——
+  // 此时不显示插入按钮，而不是显示一个点了会报「先点击…表达式框」的坏按钮。
   insert: { type: Function, default: null }
 })
 
@@ -58,13 +62,10 @@ function mapTo(aesName) {
   ElMessage.success(`${props.col.name} → 第 ${spec.selectedLayer + 1} 层 ${aesName}`)
 }
 
+const insertable = computed(() => typeof props.insert === 'function')
+
 function doInsert() {
-  if (typeof props.insert === 'function') {
-    props.insert(props.col.name)
-    return
-  }
-  const r = insertExpr(props.col.name)
-  if (!r.ok) ElMessage.info(r.msg)
+  if (insertable.value) props.insert(props.col.name)
 }
 
 const rangeText = computed(() => {
@@ -83,7 +84,7 @@ const fmt = (v) => (v === null || v === undefined ? '' : String(v))
         <code v-if="geomMeta" class="gg-mono">{{ geomMeta.fn }}</code>
         <span v-else class="ca-warn">尚未添加图层</span>
       </span>
-      <el-tooltip content="插入列名到表达式" placement="top">
+      <el-tooltip v-if="insertable" content="插入列名到表达式" placement="top">
         <el-button size="small" text class="ca-ins" @click="doInsert">
           <el-icon><EditPen /></el-icon>
         </el-button>
