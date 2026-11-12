@@ -1,8 +1,6 @@
 # Glyph · ggplot2 可视化工作台
 
 > 用图形界面构建 ggplot2 图形，实时生成**规范、可复现的 R 代码**。
->
-> 原名 ggplotGUI。项目内部标识（`app: "ggplotgui"`、本地存储键等）保持不变，旧项目文件可直接打开。
 
 ![主界面](docs/images/main.png)
 
