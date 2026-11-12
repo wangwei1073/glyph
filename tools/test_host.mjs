@@ -18,7 +18,9 @@ const H = TOKEN ? { 'x-glyph-token': TOKEN } : {}
 
 // 修复记录：旧版把 interval id 存进 globalThis.__t 却从不赋值，
 // clearInterval 永远清不掉，进程永不退出
+let stopping = false
 let timer = setInterval(async () => {
+  if (stopping) return
   try {
     const r = await fetch(`http://127.0.0.1:${PORT}/status`, { headers: H })
     const s = await r.json()
@@ -29,7 +31,11 @@ let timer = setInterval(async () => {
         await fetch(`http://127.0.0.1:${PORT}/stop`, { method: 'POST', headers: H })
       } catch { /* 忽略 */ }
       clearInterval(timer)
-      process.exit(0)
+      // 不要立刻 process.exit：停止请求的响应可能还在飞，强退会触发 libuv 断言
+      // （Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)）。
+      // 清掉定时器后事件循环会自然结束。
+      stopping = true
+      timer = null
     }
   } catch (e) {
     console.log('[test] 控制服务未就绪:', e.message)

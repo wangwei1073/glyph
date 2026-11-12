@@ -10,7 +10,7 @@
 | 组成 | 说明 |
 |---|---|
 | **宿主半** `lib/index.js` | 随 DSH 启动自动拉起 Glyph 的 R 服务，并提供一个本地控制服务 |
-| **浏览器半** `lib/client.js` | 在 DSH 右栏注册一个原生页签，里面内嵌 Glyph 界面；并给聊天代码块加「推送」按钮 |
+| **浏览器半** `lib/client.template.js` → 生成 `lib/client.js` | 在 DSH 右栏注册一个原生页签，内嵌 Glyph 界面；并给聊天代码块加「推送」按钮。`client.js` 是宿主启动时按模板生成的（含运行时 token），已在 `.gitignore` 里，**不要提交** |
 
 数据流：
 
@@ -155,9 +155,10 @@ curl -s -X POST http://127.0.0.1:4399/config \
    `127.0.0.1` / `localhost`、以及配置文件 `allowedOrigins` 里的来源回 CORS 头。
    公网页面读不到任何响应、POST 预检直接被拒。
 3. **token 校验** —— 所有路由要求 `x-glyph-token` 头。token 由宿主生成一次、
-   存在配置文件里，并在启动时回写进 `lib/client.js`（浏览器半没有文件系统权限，
-   只能靠宿主改写源文件把 token 交到它手里；token 绝不经 HTTP 提供，
-   因此被 CORS 放行的来源也拿不到它）。若 `client.js` 无法回写（只读安装目录等），
+   存在配置文件里；浏览器半没有文件系统权限，只能靠宿主**按模板生成** 
+   `lib/client.js` 把 token 交给它（源文件 `lib/client.template.js` 保持占位空串，
+   生成物已 gitignore，避免密钥进版本库）。token 绝不经 HTTP 提供，
+   因此被 CORS 放行的来源也拿不到它。若生成失败（只读安装目录等），
    自动放弃 token 校验、退回仅 CORS 白名单模式（`/status` 里 `tokenEnforced: false`）。
 
 另外，宿主以 `--heartbeat` 启动 Glyph 并每 10 秒 ping 一次：DSH 退出后心跳停止，

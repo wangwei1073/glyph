@@ -57,3 +57,6 @@ extensions.json
 # 开发期运行器产物
 dsh-r-runner/
 
+
+# DSH 鎻掍欢锛氭祻瑙堝櫒鍗婄殑鐢熸垚鐗╋紙鍚繍琛屾椂 token锛岀粷涓嶅叆搴擄級
+/plugin/lib/client.js

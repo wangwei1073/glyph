@@ -110,7 +110,7 @@ function loadConfig() {
 const DEFAULTS = loadConfig()
 
 // ---- token（控制服务的访问凭证）----
-// 生成一次、持久化到配置文件；启动时回写进 client.js（见 syncClientFile）。
+// 生成一次、持久化到配置文件；启动时由 generateClientBundle 写进生成的 client.js。
 function ensureToken() {
   const f = readConfigFile()
   if (typeof f.token === 'string' && f.token) return f.token
@@ -122,16 +122,31 @@ function ensureToken() {
 }
 
 /** 把控制端口 / token 回写进 lib/client.js（浏览器半从同一目录加载它）。 */
-function syncClientFile(token, controlPort) {
+// 从模板生成浏览器半的 bundle。
+//
+// 为什么要有模板：token 是运行时生成的密钥，必须让浏览器半拿到它才能调用控制服务。
+// 早期做法是直接改写 lib/client.js（受版本控制的源文件）——
+// 结果每跑一次插件，git status 就脏一行 token，一不小心就会把密钥提交进仓库。
+// 现在留 client.template.js（入库、占位值为空），生成物 client.js 只存在于磁盘、
+// 已加入 .gitignore，源文件永远保持干净。
+function generateClientBundle(token, controlPort) {
   try {
-    const file = join(dirname(fileURLToPath(import.meta.url)), 'client.js')
-    const src = readFileSync(file, 'utf8')
+    const dir = dirname(fileURLToPath(import.meta.url))
+    const tplFile = join(dir, 'client.template.js')
+    const outFile = join(dir, 'client.js')
+    let src
+    try {
+      src = readFileSync(tplFile, 'utf8')
+    } catch {
+      // 没有模板（老版本安装）→ 退化为直接读现有文件，保持向后兼容
+      src = readFileSync(outFile, 'utf8')
+    }
     const next = src
       .replace(/^(\s*)const CONTROL_PORT = \d+.*$/m, `$1const CONTROL_PORT = ${controlPort}`)
       .replace(/^(\s*)const GLYPH_TOKEN = '[^']*'.*$/m, `$1const GLYPH_TOKEN = '${token}'`)
-    // 占位行没匹配到 → client.js 版本与宿主不一致，不能保证客户端带 token
+    // 占位行没匹配到 → 模板版本与宿主不一致，不能保证客户端带上 token
     if (next === src) return false
-    writeFileSync(file, next, 'utf8')
+    writeFileSync(outFile, next, 'utf8')
     return true
   } catch { return false }
 }
@@ -500,7 +515,7 @@ export function apply(ctx) {
     // token：生成/读取 → 回写 client.js（浏览器半从同一目录加载它，刷新后即持有 token）。
     // 回写失败（只读目录/版本不一致）时放弃 token 校验，退回纯 CORS 白名单模式。
     state.token = ensureToken()
-    if (!syncClientFile(state.token, DEFAULTS.controlPort)) state.token = ''
+    if (!generateClientBundle(state.token, DEFAULTS.controlPort)) state.token = ''
     startControlServer()
     const ws = DEFAULTS.dataDir || loadSavedDir() || DEFAULTS.home
     start(ws).catch(() => { /* 失败信息记录在 status 里 */ })
