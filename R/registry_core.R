@@ -120,7 +120,13 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
   if (!length(drop)) return(params)
   params[setdiff(nms, drop)]
 }
-.ggspec_ipw <- function(nm, default_value = NULL) {
+.ggspec_ipw <- function(nm, default_value = NULL, fn = NULL) {
+  # 函数级覆盖优先：同名参数在不同 geom 里语义不同时的逃生口
+  # （如 direction：geom_step 用 hv/vh/mid，ggrepel 用 both/x/y —— PARAM_WIDGETS 只能存一份）
+  if (!is.null(fn)) {
+    w2 <- PARAM_WIDGETS_BY_FN[[paste0(fn, "$", nm)]]
+    if (!is.null(w2)) return(w2)
+  }
   w <- PARAM_WIDGETS[[nm]]
   if (!is.null(w)) return(w)
 
@@ -168,8 +174,8 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
 }
 
 # 参数 schema：覆盖表优先，缺省为 text
-.ggspec_param_schema <- function(name, default_value = NULL) {
-  w <- .ggspec_ipw(name, default_value)
+.ggspec_param_schema <- function(name, default_value = NULL, fn = NULL) {
+  w <- .ggspec_ipw(name, default_value, fn = fn)
   out <- w
   # 高频参数的中文说明（registry_meta.R 的 PARAM_DESC；pv() 已带 desc 的以原 desc 为准）
   if (is.null(out$group)) out$group <- .ggspec_param_group(name)
@@ -199,7 +205,7 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
       v <- tryCatch(eval(d, envir = .ggspec_ns()), error = function(e) NULL)
       if (is.character(v) || is.numeric(v) || is.logical(v)) dv <- v
     }
-    .ggspec_param_schema(nm, dv)
+    .ggspec_param_schema(nm, dv, fn = fn)
   })
 }
 
@@ -622,7 +628,7 @@ ggspec_build_meta <- function() {
       g$aes <- aes_info
       g$params <- lapply(setdiff(names(formals(f)), c("mapping", "data", "stat", "position", "...",
                                                       "show.legend", "inherit.aes")),
-                         function(nm) .ggspec_ipw(nm))
+                         function(nm) .ggspec_ipw(nm, fn = g$fn))
       g$params <- .ggspec_dedup_params(g$params)
       g$statParams <- list()
       g$defaultStat <- if (!is.null(layer)) class(layer$stat)[1] else "identity"

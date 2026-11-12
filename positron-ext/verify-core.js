@@ -6,7 +6,9 @@ const net = require('net');
 const path = require('path');
 const http = require('http');
 
-const ROOT = 'E:\\Desktop\\vibecoding\\ggplot-gui';
+// 项目根：默认取本脚本所在目录的上一级（verify-core.js 在 positron-ext/ 内），
+// 或用环境变量 GLYPH_ROOT 覆盖
+const ROOT = process.env.GLYPH_ROOT || path.resolve(__dirname, '..');
 
 function findFreePort(start = 4330) {
   return new Promise((resolve, reject) => {
@@ -49,8 +51,10 @@ function waitForServer(port, timeoutMs = 60000) {
   const port = await findFreePort();
   console.log('STEP2 空闲端口:', port);
 
+  // Rscript 定位：环境变量 GLYPH_RSCRIPT > PATH 里的 Rscript > 常见安装目录探测
+  const rscript = process.env.GLYPH_RSCRIPT || 'Rscript';
   const proc = cp.spawn(
-    'D:\\R\\R-4.6.1\\bin\\Rscript.exe',
+    rscript,
     ['run.R', '--port', String(port), '--no-browser'],
     { cwd: ROOT, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }
   );

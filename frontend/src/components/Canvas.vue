@@ -443,11 +443,11 @@ async function downloadCode() {
   downloadBlob(blob, 'ggplot-plot.R')
 }
 
-// 存入图库：编辑自某条图库条目时覆盖更新（标签不变），否则新建。
-// 需要「另存为新条目」时去图库页签的分体按钮下拉里选。
-function pinCurrent() {
+// 存入图库：编辑自某条图库条目时覆盖更新（标签不变），下拉可选「另存为新条目」。
+// mode: 'update' | 'new'；此前本函数丢弃了模板传来的 mode 参数，导致「另存」实际是覆盖。
+function pinCurrent(mode = 'auto') {
   if (!spec.spec.layers.length) return
-  pins.saveCurrent().then((res) => {
+  pins.saveCurrent(null, mode).then((res) => {
     const label = pins.byId[res.id]?.label || res.id
     if (res.created) ElMessage.success(`已存入图库：${label}`)
     else ElMessage.success(`已更新图库条目：${label}`)

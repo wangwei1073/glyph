@@ -346,7 +346,7 @@ PARAM_DESC <- list(
   ngrid       = "网格采样点数",
   draws       = "抽样生成的分布样本数",
   # 箱线 / 小提琴
-  coef        = "须长系数：超出 Q1/Q2 ± coef×IQR 判为离群点",
+  coef        = "须长系数：超出 Q1/Q3 ± coef×IQR 判为离群点",
   varwidth    = "箱宽 ∝ 组样本量",
   notch       = "显示中位数凹口",
   notchwidth  = "凹口宽度（相对箱体的比例）",
@@ -374,8 +374,18 @@ PARAM_DESC <- list(
   arrow         = "箭头规格：arrow(angle, length, ends, type)",
   # 其它
   bounds        = "数值裁剪范围 c(下, 上)",
-  refresher     = "刷新辅助图层",
   geom          = "底层几何（stat 计算后转用哪个 geom 展示）"
+)
+
+# ---- 函数级参数覆盖：同名参数在不同 geom 里语义不同时用 ----------
+# 键格式 "<geom/stat fn>$<参数名>"；.ggspec_ipw(fn=) 命中时优先于 PARAM_WIDGETS。
+# 典型：direction —— geom_step 的阶梯方向是 hv/vh/mid，
+#       ggrepel 的避让方向是 both/x/y，共用一个参数名无法共用下拉选项。
+PARAM_WIDGETS_BY_FN <- list(
+  `geom_text_repel$direction` = pv("direction", "select", "避让方向", c("both", "y", "x")),
+  `geom_label_repel$direction` = pv("direction", "select", "避让方向", c("both", "y", "x")),
+  `geom_marquee_repel$direction` = pv("direction", "select", "避让方向", c("both", "y", "x")),
+  `stat_half_ydensity$direction` = pv("direction", "select", "阶梯方向", c("hv", "vh", "mid"))
 )
 
 # ---- 参数控件提示（按参数名匹配；未命中默认 text） --------------------------
@@ -411,9 +421,7 @@ PARAM_WIDGETS <- list(
   level       = pv("level", "number", "置信水平", min = 0, max = 1, step = 0.01),
   orientation = pv("orientation", "select", "方向", c("x", "y")),
   just        = pv("just", "number", "对齐位置", min = 0, max = 1, step = 0.05),
-  lineend     = pv("lineend", "select", "线端样式", c("butt", "round", "square")),
-  linejoin    = pv("linejoin", "select", "折角样式", c("mitre", "round", "bevel")),
-  linemitre   = pv("linemitre", "number", "斜接限制", min = 1, step = 1),
+  # lineend / linejoin / linemitre 的定义在下方 459-461 行（此处曾重复，R 取首个导致新值集被遮蔽）
   arrow       = pv("arrow", "select", "箭头", c("无", "单端 arrow()", "两端 arrow(ends=\"both\")"),
                    exprOk = TRUE),
   flatten     = pv("flatten", "bool", "压平堆叠"),
@@ -459,7 +467,8 @@ PARAM_WIDGETS <- list(
   direction     = pv("direction", "select", "阶梯方向", c("hv", "vh", "mid")),
   lineend       = pv("lineend", "select", "线端样式", c("round", "butt", "square")),
   linejoin      = pv("linejoin", "select", "折角样式", c("round", "mitre", "bevel")),
-  linemitre     = pv("linemitre", "number", "斜接限制", min = 1, step = 1),  outliers    = pv("outliers", "bool", "显示离群点", exprOk = TRUE),
+  linemitre     = pv("linemitre", "number", "斜接限制", min = 1, step = 1),
+  outliers      = pv("outliers", "bool", "显示离群点", exprOk = TRUE),
   outlier.colour  = pv("outlier.colour", "color", "离群点颜色"),
   outlier.fill    = pv("outlier.fill", "color", "离群点填充"),
   outlier.shape   = pv("outlier.shape", "shape", "离群点形状"),
@@ -506,7 +515,8 @@ PARAM_WIDGETS <- list(
   force_pull  = pv("force_pull", "number", "回拉力", step = 0.5),
   max.overlaps= pv("max.overlaps", "number", "最大重叠数", step = 1),
   max.iter    = pv("max.iter", "number", "迭代次数", step = 100),
-  direction   = pv("direction", "select", "方向", c("both", "x", "y")),
+  # direction（ggrepel 避让方向 both/x/y）不在此定义：与 geom_step 的阶梯方向
+  # （hv/vh/mid，见上方）同名不同义，走 PARAM_WIDGETS_BY_FN 的函数级覆盖
   seed        = pv("seed", "number", "随机种子", step = 1),
   stat        = pv("stat", "text", "统计变换", exprOk = TRUE),
   inside      = pv("inside", "bool", "画在内部"),

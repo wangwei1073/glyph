@@ -285,8 +285,9 @@ function loadProjectClick() {
         if (!newId) throw new Error(res.error || '内嵌数据恢复失败')
         project.spec.data.source = { type: 'user', id: newId }
         if (Array.isArray(embedded.edits) && embedded.edits.length) {
-          // 带上当前加工参数：行锚基于「原始数据 + prep」的行序，校验语义与编辑时一致
-          await importEdits(project.spec.data.source, embedded.edits, buildPrep(spec.spec.data))
+          // 带上项目的加工参数（此时 loadProject 还没执行，spec.spec.data 是旧画布的，
+          // 行锚校验必须用项目自己的 prep——行锚基于「项目数据 + 项目 prep」的行序）
+          await importEdits(project.spec.data.source, embedded.edits, buildPrep(project.spec.data))
         }
         await data.load()
       }

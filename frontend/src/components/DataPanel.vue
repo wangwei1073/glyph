@@ -140,7 +140,9 @@ const srcGroups = computed(() => {
 // 下拉的绑定值：只在 user:/dataset: 两类里有对应选项；
 // 未选数据时 srcKey 是 none:__none__，直接绑会显示成 "none" 这种原始值。
 const srcValue = computed(() => /^(user|dataset):/.test(data.srcKey || '') ? data.srcKey : '')
-const numericColumns = computed(() => data.columns.filter(c => c.type === 'num'))
+// 列类型名来自 /api/columns（column_info）：numeric/character/factor/…（此前误写 'num'，
+// 异常值步骤的列下拉因此一直为空）
+const numericColumns = computed(() => data.columns.filter(c => c.type === 'numeric'))
 
 function originLabel(s) {
   const o = s.origin || {}

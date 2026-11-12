@@ -71,7 +71,10 @@
 
 .ggspec_sig_visible_range <- function(d, y_col, spec = NULL, x_col = NULL) {
   v <- d[[y_col]]
-  v <- v[is.finite(v)]
+  # 用同一索引过滤 y 与分组向量：只过滤 y 会让 split() 长度不匹配而循环补齐，
+  # 把值静默分到错误的组里（y 含 NA/Inf + 隐藏离群点 + 有标注时触发）
+  keep <- is.finite(v)
+  v <- v[keep]
   if (!length(v)) return(NULL)
   if (is.null(spec) || !.ggspec_hide_outliers(spec)) return(range(v))
   whisk <- function(z) {
@@ -82,7 +85,7 @@
     c(st[1], st[5])
   }
   if (!is.null(x_col) && x_col %in% names(d)) {
-    g <- as.character(d[[x_col]])
+    g <- as.character(d[[x_col]])[keep]
     rs <- lapply(split(v, g), whisk)
     lo <- min(vapply(rs, `[`, numeric(1), 1), na.rm = TRUE)
     hi <- max(vapply(rs, `[`, numeric(1), 2), na.rm = TRUE)

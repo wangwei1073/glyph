@@ -1,7 +1,7 @@
 options(width = 250, warn = 1)
 cat("ggplot2:", as.character(packageVersion("ggplot2")), "\n")
 suppressPackageStartupMessages({ library(ggplot2); library(ragg) })
-outdir <- "C:/Users/doctorww/AppData/Local/Temp/ggpkg_eval"
+outdir <- file.path(tempdir(), "ggpkg_eval")
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
 save_png <- function(p, file, w = 800, h = 500) {

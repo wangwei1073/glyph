@@ -23,7 +23,8 @@ for (p in pkgs) {
 
 cat("\n==== registry integration simulation ====\n")
 suppressPackageStartupMessages({ library(ggplot2); library(jsonlite) })
-setwd("E:/Desktop/ggplot-gui")
+# 项目根：GLYPH_ROOT 环境变量优先，否则假定脚本在 <root>/tools/extension-eval/ 下运行
+setwd(Sys.getenv("GLYPH_ROOT", normalizePath(file.path(dirname(sys.frame(1)$ofile %||% "."), "..", ".."), mustWork = FALSE)))
 for (f in c("R/utils.R", "R/registry_meta.R", "R/registry_core.R")) source(f, encoding = "UTF-8", local = FALSE)
 
 for (p in pkgs) {
