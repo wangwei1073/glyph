@@ -6,11 +6,21 @@ import { ElMessage } from 'element-plus'
 const VERSION = '0.1.0'
 const AUTHOR = 'DoctorW'
 const EMAIL = 'wangwei1073@gmail.com'
+const REPO = 'https://github.com/wangwei1073/glyph'
 
 async function copyEmail() {
   try {
     await navigator.clipboard.writeText(EMAIL)
     ElMessage.success('邮箱已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动选择')
+  }
+}
+
+async function copyRepo() {
+  try {
+    await navigator.clipboard.writeText(REPO)
+    ElMessage.success('仓库地址已复制')
   } catch {
     ElMessage.warning('复制失败，请手动选择')
   }
@@ -75,6 +85,12 @@ const highlights = [
         <span class="ab-k">邮箱</span>
         <a class="ab-mail" :href="`mailto:${EMAIL}`">{{ EMAIL }}</a>
         <el-button size="small" text type="primary" @click="copyEmail">复制</el-button>
+      </div>
+      <div class="ab-row">
+        <el-icon class="ab-gh-ico"><Link /></el-icon>
+        <span class="ab-k">GitHub</span>
+        <a class="ab-mail" :href="REPO" target="_blank" rel="noopener">wangwei1073/glyph</a>
+        <el-button size="small" text type="primary" @click="copyRepo">复制</el-button>
       </div>
     </div>
 
@@ -156,6 +172,7 @@ const highlights = [
   background: var(--gg-panel);
 }
 .ab-k { font-size: 11.5px; color: var(--gg-text-3); flex-shrink: 0; }
+.ab-gh-ico { flex-shrink: 0; font-size: 13px; color: var(--gg-text-3); margin-right: -2px; }
 .ab-mail {
   font-size: 12px; color: var(--gg-brand); text-decoration: none;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

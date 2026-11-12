@@ -262,5 +262,6 @@ Glyph 通过注册表自动发现扩展包提供的 geom、主题与调色板：
 
 ## 反馈
 
+- 仓库：<https://github.com/wangwei1073/glyph>
 - 邮箱：wangwei1073@gmail.com
 - Issue / PR 欢迎提交
