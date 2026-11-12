@@ -91,8 +91,9 @@ function aesDesc(name) {
 }
 
 // 常量值 schema（用于 ParamControl）
+// exprOk 关掉：外层已有「fx」按钮负责表达式模式，内层再显示一个会重复
 const constSchema = computed(() => (kind) => ({
-  name: 'aes', widget: kind === 'auto' ? 'text' : kindWidget(kind), label: '', exprOk: true
+  name: 'aes', widget: kind === 'auto' ? 'text' : kindWidget(kind), label: '', exprOk: false
 }))
 
 // after_stat 提示

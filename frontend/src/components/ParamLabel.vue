@@ -19,7 +19,7 @@ const defText = computed(() => {
 </script>
 <template>
   <span class="param-label-wrap">
-    <span :title="name">{{ label }}</span>
+    <span class="param-text" :title="name">{{ label }}</span>
     <el-tooltip v-if="hasTip" placement="top" effect="light">
       <template #content>
         <div style="max-width:240px;line-height:1.5">
@@ -32,7 +32,9 @@ const defText = computed(() => {
   </span>
 </template>
 <style scoped>
-.param-label-wrap { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+.param-label-wrap { display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; }
+/* 长标签省略而不是把控件挤歪；完整名在 title 里 */
+.param-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .param-help { color: var(--el-text-color-secondary); cursor: help; font-size: 12px; flex-shrink: 0; }
 .param-help:hover { color: var(--gg-accent); }
 </style>

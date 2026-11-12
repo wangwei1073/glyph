@@ -53,7 +53,8 @@ function aesCount(l) {
   return Object.values(l.aes || {}).filter(Boolean).length
 }
 function nParams(l) {
-  return Object.keys(l.params || {}).length + Object.keys(l.aesParams || {}).length +
+  // aesParams 的 UI 已并入美学面板「常量」模式，不再单独计数
+  return Object.keys(l.params || {}).length +
     Object.keys(l.position?.params || {}).length + (l.stat ? 1 : 0)
 }
 

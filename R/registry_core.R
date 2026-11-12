@@ -68,6 +68,19 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
 # 丢弃「同一参数的另一种拼写」：colour/color、linewidth/size 之类
 # ggplot2 4.0 同时提供 .colour 与 .color，二者语义完全等价，
 # 面板里并排出现会让用户以为能分别设置不同颜色。
+# 参数分组：把同一 geom 的参数按语义归到折叠组里，避免几十行平铺
+# 返回分组名（前端据此分栏）；匹配不到的进「其他」
+.ggspec_param_group <- function(nm) {
+  n <- tolower(nm)
+  if (grepl("^(whisker|staple|median|box|middle|quantile)[.]", n)) return("箱体与线条")
+  if (grepl("^outliers$", n)) return("离群点")
+  if (grepl("^outlier[.]", n)) return("离群点")
+  if (grepl("^(label|con)[.]", n)) return("标签与连接线")
+  if (grepl("^(arrow|lineend|linejoin|linemitre)$", n)) return("线条样式")
+  if (grepl("^(notch|notchwidth|varwidth|staplewidth|width|binwidth|bins|binaxis|stackdir|stackratio|dotsize|fatten)$", n)) return("尺寸与分箱")
+  if (grepl("^(orientation|na[.]rm)$", n)) return("其他")
+  "其他"
+}
 .ggspec_dedup_params <- function(params) {
   if (!length(params)) return(params)
   nms <- names(params)
@@ -141,6 +154,7 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
   w <- .ggspec_ipw(name, default_value)
   out <- w
   # 高频参数的中文说明（registry_meta.R 的 PARAM_DESC；pv() 已带 desc 的以原 desc 为准）
+  if (is.null(out$group)) out$group <- .ggspec_param_group(name)
   if (is.null(out$desc)) {
     d <- PARAM_DESC[[name]]
     if (!is.null(d)) out$desc <- d
