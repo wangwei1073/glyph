@@ -333,12 +333,6 @@ export const useSpecStore = defineStore('spec', {
         this.spec.theme.args = { base_size: 12 }
       }
     },
-    setLayerAesParam(i, name, value) {
-      const layer = this.spec.layers[i]
-      if (!layer) return
-      if (value === null || value === undefined || value === '') delete layer.aesParams[name]
-      else layer.aesParams[name] = value
-    },
     // 更换图层类型：保留新 geom 接受的 aes 映射/常量与参数，其余清理
     // （ggplot2 的 layer() 遇到无法识别的参数会直接报错，故按 registry 交集过滤）
     changeGeom(i, newGeom) {
@@ -526,9 +520,6 @@ export const useSpecStore = defineStore('spec', {
         }
       }
       return changed
-    },
-    exportProject() {
-      return JSON.stringify(this.spec, null, 2)
     },
 
     // 从「代码图」回到按当前 spec 渲染的图。

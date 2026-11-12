@@ -146,17 +146,6 @@ ext_set_enabled <- function(id, on) {
   invisible(ext_is_enabled(id))
 }
 
-## ---- 供扫描使用的「已启用扩展」列表 -----------------------------------------
-# 返回已安装且已启用的扩展 id
-ext_active_ids <- function() {
-  ids <- character(0)
-  for (e in GGSPEC_EXTENSIONS) {
-    if (!.ext_installed(e$pkg)) next
-    if (!ext_is_enabled(e$id)) next
-    ids <- c(ids, e$id)
-  }
-  ids
-}
 
 # 按组件类型筛选，供各扫描环节调用
 ext_active_for <- function(kind) {

@@ -39,12 +39,10 @@ function post(path, body, timeoutMs = T_NORMAL) {
 
 export const getMeta = () => api('/api/meta')
 // 工作区（项目目录）：读取 / 切换
-export const getWorkspace = () => api('/api/workspace')
 export const setWorkspace = (dir) => post('/api/workspace', { dir })
 // 外部推送到编辑器的代码（IDE / AI 调用 /api/code/push 写入，前端轮询取走）
 export const takePendingCode = () => api('/api/code/pending')
 // 扩展管理
-export const getExtensions = () => api('/api/extensions')
 export const toggleExtension = (id, enabled) =>
   post('/api/extensions/toggle', { id, enabled }, T_HEAVY)
 // 一键安装扩展 / 运行期依赖（后台任务，轮询状态）
@@ -207,7 +205,6 @@ export const editAdd = async (source, prep, op) => {
   return res
 }
 export const editUndo = (source) => post('/api/edits/undo', { source })
-export const editsClear = (source) => post('/api/edits/clear', { source })
 
 // 图库（pins，用于 patchwork 拼图）
 export const getPins = () => api('/api/pins')

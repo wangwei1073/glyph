@@ -100,11 +100,6 @@ r_aes_value <- function(v) {
   r_literal(v)
 }
 
-snake_to_camel <- function(x) {
-  parts <- strsplit(x, "_", fixed = TRUE)
-  vapply(parts, function(p) paste0(p[1], paste0(toupper(substring(p[-1], 1, 1)),
-         substring(p[-1], 2)), collapse = ""), character(1))
-}
 
 ## 读取 httpuv 请求体。httpuv >= 1.6.17 将 body 写入临时文件并以连接提供
 ## (req$.bodyData)，写完后读指针留在文件末尾 —— 必须 seek 重绕后再读；
@@ -180,8 +175,3 @@ clamp_px <- function(v, def, lo, hi) {
   max(as.integer(lo), min(v, as.integer(hi)))
 }
 
-## 供后续扩展使用：安全执行表达式并捕获错误
-safe_eval <- function(expr, env) {
-  tryCatch(eval(expr, envir = env),
-           error = function(e) structure(NULL, error = conditionMessage(e)))
-}

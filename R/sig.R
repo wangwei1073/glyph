@@ -13,13 +13,6 @@
 ## ---- 依赖探测 ---------------------------------------------------------------
 .ggspec_has_pkg <- function(p) requireNamespace(p, quietly = TRUE)
 
-## ---- 标注形态选择 -----------------------------------------------------------
-# 离散 x + 两组 → 括号；其他 → 文字
-.ggspec_sig_kind <- function(spec) {
-  x <- .ggspec_sig_x_column(spec)
-  if (is.null(x)) return("text")
-  .ggspec_is_discrete_x(spec, x) && .ggspec_has_pkg("ggsignif")
-}
 
 # 取第一个图层 x 映射的列名
 .ggspec_sig_x_column <- function(spec) {

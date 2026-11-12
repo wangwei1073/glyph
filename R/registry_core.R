@@ -521,26 +521,6 @@ GGTHEMES_THEME_LABELS <- list(
   args
 }
 
-.ggspec_scan_pkg_themes <- function(pkg, labels = list()) {
-  if (!requireNamespace(pkg, quietly = TRUE)) return(list())
-  fns <- grep("^theme_", getNamespaceExports(pkg), value = TRUE)
-  fns <- setdiff(fns, c("theme_get", "theme_set", "theme_update", "theme_replace",
-                       "theme_solid_calc"))
-  out <- list()
-  for (fn in sort(fns)) {
-    f <- tryCatch(get(fn, envir = asNamespace(pkg)), error = function(e) NULL)
-    if (is.null(f) || !is.function(f)) next
-    key <- sub("^theme_", "", fn)
-    args <- .ggspec_theme_args(fn, pkg)
-    if (identical(pkg, "ggprism") && identical(key, "prism")) args <- .ggprism_theme_args(args)
-    out[[length(out) + 1]] <- list(
-      name = key, fn = fn, package = pkg,
-      label = paste0(labels[[key]] %||% key, " (", pkg, ")"),
-      args = args
-    )
-  }
-  out
-}
 
 .ggspec_scan_pkg_guides <- function(pkg, labels = list()) {
   if (!requireNamespace(pkg, quietly = TRUE)) return(list())

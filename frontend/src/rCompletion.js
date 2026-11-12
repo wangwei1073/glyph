@@ -205,6 +205,3 @@ export function preloadCompletions() {
   loadTables().catch(() => {})
 }
 
-export function completionsReady() {
-  return !!cache
-}
