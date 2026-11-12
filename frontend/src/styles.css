@@ -221,6 +221,15 @@ body {
 *::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, .50); }
 *::-webkit-scrollbar-corner { background: transparent; }
 
+/* Element 按钮内图标与文字间距：button > span(flex) > i.el-icon + 文本节点，
+   内层 span 没有 gap → 「+导入数据」贴在一起。给内层 span 加列间隙。 */
+.el-button > span { gap: 5px; }
+/* 小按钮里的图标提到 14px：12px 在高 DPI 缩放下笔画过细，蓝底上几乎看不见 */
+.el-button--small .el-icon { font-size: 14px; }
+/* primary 按钮的图标强制纯白：避免继承链/亚像素渲染下发灰 */
+.el-button--primary .el-icon,
+.el-button--primary .el-icon svg path { color: #fff; fill: #fff; }
+
 .gg-mono { font-family: Consolas, "JetBrains Mono", "Courier New", monospace; }
 
 /* 原顶栏已移除：渲染/项目/暗色并入左栏底部工具区（ActionBar.vue） */

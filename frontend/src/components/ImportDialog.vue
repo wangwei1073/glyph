@@ -304,7 +304,7 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
 
 <template>
   <el-dialog v-model="visible" title="导入数据" width="1040px" top="5vh"
-    :close-on-click-modal="false">
+    class="imp-dialog" :close-on-click-modal="false">
     <input ref="fileInput" type="file" hidden
       accept=".csv,.tsv,.txt,.xlsx,.xls,.rds,.rdata,.rda,.json" @change="onFilePicked" />
     <input ref="dbInput" type="file" hidden accept=".db,.sqlite,.sqlite3"
@@ -326,12 +326,12 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
           <el-icon class="f-ic"><Document /></el-icon>
           <span class="fname">{{ fileName || '未选择文件' }}</span>
           <span class="meta">{{ fileSize }}</span>
-          <el-button v-if="!fileName" size="small" type="primary" @click="fileInput.click()">选择文件…</el-button>
-          <el-button v-else text size="small" class="swap" @click="fileInput.click()">更换…</el-button>
+          <el-button v-if="!fileName" type="primary" @click="fileInput.click()">选择文件…</el-button>
+          <el-button v-else text class="swap" @click="fileInput.click()">更换…</el-button>
         </div>
         <div class="r2">
           <div><span class="lbl">分隔符</span>
-            <el-select v-model="fileOpts.delim" size="small" style="width:100%">
+            <el-select v-model="fileOpts.delim" style="width:100%">
               <el-option value="auto" label="自动检测" />
               <el-option value="comma" label="逗号" />
               <el-option value="tab" label="制表符" />
@@ -339,7 +339,7 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
             </el-select>
           </div>
           <div><span class="lbl">编码</span>
-            <el-select v-model="fileOpts.encoding" size="small" style="width:100%">
+            <el-select v-model="fileOpts.encoding" style="width:100%">
               <el-option value="UTF-8" label="UTF-8" />
               <el-option value="GBK" label="GBK" />
               <el-option value="GB18030" label="GB18030" />
@@ -349,11 +349,11 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
         </div>
         <div class="r2">
           <div><span class="lbl">跳过行</span>
-            <el-input-number v-model="fileOpts.skip" :min="0" :max="10000" size="small" controls-position="right" style="width:100%" />
+            <el-input-number v-model="fileOpts.skip" :min="0" :max="10000" controls-position="right" style="width:100%" />
           </div>
-          <div><span class="lbl">NA 标记</span><el-input v-model="fileOpts.na" size="small" /></div>
+          <div><span class="lbl">NA 标记</span><el-input v-model="fileOpts.na" /></div>
         </div>
-        <el-checkbox v-model="fileOpts.header" size="small">首行作为列名</el-checkbox>
+        <el-checkbox v-model="fileOpts.header">首行作为列名</el-checkbox>
         <div class="hint">预览只读前 50 行；导入时按同一组选项读取整表。</div>
       </div>
       <div class="col right">
@@ -380,7 +380,7 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
           <el-table-column prop="name" label="列名" min-width="120" />
           <el-table-column label="类型" width="112">
             <template #default="{ row }">
-              <el-select size="small" :model-value="fileColTypes[row.name] || row.type"
+              <el-select :model-value="fileColTypes[row.name] || row.type"
                 @update:model-value="(v) => setFileType(row.name, v)">
                 <el-option value="num" label="num" /><el-option value="chr" label="chr" />
                 <el-option value="fct" label="fct" /><el-option value="lgl" label="lgl" />
@@ -405,8 +405,8 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
           <el-icon class="f-ic"><Coin /></el-icon>
           <span class="fname">{{ dbFileName || '未选择数据库' }}</span>
           <span class="meta">{{ dbSize ? toSize(dbSize) : '' }}</span>
-          <el-button v-if="!dbFileName" size="small" type="primary" @click="dbInput.click()">选择文件…</el-button>
-          <el-button v-else text size="small" class="swap" @click="dbInput.click()">更换…</el-button>
+          <el-button v-if="!dbFileName" type="primary" @click="dbInput.click()">选择文件…</el-button>
+          <el-button v-else text class="swap" @click="dbInput.click()">更换…</el-button>
         </div>
         <div class="col-h" style="margin-top:4px">表（{{ dbTables.length }}）</div>
         <div class="tbl-list">
@@ -439,7 +439,7 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
         <span class="lbl">粘贴 CSV / TSV 文本（第一行为列名）</span>
         <el-input v-model="clipText" type="textarea" :rows="10" class="gg-mono"
           placeholder="a,b,c&#10;1,2,x" />
-        <el-button size="small" type="primary" :loading="clipLoading" @click="previewClip">解析预览</el-button>
+        <el-button type="primary" :loading="clipLoading" @click="previewClip">解析预览</el-button>
         <div class="hint">解析后可在右侧预览；确认后导入。</div>
       </div>
       <div class="col right">
@@ -460,7 +460,7 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
         <div class="sum">{{ footSource }}</div>
         <div class="name-inline">
           <span>数据源名称</span>
-          <el-input v-model="currentName" size="small" style="width:160px" placeholder="导入后的名称" />
+          <el-input v-model="currentName" placeholder="导入后的名称" />
         </div>
         <el-button @click="visible = false">取消</el-button>
         <el-button type="primary" :loading="busy" :disabled="!canImport" @click="doImport">
@@ -514,8 +514,23 @@ onMounted(() => { if (activeTab.value === 'remote') db.loadDrivers() })
 .tp.date { background: #fdeee3; color: #c55a11; }
 .raw-box { margin: 0; height: 340px; overflow: auto; background: #fbfcfe; border: 1px solid var(--gg-border); border-radius: 6px; padding: 10px; font-family: Consolas, monospace; font-size: 11.5px; color: var(--gg-text-2); white-space: pre-wrap; }
 .empty { color: var(--gg-text-4); font-size: 12px; padding: 36px; text-align: center; border: 1px dashed var(--gg-border); border-radius: 6px; }
+/* 弹窗内控件统一高度 32px（default 尺寸天然一致，这里兜底微调） */
+.imp-dialog :deep(.el-select__wrapper),
+.imp-dialog :deep(.el-input__wrapper),
+.imp-dialog :deep(.el-input-number) { --el-component-size: 32px; }
+.imp-dialog :deep(.el-input__wrapper),
+.imp-dialog :deep(.el-select__wrapper) { min-height: 32px; }
+.imp-dialog :deep(.el-input-number .el-input__inner) { height: 30px; line-height: 30px; }
+.imp-dialog :deep(.el-checkbox) { height: 32px; }
+.imp-dialog :deep(.el-checkbox .el-checkbox__label) { font-size: 13px; }
+.imp-dialog :deep(.el-button) { height: 32px; }
 .foot { display: flex; align-items: center; gap: 12px; width: 100%; }
 .foot .sum { font-size: 11.5px; color: var(--gg-text-3); margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .foot .sum b { color: var(--gg-text-2); }
+/* 底栏统一高度：名称输入框、取消/导入按钮都用 32px（default 尺寸），视觉一条线 */
 .name-inline { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--gg-text-3); white-space: nowrap; flex-shrink: 0; }
+.name-inline :deep(.el-input) { width: 200px; }
+.foot :deep(.el-input__wrapper) { padding-top: 1px; padding-bottom: 1px; }
+.foot :deep(.el-input__inner) { height: 28px; line-height: 28px; }
+.foot :deep(.el-button) { height: 30px; padding-left: 18px; padding-right: 18px; }
 </style>

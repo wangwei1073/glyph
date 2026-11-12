@@ -27,6 +27,9 @@ watch(() => spec.selectedLayer, (v) => {
 function toggle(i) {
   if (expanded.value === i) { expanded.value = -1; return }  // 收起不改选中
   spec.selectLayer(i)  // watch 会展开并滚动
+  // 该层本来就是选中层时 selectLayer 不会触发 watch，这里兜底展开，
+  // 否则「收起后再点同一张卡片」会没反应
+  expanded.value = i
 }
 
 function describe(l) {

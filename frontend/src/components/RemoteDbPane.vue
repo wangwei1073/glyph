@@ -33,29 +33,29 @@ onMounted(() => db.loadDrivers())
       <template v-if="!db.connId">
         <div class="form">
           <div class="r2">
-            <div><span class="lbl">主机</span><el-input v-model="db.form.host" size="small" /></div>
-            <div><span class="lbl">端口</span><el-input v-model.number="db.form.port" size="small" /></div>
+            <div><span class="lbl">主机</span><el-input v-model="db.form.host" /></div>
+            <div><span class="lbl">端口</span><el-input v-model.number="db.form.port" /></div>
           </div>
           <div class="r2">
-            <div><span class="lbl">数据库</span><el-input v-model="db.form.dbname" size="small" /></div>
-            <div><span class="lbl">用户</span><el-input v-model="db.form.user" size="small" /></div>
+            <div><span class="lbl">数据库</span><el-input v-model="db.form.dbname" /></div>
+            <div><span class="lbl">用户</span><el-input v-model="db.form.user" /></div>
           </div>
           <div class="r2">
-            <div><span class="lbl">密码</span><el-input v-model="db.form.password" type="password" size="small" show-password /></div>
+            <div><span class="lbl">密码</span><el-input v-model="db.form.password" type="password" show-password /></div>
             <div v-if="db.driver === 'postgres'"><span class="lbl">SSL</span>
-              <el-select v-model="db.form.sslmode" size="small" style="width:100%">
+              <el-select v-model="db.form.sslmode" style="width:100%">
                 <el-option value="prefer" label="prefer" />
                 <el-option value="require" label="require" />
                 <el-option value="disable" label="disable" />
               </el-select>
             </div>
-            <div v-else-if="db.driver === 'odbc'"><span class="lbl">DSN</span><el-input v-model="db.form.dsn" size="small" /></div>
+            <div v-else-if="db.driver === 'odbc'"><span class="lbl">DSN</span><el-input v-model="db.form.dsn" /></div>
             <div v-else />
           </div>
         </div>
         <div class="btns">
-          <el-button size="small" :loading="db.testing" :disabled="!db.installed" @click="db.test">测试连接</el-button>
-          <el-button size="small" type="primary" :loading="db.connecting" :disabled="!db.installed" @click="db.connect">
+          <el-button :loading="db.testing" :disabled="!db.installed" @click="db.test">测试连接</el-button>
+          <el-button type="primary" :loading="db.connecting" :disabled="!db.installed" @click="db.connect">
             连接
           </el-button>
         </div>
@@ -70,8 +70,8 @@ onMounted(() => db.loadDrivers())
           <div class="kv">SSL<b>{{ db.form.sslmode }}</b></div>
           <div class="kv">会话<b>只读</b></div>
           <div class="btns">
-            <el-button size="small" @click="db.disconnect">断开</el-button>
-            <el-button size="small" @click="db.loadTables">刷新表</el-button>
+            <el-button @click="db.disconnect">断开</el-button>
+            <el-button @click="db.loadTables">刷新表</el-button>
           </div>
         </div>
         <div class="hint">导入会创建结果快照；断开数据库不影响已导入数据与已有图形。</div>
@@ -84,7 +84,7 @@ onMounted(() => db.loadDrivers())
     <!-- 中：表树 -->
     <div class="col mid">
       <div class="col-h">表 <span class="hint">{{ db.tables.length }} 张</span></div>
-      <el-input v-model="db.search" size="small" placeholder="搜索表…" clearable>
+      <el-input v-model="db.search" placeholder="搜索表…" clearable>
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
       <div v-if="db.connId" class="tree">
@@ -99,7 +99,7 @@ onMounted(() => db.loadDrivers())
         <div v-if="!db.filteredSchemas.length" class="empty sm">没有匹配的表</div>
       </div>
       <div v-else class="empty sm">连接后加载 schema 与表</div>
-      <el-button v-if="db.connId" size="small" text type="primary" style="justify-content:flex-start"
+      <el-button v-if="db.connId" text type="primary" style="justify-content:flex-start"
         @click="db.enterSql">自定义 SQL…</el-button>
     </div>
 
@@ -113,11 +113,11 @@ onMounted(() => db.loadDrivers())
       <div v-if="db.sqlMode" class="sql-edit">
         <el-input v-model="db.sql" type="textarea" :rows="3" class="gg-mono"
           placeholder="SELECT * FROM ...（只允许单条 SELECT / WITH）" />
-        <el-button size="small" type="primary" :loading="db.loading" @click="db.runSql">运行</el-button>
+        <el-button type="primary" :loading="db.loading" @click="db.runSql">运行</el-button>
       </div>
       <div v-else-if="db.preview?.sql" class="sqlbar gg-mono" @click="db.enterSql">{{ db.preview.sql }}</div>
 
-      <el-table v-if="db.preview" :data="db.preview.rows" size="small" height="330" border v-loading="db.loading">
+      <el-table v-if="db.preview" :data="db.preview.rows" height="330" border v-loading="db.loading">
         <el-table-column v-for="c in db.preview.columns" :key="c.name" :prop="c.name" min-width="110">
           <template #header>
             <span class="cn">{{ c.name }}</span>
@@ -150,7 +150,7 @@ onMounted(() => db.loadDrivers())
 .drv { display: flex; gap: 6px; }
 .drv .d {
   flex: 1; min-width: 0; border: 1px solid var(--gg-border); background: #fff; border-radius: 4px;
-  padding: 4px 6px; font-size: 11.5px; color: var(--gg-text-2); cursor: pointer;
+  padding: 0 6px; height: 32px; font-size: 12px; color: var(--gg-text-2); cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 5px;
 }
 .drv .d.on { border-color: var(--gg-brand); color: var(--gg-brand); background: var(--gg-brand-2, #eaf1fb); }

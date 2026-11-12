@@ -740,14 +740,35 @@ function openPreview(colName = '') {
   background: var(--gg-panel); color: var(--gg-text-1);
   border-bottom: 1px solid var(--gg-border);
 }
-.dp-brand b { font-size: 14px; letter-spacing: .2px; font-weight: 650; color: var(--gg-text-1); }
-
-/* 品牌文字背景框：主题蓝底 + 白字，作为产品名的视觉锚点 */
+/* 品牌字标（方案 H）：渐变文字，无背景框——避免与功能按钮的胶囊同构。
+   注意：不要再用 .dp-brand b 规则（特异性 0,1,1 会盖掉 .dp-brand-name 的
+   color: transparent，导致渐变不显示、文字变纯黑）。 */
 .dp-brand-name {
   display: inline-flex; align-items: center; flex-shrink: 0;
-  height: 22px; padding: 0 8px; border-radius: var(--gg-r-ctl);
-  background: var(--gg-brand); color: #fff !important;
-  line-height: 1; user-select: none;
+  font-size: 15px; font-weight: 800; letter-spacing: .3px;
+  line-height: 1.25; user-select: none;
+  /* 关键：background-clip: text 只把渐变画在元素背景盒内。
+     line-height:1 时背景盒只有 15px 高，而字母上下超出（ascender/descender），
+     超出的部分没有渐变 → 透明 → 看起来像被裁掉。
+     上下各留 3px 内边距把背景盒撑到字母全高，再用负 margin 抵消对行高的影响。 */
+  padding: 3px 1px;
+  margin: -3px 0;
+  color: var(--gg-brand);    /* 不支持 background-clip 时的兜底色 */
+}
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .dp-brand-name {
+    background: linear-gradient(90deg, var(--gg-brand) 0%, #54b28e 100%);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+}
+/* 暗色主题降级为亮蓝纯色（渐变在深底上对比不足） */
+html.dark .dp-brand-name {
+  background: none;
+  -webkit-background-clip: initial; background-clip: initial;
+  color: #7cb8e8;
+  -webkit-text-fill-color: #7cb8e8;
 }
 
 .dp-brand-sep { width: 1px; height: 14px; background: var(--gg-border-strong); margin: 0 3px; }

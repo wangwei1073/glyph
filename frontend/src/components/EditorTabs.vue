@@ -15,6 +15,7 @@ import AdvancedPanel from './AdvancedPanel.vue'
 import PinPanel from './PinPanel.vue'
 import GalleryPanel from './GalleryPanel.vue'
 import ExtensionsPanel from './ExtensionsPanel.vue'
+import AboutPanel from './AboutPanel.vue'
 
 const ui = useUiStore()
 const spec = useSpecStore()
@@ -49,7 +50,8 @@ const items = [
   { name: 'gallery', label: '图库', icon: 'PictureFilled', group: 3 },
   { name: 'patch', label: '拼图', icon: 'Menu', group: 3 },
   { name: 'adv', label: '高级', icon: 'Setting', group: 4 },
-  { name: 'ext', label: '扩展', icon: 'Box', group: 4 }
+  { name: 'ext', label: '扩展', icon: 'Box', group: 4 },
+  { name: 'about', label: '关于', icon: 'InfoFilled', group: 5 }
 ]
 
 // 旧会话的 localStorage 可能存着已撤销的页签名（aes/params）→ 回退到图层
@@ -89,6 +91,7 @@ if (!items.some(it => it.name === ui.tab)) ui.setTab('layers')
       <PinPanel v-show="tab === 'patch'" />
       <AdvancedPanel v-show="tab === 'adv'" />
       <ExtensionsPanel v-show="tab === 'ext'" />
+      <AboutPanel v-show="tab === 'about'" />
     </div>
   </div>
 </template>
