@@ -65,6 +65,30 @@ GGSPEC_NS_ENV <- NULL  # 缓存命名空间，避免重复查找
 # 参数控件推断：覆盖表优先 → 名字模式 → 默认值类型 → text
 # 目标：官方文档里取值有限/布尔/颜色的参数都给对应控件，不要一律自由文本。
 # 判定依据已用 ggplot2 4.0.3 的 formals 默认值实测（见 tools/probe_param_types.R）。
+# 丢弃「同一参数的另一种拼写」：colour/color、linewidth/size 之类
+# ggplot2 4.0 同时提供 .colour 与 .color，二者语义完全等价，
+# 面板里并排出现会让用户以为能分别设置不同颜色。
+.ggspec_dedup_params <- function(params) {
+  if (!length(params)) return(params)
+  nms <- names(params)
+  # 扩展 geom 走 lapply 会产生无名 list：用参数自身的 $name 补回名字，
+  # 否则去重与前端按名索引都会失效
+  if (is.null(nms)) {
+    nms <- vapply(params, function(x) as.character(x$name %||% ""), character(1))
+    names(params) <- nms
+  }
+  drop <- character(0)
+  for (nm in nms) {
+    if (is.na(nm)) next
+    # colour/color 与 a.colour/a.color 两种写法都要去重
+    if (grepl("(^|[.])color$", nm)) {
+      twin <- sub("color$", "colour", nm)
+      if (twin %in% nms) drop <- c(drop, nm)
+    }
+  }
+  if (!length(drop)) return(params)
+  params[setdiff(nms, drop)]
+}
 .ggspec_ipw <- function(nm, default_value = NULL) {
   w <- PARAM_WIDGETS[[nm]]
   if (!is.null(w)) return(w)
@@ -505,7 +529,7 @@ GGTHEMES_THEME_LABELS <- list(
     out[[length(out) + 1]] <- list(
       fn = fn, name = name, package = pkg,
       label = paste0(ANNOTATION_META[[name]] %||% paste0("annotation_", name), " (", pkg, ")"),
-      params = p
+      params = .ggspec_dedup_params(p)
     )
   }
   out
@@ -536,7 +560,7 @@ ggspec_build_meta <- function() {
       shape = (.shape_of(name)),
       desc = (meta$desc %||% ""),
       aes = aes_info,
-      params = .ggspec_formals_params(fn),
+      params = .ggspec_dedup_params(.ggspec_formals_params(fn)),
       statParams = stat_params,
       defaultStat = .ggspec_stat_name(stat_obj, fn),
       defaultPosition = as.character(formals(get(fn, envir = ns))$position %||% "identity")
@@ -557,6 +581,7 @@ ggspec_build_meta <- function() {
       g$params <- lapply(setdiff(names(formals(f)), c("mapping", "data", "stat", "position", "...",
                                                       "show.legend", "inherit.aes")),
                          function(nm) .ggspec_ipw(nm))
+      g$params <- .ggspec_dedup_params(g$params)
       g$statParams <- list()
       g$defaultStat <- if (!is.null(layer)) class(layer$stat)[1] else "identity"
       if (g$defaultStat %in% c("Stat", "StatIdentity", "ggproto", "gg")) g$defaultStat <- "identity"
@@ -759,7 +784,7 @@ ggspec_build_meta <- function() {
              ov <- PARAM_WIDGETS[[names(p)[i]]]
              if (!is.null(ov)) p[[i]] <- ov
            }
-           p
+           .ggspec_dedup_params(p)
          })()
     )
   })

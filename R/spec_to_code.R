@@ -5,6 +5,22 @@
 # ---- 局部工具 ---------------------------------------------------------------
 .enc <- function(x) r_literal(x)
 
+# 参数值类型纠正：前端控件回传的可能是字符串，R 侧要求强类型。
+# bool  "false" → FALSE   number "2" → 2   shape "15" → 15   空串 → NULL
+# 颜色 / 线型 / 枚举 / 表达式保持原样
+.coerce_param_value <- function(pnm, v) {
+  if (!is.character(v) || length(v) != 1) return(v)
+  s <- trimws(v)
+  if (!nzchar(s)) return(NULL)                    # 清空字段
+  low <- tolower(s)
+  if (low %in% c("true", "false")) return(identical(low, "true"))
+  # 纯数字一律转数值（shape / size / linewidth / alpha / bins ...）
+  if (grepl("^-?[0-9]+([.][0-9]+)?$", s) || grepl("^-?[0-9.]*[eE][-+]?[0-9]+$", s)) {
+    return(as.numeric(s))
+  }
+  # 数据里本来就存在的字符串（如分组名）不能乱转，其余保持原值
+  v
+}
 # 合并调用参数：支持位置参数（name 为 ""）
 .args_line <- function(args) {
   if (!length(args)) return("")
@@ -109,7 +125,10 @@
 
   # geom/stat 参数
   for (pnm in names(layer$params %||% list())) {
-    if (has_val(layer$params[[pnm]])) args[[pnm]] <- .enc(layer$params[[pnm]])
+    v <- layer$params[[pnm]]
+    if (!has_val(v)) next
+    v <- .coerce_param_value(pnm, v)
+    args[[pnm]] <- .enc(v)
   }
   # 常量美学
   for (pnm in names(layer$aesParams %||% list())) {

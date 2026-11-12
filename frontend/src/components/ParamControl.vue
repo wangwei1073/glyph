@@ -87,15 +87,47 @@ const selectModel = computed({
 // numberOrExpr 控件的显示文本（数字直接显示，表达式由 exprMode 分支接管）
 const numOrExprText = computed(() => (rawVal.value === null || rawVal.value === undefined ? '' : String(rawVal.value)))
 
+// R 的 pch 只有 0-25 是合法绘图符号：>25、非数字字符串在 R 里画不出来或直接报错。
+// 0-14 空心（由 colour 决定），15-20 实心（由 colour 决定），21-25 有边框+填充（colour + fill）
 const shapeOpts = [
-  { v: '0', l: '0 方块' }, { v: '1', l: '1 圆' }, { v: '2', l: '2 三角↑' }, { v: '3', l: '3 加号' },
-  { v: '4', l: '4 叉' }, { v: '5', l: '5 菱形' }, { v: '6', l: '6 倒三角' }, { v: '7', l: '7 方叉' },
-  { v: '8', l: '8 星号' }, { v: '9', l: '9 菱加' }, { v: '10', l: '10 圆点圈' }, { v: '11', l: '11 双三角' },
-  { v: '12', l: '12 方加' }, { v: '13', l: '13 方叉' }, { v: '14', l: '14 方箭' }, { v: '15', l: '15 实方块' },
-  { v: '16', l: '16 实圆' }, { v: '17', l: '17 实三角' }, { v: '18', l: '18 实菱' }, { v: '19', l: '19 实圆大' },
-  { v: '20', l: '20 小实圆' }, { v: '21', l: '21 圆(可填充)' }, { v: '22', l: '22 方(可填充)' },
-  { v: '23', l: '23 菱(可填充)' }, { v: '24', l: '24 三角(可填充)' }, { v: '25', l: '25 倒三角(可填充)' }
+  { v: '0',  l: '0 方块（空）',        g: '空心' },
+  { v: '1',  l: '1 圆（空）',          g: '空心' },
+  { v: '2',  l: '2 三角↑（空）',       g: '空心' },
+  { v: '3',  l: '3 加号',              g: '空心' },
+  { v: '4',  l: '4 叉',                g: '空心' },
+  { v: '5',  l: '5 菱形（空）',        g: '空心' },
+  { v: '6',  l: '6 三角↓（空）',       g: '空心' },
+  { v: '7',  l: '7 方叉（空）',        g: '空心' },
+  { v: '8',  l: '8 星号',              g: '空心' },
+  { v: '9',  l: '9 菱加',              g: '空心' },
+  { v: '10', l: '10 圆点圈',           g: '空心' },
+  { v: '11', l: '11 双三角',           g: '空心' },
+  { v: '12', l: '12 方加',             g: '空心' },
+  { v: '13', l: '13 圆叉',             g: '空心' },
+  { v: '14', l: '14 方箭',             g: '空心' },
+  { v: '15', l: '15 实方块',           g: '实心' },
+  { v: '16', l: '16 实圆',             g: '实心' },
+  { v: '17', l: '17 实三角',           g: '实心' },
+  { v: '18', l: '18 实菱',             g: '实心' },
+  { v: '19', l: '19 实圆（大）',       g: '实心' },
+  { v: '20', l: '20 实圆（小）',       g: '实心' },
+  { v: '21', l: '21 圆（可填填充色）', g: '可填充' },
+  { v: '22', l: '22 方（可填填充色）', g: '可填充' },
+  { v: '23', l: '23 菱（可填填充色）', g: '可填充' },
+  { v: '24', l: '24 三角（可填填充色）', g: '可填充' },
+  { v: '25', l: '25 三角↓（可填填充色）', g: '可填充' }
 ]
+const shapeGroups = ['空心', '实心', '可填充']
+const shapeByGroup = (g) => shapeOpts.filter(o => o.g === g)
+// 非法值（>25、非数字）在 R 里会报错：选择框显示为空，而不是留一个看不懂/画不出的值
+const shapeModel = computed({
+  get: () => {
+    const s = String(rawVal.value ?? '').trim()
+    if (!s) return ''
+    return /^(1?\d|2[0-5])$/.test(s) ? s : ''
+  },
+  set: (v) => set(v === '' || v === null ? null : v)
+})
 const linetypeOpts = ['blank', 'solid', 'dashed', 'dotted', 'dotdash', 'longdash', 'twodash']
   .map(v => ({ v, l: v }))
 </script>
@@ -123,13 +155,15 @@ const linetypeOpts = ['blank', 'solid', 'dashed', 'dotted', 'dotdash', 'longdash
         <el-option v-for="o in schema.options || []" :key="o"
           :value="typeof o === 'object' ? o.v : o" :label="typeof o === 'object' ? o.l : o" />
       </el-select>
-      <el-select v-else-if="schema.widget === 'shape'" :model-value="selectModel" size="small"
-        filterable clearable style="width:100%" @update:model-value="set($event || null)">
-        <el-option v-for="o in shapeOpts" :key="o.v" :value="o.v" :label="o.l">
-          <span style="display:flex;justify-content:space-between;gap:12px">
-            <span>{{ o.l }}</span><span class="gg-mono">{{ o.v }}</span>
-          </span>
-        </el-option>
+      <el-select v-else-if="schema.widget === 'shape'" v-model="shapeModel" size="small"
+        filterable clearable style="width:100%">
+        <el-option-group v-for="g in shapeGroups" :key="g" :label="g">
+          <el-option v-for="o in shapeByGroup(g)" :key="o.v" :value="o.v" :label="o.l">
+            <span style="display:flex;justify-content:space-between;gap:12px">
+              <span>{{ o.l }}</span><span class="gg-mono">{{ o.v }}</span>
+            </span>
+          </el-option>
+        </el-option-group>
       </el-select>
       <el-select v-else-if="schema.widget === 'linetype'" :model-value="selectModel" size="small"
         clearable style="width:100%" @update:model-value="set($event || null)">
