@@ -60,3 +60,7 @@ dsh-r-runner/
 
 # DSH 插件：浏览器半的生成物（含运行时 token，绝不入库）
 /plugin/lib/client.js
+
+# 参考整合项目（各自独立 git，只是拷进来参考，不是本仓库内容）
+/cmptool/
+/meta-analysis/

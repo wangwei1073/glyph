@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --gg-brand:#2f6fbf; --gg-brand-strong:#265999; --gg-brand-weak:#eaf1f9;
+    --gg-bg:#f4f6f8; --gg-border:#e5e8ec; --gg-border-strong:#d4d9e0;
+    --gg-text-1:#1f2329; --gg-text-2:#4e5969; --gg-text-3:#6b7785; --gg-text-4:#a9b0bb;
+    --ok:#1e8e4a; --ok-bg:#e8f5ec; --warn:#b8860b; --warn-bg:#fdf6e3; --err:#c0392b; --err-bg:#fdecea;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--gg-bg); color:var(--gg-text-1);
+    font:13px/1.55 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+  }
+  svg{display:block}
+
+  /* ---------- 顶栏 ---------- */
+  .top{
+    display:flex; align-items:center; gap:14px;
+    padding:0 22px; height:52px; background:#fff; border-bottom:1px solid var(--gg-border);
+  }
+  .logo{display:flex; align-items:center; gap:9px; font-weight:700; font-size:14.5px; letter-spacing:.2px}
+  .logo .mark{
+    width:26px;height:26px;border-radius:7px;background:var(--gg-brand);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700
+  }
+  .logo .sub{font-weight:400;font-size:12px;color:var(--gg-text-3);margin-left:2px}
+  .spacer{flex:1}
+  .dir{
+    display:flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--gg-border-strong);
+    border-radius:7px;background:#fff;font-size:12px;color:var(--gg-text-2);cursor:pointer
+  }
+  .dir:hover{border-color:var(--gg-brand);color:var(--gg-brand)}
+  .icon-btn{
+    width:30px;height:30px;border:1px solid var(--gg-border-strong);border-radius:7px;background:#fff;
+    display:flex;align-items:center;justify-content:center;color:var(--gg-text-3);cursor:pointer
+  }
+  .icon-btn:hover{border-color:var(--gg-brand);color:var(--gg-brand)}
+
+  /* ---------- 主体 ---------- */
+  .wrap{padding:22px; max-width:1280px; margin:0 auto}
+  .sec-head{display:flex;align-items:baseline;gap:9px;margin:0 0 12px}
+  .sec-title{font-size:13px;font-weight:650}
+  .sec-hint{font-size:11.5px;color:var(--gg-text-4)}
+
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{
+    background:#fff;border:1px solid var(--gg-border);border-radius:11px;padding:15px 16px 13px;
+    display:flex;flex-direction:column;gap:9px;position:relative;transition:.15s;
+  }
+  .card:hover{border-color:var(--gg-brand);box-shadow:0 6px 20px rgba(47,111,191,.10)}
+  .card.on{border-color:#bcd9c6;background:linear-gradient(180deg,#fbfefc,#fff)}
+
+  .c-head{display:flex;align-items:center;gap:9px}
+  .c-ic{
+    width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    background:var(--gg-brand-weak);color:var(--gg-brand);flex:none
+  }
+  .c-name{font-weight:650;font-size:13.5px}
+  .c-tech{font-size:10.5px;color:var(--gg-text-4);font-weight:400}
+  .c-desc{font-size:11.5px;color:var(--gg-text-3);line-height:1.6;min-height:38px}
+
+  .c-meta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--gg-text-3);flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:4px;padding:1.5px 7px;border-radius:20px;font-size:10.5px;font-weight:600}
+  .pill.ok{background:var(--ok-bg);color:var(--ok)}
+  .pill.off{background:#f1f3f6;color:var(--gg-text-3)}
+  .port{font:10.5px ui-monospace,Consolas,monospace;color:var(--gg-text-3);background:#f4f6f8;
+    padding:1px 6px;border-radius:5px}
+
+  .c-foot{display:flex;gap:7px;margin-top:2px}
+  .btn{
+    flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+    height:31px;border-radius:7px;border:1px solid var(--gg-border-strong);background:#fff;
+    font-size:12px;color:var(--gg-text-2);cursor:pointer;font-family:inherit
+  }
+  .btn:hover{border-color:var(--gg-brand);color:var(--gg-brand)}
+  .btn.primary{background:var(--gg-brand);border-color:var(--gg-brand);color:#fff;font-weight:600}
+  .btn.primary:hover{background:var(--gg-brand-strong)}
+  .btn.ghost{flex:0 0 auto;width:34px;padding:0}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(30,142,74,.15)}
+
+  /* ---------- 底部两栏 ---------- */
+  .bottom{display:grid;grid-template-columns:1.15fr .85fr;gap:14px;margin-top:18px}
+  .panel{background:#fff;border:1px solid var(--gg-border);border-radius:11px;padding:14px 16px}
+  .p-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+  .p-title{font-size:12.5px;font-weight:650}
+  .link{font-size:11.5px;color:var(--gg-brand);cursor:pointer}
+
+  .env{display:flex;flex-direction:column;gap:7px}
+  .env-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--gg-text-2)}
+  .env-row .k{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .env-row .v{font:11px ui-monospace,Consolas,monospace;color:var(--gg-text-3);flex:none}
+
+  .recent{display:flex;flex-direction:column;gap:6px}
+  .rec{
+    display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid transparent;
+    border-radius:7px;font-size:11.5px;color:var(--gg-text-2);cursor:pointer
+  }
+  .rec:hover{background:#f7f9fc;border-color:var(--gg-border)}
+  .rec .rt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rec .rd{font-size:10.5px;color:var(--gg-text-4);flex:none}
+  .rec .tag{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--gg-brand-weak);color:var(--gg-brand);flex:none}
+
+  .tpl-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+  .tpl{font-size:10.5px;padding:2.5px 8px;border:1px solid var(--gg-border);border-radius:20px;color:var(--gg-text-3)}
+  .tpl.act{border-color:var(--gg-brand);color:var(--gg-brand);background:var(--gg-brand-weak);font-weight:600}
+
+  .foot-note{margin:18px 2px 4px;font-size:11px;color:var(--gg-text-4);display:flex;gap:14px;flex-wrap:wrap}
+  .foot-note b{color:var(--gg-text-3);font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo">
+    <span class="mark">G</span>
+    <span>Glyph 工作台</span>
+    <span class="sub">医学统计与绘图</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="dir" title="所有工具共用这个目录的数据与产出">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M1.8 4.2h4l1.4 1.6h6.9v7.4H1.8z"/>
+    </svg>
+    E:\Desktop\vibecoding\ggplot-gui
+  </div>
+  <div class="icon-btn" title="设置">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="8" cy="8" r="2.2"/>
+      <path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1"/>
+    </svg>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="sec-head">
+    <span class="sec-title">工具</span>
+    <span class="sec-hint">点击「打开」启动服务并跳转；已在运行则直接切换</span>
+  </div>
+
+  <div class="cards">
+
+    <!-- Glyph -->
+    <div class="card on">
+      <div class="c-head">
+        <span class="c-ic">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M2 12.5l3.2-4.4 2.6 2.6L13.8 3"/>
+            <path d="M2 14.2h12"/>
+          </svg>
+        </span>
+        <span>
+          <div class="c-name">Glyph</div>
+          <div class="c-tech">R · ggplot2</div>
+        </span>
+      </div>
+      <div class="c-desc">任意数据的绘图与基础统计：190 种 geom、主题系统、期刊规格导出、可复现包。</div>
+      <div class="c-meta">
+        <span class="pill ok"><span class="dot"></span>运行中</span>
+        <span class="port">:4321</span>
+      </div>
+      <div class="c-foot">
+        <button class="btn primary">打开</button>
+        <button class="btn ghost" title="停止服务">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/></svg>
+        </button>
+        <button class="btn ghost" title="查看日志">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M2 4h12M2 8h12M2 12h8"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- cmptool -->
+    <div class="card">
+      <div class="c-head">
+        <span class="c-ic">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M2 13V9M6 13V5M10 13V7M14 13V3"/>
+          </svg>
+        </span>
+        <span>
+          <div class="c-name">预测模型</div>
+          <div class="c-tech">R + FastAPI · cmptool</div>
+        </span>
+      </div>
+      <div class="c-desc">基线表 → 变量筛选 → Bootstrap 验证 → ROC/校准/DCA → 列线图 → TRIPOD 报告。</div>
+      <div class="c-meta">
+        <span class="pill off">已停止</span>
+        <span class="port">:8100</span>
+        <span class="port">引擎 :8199</span>
+      </div>
+      <div class="c-foot">
+        <button class="btn primary">启动并打开</button>
+        <button class="btn ghost" title="查看日志">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M2 4h12M2 8h12M2 12h8"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Meta -->
+    <div class="card">
+      <div class="c-head">
+        <span class="c-ic">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 2v12M12 2v12M4 8h8"/>
+            <circle cx="4" cy="8" r="1.4" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="8" r="1.4" fill="currentColor" stroke="none"/>
+          </svg>
+        </span>
+        <span>
+          <div class="c-name">Meta 分析</div>
+          <div class="c-tech">Python · NiceGUI</div>
+        </span>
+      </div>
+      <div class="c-desc">七步流程：提出问题 → 筛选 → 提取 → 偏倚风险 → 合并分析 → 发表偏倚 → 报告。</div>
+      <div class="c-meta">
+        <span class="pill off">已停止</span>
+        <span class="port">:8510</span>
+      </div>
+      <div class="c-foot">
+        <button class="btn primary">启动并打开</button>
+        <button class="btn ghost" title="查看日志">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M2 4h12M2 8h12M2 12h8"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="bottom">
+    <!-- 最近项目 -->
+    <div class="panel">
+      <div class="p-head">
+        <span class="p-title">最近</span>
+        <span class="link">全部项目 →</span>
+      </div>
+      <div class="recent">
+        <div class="rec">
+          <span class="tag">Glyph</span>
+          <span class="rt">ECMO 回顾性队列 · 生存分析</span>
+          <span class="rd">今天 14:20</span>
+        </div>
+        <div class="rec">
+          <span class="tag">预测模型</span>
+          <span class="rt">脓毒症 28 天死亡预测（TRIPOD）</span>
+          <span class="rd">昨天</span>
+        </div>
+        <div class="rec">
+          <span class="tag">Meta</span>
+          <span class="rt">ECMO 与常规通气预后比较</span>
+          <span class="rd">11-12</span>
+        </div>
+      </div>
+
+      <div class="p-head" style="margin-top:14px">
+        <span class="p-title">共享期刊规格</span>
+        <span class="link">管理 →</span>
+      </div>
+      <div class="tpl-row">
+        <span class="tpl">通用 300dpi</span>
+        <span class="tpl">Nature 89mm</span>
+        <span class="tpl">Science 55mm</span>
+        <span class="tpl">Cell 85mm</span>
+        <span class="tpl">PLOS 83mm</span>
+        <span class="tpl act">中文核心 85mm</span>
+      </div>
+    </div>
+
+    <!-- 环境自检 -->
+    <div class="panel">
+      <div class="p-head">
+        <span class="p-title">环境自检</span>
+        <span class="link">重新检测</span>
+      </div>
+      <div class="env">
+        <div class="env-row">
+          <span class="pill ok">正常</span>
+          <span class="k">R 4.6.1 · ggplot2 4.0.3</span>
+          <span class="v">Rscript</span>
+        </div>
+        <div class="env-row">
+          <span class="pill ok">正常</span>
+          <span class="k">Python 3.14 · 12 个依赖</span>
+          <span class="v">python</span>
+        </div>
+        <div class="env-row">
+          <span class="pill ok">正常</span>
+          <span class="k">R 包 42/42（含 survival / pROC / rms）</span>
+          <span class="v">42</span>
+        </div>
+        <div class="env-row">
+          <span class="pill" style="background:var(--warn-bg);color:var(--warn)">提示</span>
+          <span class="k">cmptool 缺少 MatchIt（倾向性评分不可用）</span>
+          <span class="v">可选</span>
+        </div>
+        <div class="env-row">
+          <span class="pill ok">正常</span>
+          <span class="k">端口 4321 / 8100 / 8199 / 8510 未被占用</span>
+          <span class="v">4</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-note">
+    <span><b>说明</b> 三个工具各自独立进程，工作台只负责启动、跳转与共享配置</span>
+    <span>数据与产出统一存放在项目目录</span>
+    <span>全程离线，不联网</span>
+  </div>
+</div>
+
+</body>
+</html>
